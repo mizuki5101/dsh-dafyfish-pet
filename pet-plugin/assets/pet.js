@@ -7313,8 +7313,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 演指定小戏。两个入口共用：
    *   · 菜单「小戏」页：不传 opts → 跳过随机/冷却（点了就要看），`manual:true`；
-   *   · 感知器桥（`doReaction` kind:'script'）：传 `{respectCooldown:true, manual:false}`，
-   *     尊重小戏自己的 minGap，且不绕过 agent 忙守卫（真实事件仍会 abort）。
+   *   · 感知器桥（`doReaction` kind:'script'）：传 `{manual:false}`，跳过小戏 minGap
+   *     （限流交给感知器自己的冷却），且不绕过 agent 忙守卫（真实事件仍会 abort）。
+   *     `respectCooldown:true` 仍保留：别的感知器若想套小戏 minGap 可以传。
    */
   function startIdleScriptByName(name, opts) {
     const sc = idle.scripts
@@ -7966,9 +7967,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       return true
     }
     if (r.kind === 'script') {
-      // 感知器 → 小戏桥：只起小戏，不写 override、不调 act()
+      // 感知器 → 小戏桥：只起小戏，不写 override、不调 act()。
+      // 限流用感知器自己的冷却；不套小戏 minGap（否则「刚演过」会把这次反应吃掉）。
       note(r)
-      const got = startIdleScriptByName(r.arg, { respectCooldown: true, manual: false })
+      const got = startIdleScriptByName(r.arg, { manual: false })
       return !!got
     }
     if (r.kind === 'clip') {
@@ -8041,10 +8043,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (idle.sleep) {
       if (audioBurst) {
         wakeUp('audio')
-        // 醒来过场之后再接「听见什么」：先懵一下，再找声音
+        // 醒来过场之后再接「听见什么」：先懵一下，再找声音。
+        // ⚠️ 这里**不**尊重小戏自己的 minGap：手动睡/刚演过时 90s 冷却会把这段吃掉；
+        //    限流交给 audioBurst 自己的 5min 冷却。
         setTimeout(() => {
-          if (idle.sleep || rig.override) return
-          startIdleScriptByName('听见什么', { respectCooldown: true, manual: false })
+          const at = Math.round(performance.now())
+          const note = (why, extra) => { motion.debug.wakeScript = Object.assign({ at: at, why: why }, extra || {}) }
+          if (idle.sleep) { note('sleep'); return }
+          if (rig.override) { note('override'); return }
+          const got = startIdleScriptByName('听见什么', { manual: false })
+          note(got ? 'started' : 'failed', got ? { name: got } : null)
         }, 900)
         return
       }

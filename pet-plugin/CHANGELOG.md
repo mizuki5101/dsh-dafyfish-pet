@@ -1,5 +1,14 @@
 # 更新日志 / Changelog
 
+## 0.4.20 — 2026-10-17（修：惊醒后没接「听见什么」）
+
+- 原因：手动睡 / 刚演过时，「听见什么」自己的 **90s minGap** 还在；惊醒路径又 `respectCooldown`，
+  于是 `wakeUp('audio')` 成功、900ms 后却没起小戏。自然睡 3min 通常已过 90s，所以只在手动测试里明显。
+- **惊醒和 audioBurst 桥都不再套小戏 minGap**（限流交给 audioBurst 自己的 5min 冷却）；
+  `startIdleScriptByName` 仍保留 `respectCooldown` 给别的感知器。
+- `motion.debug.wakeScript` 记录惊醒后接小戏的结果（`started` / `sleep` / `override` / `failed`）。
+- 测试数不变（732）。
+
 ## 0.4.19 — 2026-10-17（听见什么 + 感知器→小戏桥）
 
 - 声音感知的 sustain 从 1.2s 降到 **0.8s**（主人实测后调整；短提示音仍不会触发）。
