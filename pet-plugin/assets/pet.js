@@ -605,9 +605,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-body::-webkit-scrollbar{width:5px}
 .dshp-body::-webkit-scrollbar-thumb{background:var(--dshp-line);border-radius:3px}
 .dshp-foot{margin-top:calc(4px * var(--dshp-s));font-size:calc(10px * var(--dshp-s));opacity:.55;min-height:0}
-   真正的病根是 left:50% —— 绝对定位元素的可容纳宽度只剩下父容器的一半，
-   三个按钮被挤成 104px，文字折行后每个都变成又窄又高的方块。
-   width:max-content 让它超出那半幅也能保持居中，按钮就恢复成正常的一行小按钮。 */
 /* 工具栏用视口坐标（fixed），**脱离 root 坐标系**。本机改动：
    原来它在 root 里靠 bottom:-40px 定位，她被拖到屏幕下缘时按钮就跑到屏幕外了
    （和气泡同一个毛病）。fixed 之后位置只由「她可见的位置 + 视口」决定，天然不会被截。
@@ -3932,9 +3929,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   const MIN_VISIBLE_FRAC = 0.5
   const MIN_VISIBLE_X = 120
   const MIN_VISIBLE_Y = 120
-  /** 实际生效的「至少露多少」：不超过身体的一半，避免身体比阈值还小时算出反向区间 */
+  /** 实际生效的「至少露多少」：
+   *  水平保留**整个身体/内容**可见（2026-10-17 改：只留一半时她几乎全在屏幕外，
+   *  对话面板会被夹到很远；现在拖到边缘会整车拉回）；竖直仍保留 120px 上限。
+   */
   function minVisible(axis, bodySize) {
-    return Math.max(24, Math.min(MIN_VISIBLE_FRAC * bodySize, axis === 'x' ? MIN_VISIBLE_X : MIN_VISIBLE_Y))
+    if (axis === 'x') return Math.max(24, bodySize)
+    return Math.max(24, Math.min(MIN_VISIBLE_FRAC * bodySize, MIN_VISIBLE_Y))
   }
 
   /**
@@ -4029,7 +4030,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       return
     }
     if (layout.x != null && layout.y != null) {
-      root.style.left = layout.x + 'px'
+      // 自由摆放也要夹水平：老存档可能只剩一条缝，重载后要能拉回可见范围
+      const bodyW = Math.max(20, root.getBoundingClientRect().width - charInset('x') * 2)
+      root.style.left = clampLeft(layout.x, bodyW) + 'px'
       root.style.top = clampY(layout.y, h, vh) + 'px'
       root.style.right = 'auto'
       root.style.bottom = 'auto'
