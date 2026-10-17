@@ -304,6 +304,36 @@ console.log('\n【14】第 6 段小戏「偷看主人」（2026-10-17）')
   }
 }
 
+console.log('\n【15】第 7 段小戏「找个东西」（2026-10-17）')
+{
+  const sc = DATA.find((x) => x.name === '找个东西')
+  ok('数据表里有「找个东西」', !!sc, DATA.map((x) => x.name))
+  if (sc) {
+    ok(
+      '4 步：clip(左顾右盼) → face(疑惑) → clip(点头) → line',
+      sc.steps.map((s) => s.do + (s.arg ? ':' + s.arg : '')).join(' / ') === 'clip:左顾右盼 / face:疑惑 / clip:点头 / line:咦，放哪儿了…',
+      sc.steps,
+    )
+    const st = E.makeState()
+    E.start(st, sc, 0)
+    const at = (ms) => E.frame(st, ms, { holdSec: 0.8 }).filter((x) => x.verb !== 'end')
+    const a0 = at(0)
+    const a1 = at(1800)
+    const a2 = at(3600)
+    const a3 = at(4800)
+    ok(
+      '按 0 / 1.8 / 3.6 / 4.8 秒依次放出四步',
+      a0.length === 1 && a0[0].verb === 'clip' && a0[0].arg === '左顾右盼' &&
+        a1.length === 1 && a1[0].verb === 'face' && a1[0].arg === '疑惑' &&
+        a2.length === 1 && a2[0].verb === 'clip' && a2[0].arg === '点头' &&
+        a3.length === 1 && a3[0].verb === 'line',
+      { a0, a1, a2, a3 },
+    )
+    const end = E.frame(st, 5700, { holdSec: 0.8 }).some((x) => x.verb === 'end')
+    ok('4.8 + 0.8 秒后报 end（时长 ' + E.durOf(sc).toFixed(1) + 's）', end === true)
+  }
+}
+
 console.log('\n' + '='.repeat(52))
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项')
 process.exit(fail === 0 ? 0 : 1)
