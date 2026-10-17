@@ -4236,6 +4236,51 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
   }
 
+  /**
+   * 鼠标是不是压在她的面板上（菜单 / 输入框 / HUD）。
+   *
+   * 为什么单独算：面板是 HTML，不在模型掩码里，但它常常压在她身体附近。
+   * 不排除的话，睡着时把鼠标移到设置面板上，就会被「身边甩动」当成叫醒手势。
+   */
+  function overPanels(clientX, clientY) {
+    try {
+      const items = [
+        [ui.menu && ui.menu.el, () => ui.menu.el.classList.contains('dshp-on')],
+        [ui.composer && ui.composer.el, () => ui.composer.el.classList.contains('dshp-on')],
+        [ui.hud && ui.hud.el, () => !!hud.open],
+      ]
+      for (const [el, shown] of items) {
+        if (!el || !shown()) continue
+        const r = el.getBoundingClientRect()
+        if (!r.width || !r.height) continue
+        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) return true
+      }
+    } catch (err) {}
+    return false
+  }
+
+  /**
+   * 「她身边」的判定：用掩码量出来的**实体包围盒**外扩 pad 像素，
+   * 而不是整个 canvas 矩形（canvas 里一大半是空气，拿它当「附近」会让正常移动也被当成甩动）。
+   * 掩码还没建好时返回 false，调用方自己退回旧矩形。
+   */
+  function nearBody(clientX, clientY, pad) {
+    try {
+      const stage = app && app.view && app.view.parentElement
+      const r = stage && stage.getBoundingClientRect()
+      if (!r || !r.width || !r.height || !mask.bbox) return false
+      const bb = mask.bbox
+      const p = Number(pad) || 0
+      const l = r.left + bb.x0 * r.width - p
+      const t = r.top + bb.y0 * r.height - p
+      const rt = r.left + bb.x1 * r.width + p
+      const bt = r.top + bb.y1 * r.height + p
+      return clientX >= l && clientX <= rt && clientY >= t && clientY <= bt
+    } catch (err) {
+      return false
+    }
+  }
+
   // ——————————————————————————————————————————————————————————————
   // 六点五、视线控制器
   // ——————————————————————————————————————————————————————————————
@@ -7106,6 +7151,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     reactUntil: 0,
     /** 刚醒的过场窗口：这段时间里感知器/待机大脑都让位（见 wakeUp） */
     wakeHoldUntil: 0,
+    /** 最后一次光标压在面板上的时刻（睡眠甩动唤醒的 600ms 宽限用） */
+    lastPanelAt: 0,
     /** 待机节奏状态（@idle-rhythm）。纯数据，转移逻辑都在那个纯函数块里 */
     rhythm: DSHPetIdleRhythm.makeState(),
   }
@@ -7154,7 +7201,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 光标现在是不是真的在她身上（入睡瞬间判断「已经在身上」用） */
   function pointerOnHer() {
-    try { return !!(gaze.pointer.seen && hitTest(gaze.pointer.x, gaze.pointer.y)) } catch (e) { return false }
+    try {
+      return !!(gaze.pointer.seen && hitTest(gaze.pointer.x, gaze.pointer.y) && !overPanels(gaze.pointer.x, gaze.pointer.y))
+    } catch (e) { return false }
   }
 
   /** 设置页调试按钮的当前文案（按钮渲染与实时同步的唯一来源） */
@@ -7663,14 +7712,20 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
     } catch (e) {}
 
-    // 她自己的面板/按钮上不算「在看她」
+    // 她自己的面板/按钮上不算「在看她」；面板（菜单/输入框/HUD）也一起排除
     let overUi = false
-    try { overUi = overDock(p.x, p.y) } catch (e) {}
+    try { overUi = overDock(p.x, p.y) || overPanels(p.x, p.y) } catch (e) {}
+    if (overUi) idle.lastPanelAt = now
+    // 「她身边」= 实体包围盒外扩 40px；掩码没建好时退回整个 stage 矩形
+    const bodyNear = nearBody(p.x, p.y, 40)
+    const swishNear = mask.bbox ? bodyNear : near
+    // 刚离开面板的 600ms 内不算甩动：从面板上快速划走时不该把她叫醒
+    const panelGrace = now - (idle.lastPanelAt || -1e9) < 600
 
     // 睡着：只跑睡眠状态机（5 秒悬停 / 身边甩动 / 换嘴 / 梦话），不做任何互动反应。
     // 放在 idleReact 总开关之前：关掉互动感知也不该让她永远叫不醒。
     if (idle.sleep) {
-      sleepTick(now, { inside: inside, near: near, vx: vx, vy: vy })
+      sleepTick(now, { inside: inside && !overUi, near: swishNear && !overUi && !panelGrace, vx: vx, vy: vy })
       if (!motion.debug.sensors) motion.debug.sensors = {}
       motion.debug.sensors.sleeping = true
       return

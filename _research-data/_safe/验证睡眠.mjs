@@ -135,6 +135,9 @@ console.log('\n【5】唤醒手势（真机模拟光标）：5 秒悬停 / 身�
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
   if (info) {
+    // 先关掉可能开着的面板：§5 要在面板外测手势
+    await ev(`(function(){document.querySelectorAll('.dshp-panel.dshp-on .dshp-close').forEach(b=>b.click())})()`)
+    await wait(250)
     // —— 5 秒悬停：必须"慢慢挪过去"，否则一次跳跃会被判成甩动 ——
     await ev('DSHPet.sleepNow()')
     await wait(500)
@@ -164,6 +167,52 @@ console.log('\n【5】唤醒手势（真机模拟光标）：5 秒悬停 / 身�
     const s2 = await ev('DSHPet.sleepState()')
     ok('身边快速甩动 → 被叫醒（swish）', !s2.asleep && s2.lastWake && s2.lastWake.reason === 'swish', s2.lastWake)
     await wait(1200)
+  }
+}
+
+console.log('\n【6】面板上不算唤醒手势（设置页调试按钮场景）')
+{
+  const move = (x, y) => c.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x, y: y, button: 'none', buttons: 0 })
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  // 先打开菜单（dock 第 2 个按钮 = 菜单）再切到设置页：面板真的要显示着，overPanels 才生效
+  await ev(`(function(){const d=document.querySelector('.dshp-dock'); if(d && d.children[1]) d.children[1].click()})()`)
+  await wait(250)
+  await ev(`(function(){const b=[...document.querySelectorAll('.dshp-tab-btn')].find(x=>x.textContent==='设置'); if(b) b.click()})()`)
+  await wait(300)
+  const box = await ev(`(function(){
+    const p = document.querySelector('.dshp-panes'); if (p) p.scrollTop = p.scrollHeight;
+    const b = [...document.querySelectorAll('.dshp-btn')].find(x=>x.textContent==='立即进入睡眠（调试）')
+    if (!b) return null
+    const r = b.getBoundingClientRect()
+    const m = document.querySelector('.dshp-panel.dshp-on')
+    const mr = m && m.getBoundingClientRect()
+    const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2)
+    return { x: x, y: y, onPanel: !!(mr && x >= mr.left && x <= mr.right && y >= mr.top && y <= mr.bottom) }
+  })()`)
+  ok('设置页里能找到调试按钮（滚动后落在面板上）', !!(box && box.x && box.onPanel), box)
+  if (box) {
+    await ev('DSHPet.sleepNow()')
+    await wait(500)
+    await move(10, 10)
+    await wait(300)
+    // 用能触发「甩动」的速度划到按钮上
+    let x = 10, y = 10
+    while (Math.hypot(box.x - x, box.y - y) > 60) {
+      const dx = box.x - x, dy = box.y - y, d = Math.hypot(dx, dy)
+      x += dx / d * 60
+      y += dy / d * 60
+      await move(Math.round(x), Math.round(y))
+      await wait(40)
+    }
+    await move(box.x, box.y)
+    await wait(1600)
+    const s1 = await ev('DSHPet.sleepState()')
+    ok('快速划到设置面板上不会叫醒她', !!(s1 && s1.asleep), s1 && { asleep: s1.asleep, lastWake: s1.lastWake })
+    await wait(5200)
+    const s2 = await ev('DSHPet.sleepState()')
+    ok('在面板上停 5 秒也不会叫醒她', !!(s2 && s2.asleep), s2 && { asleep: s2.asleep, lastWake: s2.lastWake })
+    await ev('DSHPet.wakeNow("debug")')
+    await wait(200)
   }
 }
 
