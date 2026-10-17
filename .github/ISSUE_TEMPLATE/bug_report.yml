@@ -1,0 +1,51 @@
+name: 报告一个问题
+description: 她表现不对 / 起不来 / 白屏
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢你的报告。请尽量一次写全（作者没有精力来回追问）。
+        如果只是想加功能，**大概率不会做** —— 见 README 的「维护状态」。
+  - type: textarea
+    id: what
+    attributes:
+      label: 你做了什么
+      description: 点哪里、拖到哪、说了什么话、哪一步开始不对
+      placeholder: 例如：双击 exe → 她在右下角出现 → 右键 → 动作 → 伸懒腰 → 眼睛没有闭上
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望怎样 / 实际怎样
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: "\`git log --oneline -1\` 的输出，或 pet-plugin/package.json 里的 version"
+      placeholder: "例如 0.4.11"
+    validations:
+      required: true
+  - type: textarea
+    id: model
+    attributes:
+      label: 模型自检输出
+      description: "运行 \`node pet-plugin/tools/check-model.mjs\` 把输出贴这里"
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（可选但很有用）
+      description: "外壳日志：%APPDATA%\\ds-whale-girl-pet\\boot.log"
+      render: text
+  - type: checkboxes
+    id: ack
+    attributes:
+      label: 我明白
+      options:
+        - label: 我知道这是个人项目，作者不一定能回复（README「维护状态」）
+          required: true

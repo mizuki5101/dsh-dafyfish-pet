@@ -12,6 +12,31 @@ DSH 开起来之后 8 秒内自动连上，不需要重启她。
 
 ---
 
+## 维护状态（请先看这段）
+
+这是一个**个人练手项目**：作者不是专业开发者，代码基本是「和 AI 一起写出来的」，
+**没有能力、也没有精力做长期维护**。所以先说清楚，免得你写了详细的报告却石沉大海：
+
+| | |
+|---|---|
+| 🐢 Issue | **不一定回**（尤其是「能不能加个功能」这类） |
+| 🐢 PR | **不一定会合**（太复杂/看不懂的改动作者 review 不了） |
+| 🐢 更新 | **不定期** —— 可能几个月只修自己遇到的 bug |
+
+**这不代表你不重要**，只是提前说清，省得你期待落空。真想要改动时，更靠谱的是：
+
+1. **Fork 一份自己改** —— 代码是 MIT，随便改，不用问作者
+2. 改好了**欢迎提 PR**，但请写清「为什么改 + 怎么验证」（见 [CONTRIBUTING.md](CONTRIBUTING.md)）
+3. 只是想要某个新功能：**自己加，比等作者快**
+
+> **Maintenance status (EN)**: This is a personal hobby project, not a maintained library.
+> The author is not a professional developer and has no bandwidth for long-term maintenance.
+> Issues **may not be answered**, PRs **may not be reviewed or merged**, updates are **irregular**.
+> The code is MIT — please **fork and modify freely** instead of waiting.
+> If your issue gets no reply, it is not personal: it is most likely unseen or simply beyond the author's ability.
+
+---
+
 ## 特性
 
 | | |

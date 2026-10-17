@@ -1,0 +1,65 @@
+# 参与开发 / Contributing
+
+先说结论：**这是个个人练手项目，作者不保证回复，也不保证合并。**
+（原因写在 [README 的「维护状态」](README.md#维护状态请先看这段)。）
+不过**报 bug 和提 PR 仍然很有价值** —— 你的报告可能正好是作者自己也遇到的那个问题。
+
+---
+
+## 报 bug：最少给这 5 样
+
+作者没有精力做来回追问，所以请一次性写清：
+
+1. **你做了什么**（点哪里、拖到哪、说了什么话）
+2. **她怎么了**（截图或录屏；能一句话说清最好）
+3. **版本**：`git log --oneline -1` 或 `pet-plugin/package.json` 的 version
+4. **模型自检输出**：`node pet-plugin/tools/check-model.mjs`
+5. **日志**：`%APPDATA%\ds-whale-girl-pet\boot.log`（外壳）或 DSH 控制台（插件后端）
+
+> 如果是「她的动作/表情不对」，再补一句：`DSHPet.motionState().debug.out` 里相关参数的值。
+
+## 提 PR：先跑测试
+
+这个项目有 **648 项自动化测试**，所以「改动有没有把别的地方弄坏」是可以客观检查的 ——
+这也是作者唯一愿意 review 的凭据。
+
+```bash
+# 1) 纯 Node（不需要外壳，2 分钟）—— 至少这 6 个要全绿
+node _research-data/测试动作引擎.mjs
+node _research-data/测试待机节奏.mjs
+node _research-data/测试互动感知.mjs
+node _research-data/测试成套小戏.mjs
+node _research-data/测试独立桌宠.mjs
+node _research-data/测试说话语气.mjs
+
+# 2) 改到前端/外壳时，再跑真机的 9 个（需要外壳带 --remote-debugging-port=9222）
+node _research-data/回归检查.mjs
+node _research-data/验证移除邮件.mjs
+node _research-data/验证表情.mjs
+node _research-data/验收.mjs
+node _research-data/验证独立外壳.mjs
+node _research-data/验证断开降级.mjs
+node _research-data/验证新待机行为.mjs
+node _research-data/验证说话语气.mjs
+node _research-data/验证布局.mjs
+```
+
+PR 描述里请写三行：**改了什么 / 为什么改 / 测试结果**。
+
+## 几条容易踩坏的约定（改之前看一眼）
+
+- 待机层**只写 4 个根参数**（`ParamAngleX/Y/Z` + `ParamBreath`）；`Param_arm_*`、尾巴、`ParamBodyAngleZ*` 是物理的**输出**，直接写会被每帧覆盖
+- 闭眼是**两套系统**：切素材（`PARAM_EXP5`）+ 闭形状（`ParamEyeLOpen/ROpen`），只动一个会「闭眼留缝」
+- clip 是**加性偏移**，换动作必须淡出，否则留残姿
+- 待机路径的 clip **不要写 `strength`**（会缩放到 80%，闭眼闭不严）
+- 改完 `pet.js` 一定**读回文件**再断言（长字符串替换曾经「没生效但删掉了别的」）
+- 新增的「结构性回归锁」请在断言名里写清**当初错在哪**，否则半年后没人知道为什么要这么断言
+
+## 作者会怎么处理
+
+| 情况 | 处理 |
+|---|---|
+| 测试全绿 + 改动小 + 说得清 | 大概率合，并写进 CHANGELOG |
+| 测试全绿但作者看不懂 | 可能不合（但会在 issue 里说明原因） |
+| 测试挂了 | 不合，会指出哪一条 |
+| 只是「我觉得应该这样」的偏好改动 | 大概率不合 —— fork 自己改更省事 |
