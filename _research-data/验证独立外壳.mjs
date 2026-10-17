@@ -66,7 +66,7 @@ console.log('\n=== 5. 与 DSH 的连接 ===')
 const link = await c.evaluate('DSHPet.linkState()')
 ok('页面知道连接状态（linkState.known）', !!(link && link.known), JSON.stringify(link))
 ok('此刻已连上 DSH（DSH 正开着，应该连上）', !!(link && link.online), JSON.stringify(link))
-eq('连的是 DSH 的 19387', link && link.port, 19387)
+eq('连的是 boot 里发现的那台 DSH（端口由发现决定，不写死 19387）', link && link.port, boot && boot.upstream && boot.upstream.port)
 // ⚠️ 这里不能走 c.evaluate()：它会对表达式结果直接 JSON.stringify，
 // 而 fetch 返回的是 Promise（stringify 出来是 {}，我第一版就栽在这）。
 const rawState = await c.call('Runtime.evaluate', {

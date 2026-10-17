@@ -29,7 +29,54 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✓ ' + m) } else { fail+
 
 const MF = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '..', 'pet-plugin', 'assets', 'model', 'manifest.json'), 'utf8'))
 // FACE_MENU 不是全局变量，这里按同样顺序列出（加表情时两边一起改）
-const ORDER = ['脸红', '生气', '挤眼', '担心嘴', '栗子嘴', '龇牙', '流口水', '脸黑', '圈圈眼']
+const ORDER = ['脸红', '生气', '挤眼', '担心嘴', '栗子嘴', '龇牙', '流口水', '脸黑', '圈圈眼', '疑惑', '怀疑', '嫌弃', '挑眉']
+/*
+ * 观感锁（2026-10-17，主人反馈「三个表情看不出区别」之后加的）：
+ *   · ParamEyeLOpen 的「闭」是**负偏移**（范围 [0,1]、默认 1）——
+ *     写 +0.7 会被夹回 1，等于没写。这就是「撇嘴没有半眯眼」的根因。
+ *   · 下面的区间是照着「一眼能看出来」定的；谁把它改小，这里立刻红。
+ *   · 根参数（ParamAngleX/Y/Z）不放进逐项采样：待机层也在写它们，
+ *     debug.out 是总和，分不清是表情还是待机；这里直接锁 manifest 的数值。
+ */
+const LOOK_LOCK = {
+  疑惑: {
+    ParamMouthX: [0.9, 1], ParamEyeLOpen: [-0.4, -0.2],
+    ParamBrowLForm: [0.9, 1], ParamBrowLAngle: [0.4, 0.6], ParamAngleZ: [5, 7],
+  },
+  怀疑: {
+    ParamBrowRForm: [0.9, 1], ParamBrowRAngle: [0.9, 1], ParamEyeLOpen: [-0.5, -0.3],
+    ParamEyeBallX: [-0.45, -0.25], ParamEyeBallY: [0.35, 0.55],
+    ParamAngleZ: [-12, -8], ParamAngleX: [-6, -2],
+  },
+  嫌弃: {
+    ParamBrowLAngle: [0.9, 1], ParamBrowRAngle: [0.9, 1],
+    ParamBrowLForm: [0.5, 0.7], ParamBrowRForm: [0.5, 0.7],
+    ParamEyeBallY: [-0.6, -0.4], ParamEyeLOpen: [-0.5, -0.3], ParamEyeROpen: [-0.5, -0.3],
+    PARAM_EXP7: [-1, -0.9], ParamAngleY: [-8, -4], ParamAngleZ: [-5, -3],
+    // 主人拍板：没有泪眼，委屈读不出来 → 改成「嫌弃」= 脸黑 + 眯眼。
+    // 0.7 是「脸还看得见眯眼」的深度；1.0 会把眼睛整个盖掉。
+    PARAM_EXP3: [0.6, 0.8],
+  },
+  挑眉: {
+    // 主人：换到屏幕左眉后还是不明显 → 再把另一条眉压低 + 歪头 12° + 转头 5°
+    ParamBrowRForm: [0.9, 1], ParamBrowRAngle: [0.9, 1],
+    ParamBrowLForm: [-0.6, -0.4], ParamBrowLAngle: [-0.5, -0.3],
+    ParamEyeBallY: [0.35, 0.55], ParamEyeBallX: [-0.45, -0.25],
+    ParamAngleZ: [-14, -10], ParamAngleX: [-7, -3],
+  },
+}
+console.log('\n=== 0. 观感锁：四个新表情的方向与幅度 ===')
+for (const [expr, want] of Object.entries(LOOK_LOCK)) {
+  const ps = (MF.expressions[expr] && MF.expressions[expr].params) || []
+  const bad = []
+  for (const [id, [lo, hi]] of Object.entries(want)) {
+    const p = ps.find((x) => x.id === id)
+    if (!p) bad.push(id + ' 缺失')
+    else if (!(p.value >= lo && p.value <= hi)) bad.push(id + '=' + p.value + '（应 ' + lo + '~' + hi + '）')
+  }
+  ok(bad.length === 0, expr + ' 观感锁' + (bad.length ? '：' + bad.join('；') : '：方向/幅度都在预期区间'))
+}
+
 /** 「口型」页是另一张表（纯换嘴素材），也要逐项验 */
 const MOUTH = ['口型切换', '3嘴', '〇嘴']
 
@@ -41,7 +88,7 @@ await sleep(450)
 
 const chips = await ev('Array.from(document.querySelectorAll(".dshp-panel.dshp-on .dshp-chip")).map(function(c){return {label:c.textContent, title:c.title}})')
 console.log('菜单里的表情：' + JSON.stringify(chips.map((c) => c.label)))
-ok(chips.length === 10, '表情页 10 项（平常 + 9 个表情，含主人点名加回来的圈圈眼）')
+ok(chips.length === 14, '表情页 14 项（平常 + 13 个表情，含主人点名加回来的圈圈眼 + 新加的疑惑/怀疑/嫌弃/挑眉）')
 // 每一项都要"点了她会说话"—— 主人最初的抱怨就是"点了没反应"
 const silent = chips.filter((c) => c.label !== '平常' && !String(c.title).includes('她会说'))
 ok(silent.length === 0, '每一项都配了台词' + (silent.length ? '（缺：' + silent.map((c) => c.label).join(',') + '）' : ''))
@@ -50,7 +97,8 @@ console.log('')
 for (const expr of ORDER) {
   const def = MF.expressions[expr]
   if (!def) { ok(false, expr + ' 不在 manifest 里'); continue }
-  const params = def.params.map((p) => ({ id: p.id, value: p.value }))
+  // 根参数（AngleX/Y/Z）另在 LOOK_LOCK 里锁死；待机层也在写它们，逐项采样分不清归属
+  const params = def.params.map((p) => ({ id: p.id, value: p.value })).filter((p) => !/^ParamAngle[XYZ]$/.test(p.id))
   await ev('DSHPet.clearUserFace()'); await ev('DSHPet.clearReaction()')
   await sleep(500)
   const clicked = await ev('(function(){var b=Array.from(document.querySelectorAll(".dshp-chip")).find(function(c){return c.textContent===' + JSON.stringify(expr) + '}); if(!b) return false; b.click(); return true})()')
@@ -69,7 +117,8 @@ for (const expr of ORDER) {
     await sleep(85)
   }
   const detail = params.map((p) => p.id + '=' + (peak[p.id] === undefined ? 'n/a' : peak[p.id].toFixed(2)) + '(目标' + p.value + ')').join(', ')
-  const good = params.every((p) => peak[p.id] !== undefined && peak[p.id] > 0.35)
+  // 0.2 的下限：0.3 的轻度半眯也要能过；方向与最小幅度由 LOOK_LOCK 负责
+  const good = params.every((p) => peak[p.id] !== undefined && peak[p.id] > 0.2)
   ok(good, expr.padEnd(6) + ' ' + detail)
   // 顺手确认点完之后她真的开口了（气泡里有字）
   const bub = await ev('(document.querySelector(".dshp-bubble")||{}).textContent||""')

@@ -141,6 +141,43 @@ ok(sl.tracks.find((t) => t.id === 'Param_arm_R1').keys.every((k) => k[1] >= 0), 
 ok(M.getClipDef('鞠躬') === null, '「鞠躬」已删除（站姿立绘没有弯腰绑定，留着是假动作）')
 ok(!M.listClips().includes('鞠躬'), '动作库里不再有鞠躬')
 
+console.log('\n=== 5.5 S3 新动作：打喷嚏 / 叹气 ===')
+{
+  const sneeze = M.getClipDef('打喷嚏')
+  ok(!!sneeze && sneeze.duration <= 1.1, '打喷嚏 是 0.9 秒的快动作（' + (sneeze && sneeze.duration) + 's）')
+  const y = peakOf('打喷嚏', 'ParamAngleY')
+  ok(y.lo < -15, '打喷嚏 快速低头（ParamAngleY 峰值 ' + y.lo.toFixed(1) + '°）')
+  const eL = peakOf('打喷嚏', 'ParamEyeLOpen'), eR = peakOf('打喷嚏', 'ParamEyeROpen')
+  ok(eL.lo < -0.95 && eR.lo < -0.95, '打喷嚏 眼睛形状真的闭上（EyeL/R = ' + eL.lo.toFixed(2) + ' / ' + eR.lo.toFixed(2) + '）')
+  const ex5 = peakOf('打喷嚏', 'PARAM_EXP5')
+  ok(ex5.lo < -0.95, '打喷嚏 同时切了闭眼素材 EXP5=' + ex5.lo.toFixed(2) + '（坑 12.5：两套系统必须成对）')
+  const mo = peakOf('打喷嚏', 'ParamMouthOpenY')
+  ok(mo.hi > 0.6, '打喷嚏 张嘴（ParamMouthOpenY 峰值 ' + mo.hi.toFixed(2) + '）')
+  const br = peakOf('打喷嚏', 'ParamBrowLAngle')
+  ok(br.lo < -0.3, '打喷嚏 皱眉（BrowAngle 峰值 ' + br.lo.toFixed(2) + '，负=倒八字）')
+
+  const sigh = M.getClipDef('叹气')
+  ok(!!sigh && sigh.duration >= 2.4, '叹气 是慢动作（' + (sigh && sigh.duration) + 's）')
+  const sy = peakOf('叹气', 'ParamAngleY')
+  ok(sy.lo < -8, '叹气 低头（ParamAngleY 峰值 ' + sy.lo.toFixed(1) + '°）')
+  const se = peakOf('叹气', 'ParamEyeLOpen')
+  ok(se.lo < -0.95, '叹气 闭眼（EyeOpen 峰值 ' + se.lo.toFixed(2) + '）')
+  const sb = peakOf('叹气', 'ParamBrowLAngle')
+  ok(sb.hi > 0.4, '叹气 八字眉（BrowAngle +' + sb.hi.toFixed(2) + '，委屈/无奈）')
+  ok(!sigh.tracks.some((t) => t.id === 'ParamBreath'), '叹气 不写 ParamBreath 负值（引擎夹到 [0,1]，负值等于没写；尾巴靠低头带动）')
+
+  // 结构性锁：闭眼两套系统必须同时出现（只写一个 = 坑 12.5）
+  for (const name of ['打喷嚏', '叹气']) {
+    const ids = M.getClipDef(name).tracks.map((t) => t.id)
+    ok(ids.includes('PARAM_EXP5') && ids.includes('ParamEyeLOpen') && ids.includes('ParamEyeROpen'),
+       name + ' 闭眼两套系统成对出现（EXP5 + EyeL/R）')
+    ok(M.getClipDef(name).tracks.every((t) => t.keys[t.keys.length - 1][1] === 0),
+       name + ' 每条轨道末尾都回到 0（不会留残姿）')
+  }
+  ok(M.resolveName('sneeze') === '打喷嚏', "resolveName('sneeze') -> 打喷嚏")
+  ok(M.resolveName('sigh') === '叹气', "resolveName('sigh') -> 叹气")
+}
+
 console.log('\n=== 6. speed / strength / hold / delay ===')
 const fast = M.makeClip('挥手(左)', { speed: 2 }), slow = M.makeClip('挥手(左)', { speed: 0.5 })
 const len = (c) => { let g = 0; while (!c.done && g++ < 8000) M.stepClip(c, 1000 / 60); return g / 60 }

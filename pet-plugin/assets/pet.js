@@ -300,6 +300,9 @@
     shift: { label: '换重心', motion: '换重心', ms: 4600, mood: null, lines: ['（换了个站姿）', '站累了…换只脚', '（左右晃了晃）'] },
     // 合并版：闭眼 + 张手 + 仰头（原「伸懒腰」的手臂 + 原「打哈欠」的闭眼）
     stretch: { label: '伸懒腰', motion: '伸懒腰', ms: 3800, mood: null, lines: ['（伸懒腰）唔——', '伸一下～好舒服', '（闭着眼张开手）啊——'] },
+    // S3（2026-10-17）：两个只用根参数的快/慢动作。mood 一律 null，脸交给 clip 自己。
+    sneeze: { label: '打喷嚏', motion: '打喷嚏', ms: 1200, mood: null, note: '0.9 秒：快速低头 + 成对闭眼 + 张嘴', lines: ['（阿嚏！）啊——嚏！', '（揉了揉鼻子）唔…谁在说人家', '（吸鼻子）好像有点着凉'] },
+    sigh: { label: '叹气', motion: '叹气', ms: 3000, mood: null, note: '2.6 秒：低头 + 闭眼半秒；尾巴靠物理自然沉', lines: ['（叹气）唉……', '（低着头）好累哦', '（长出一口气）白饭还没来'] },
 
     // —— 阶段 1：表情类动作。mood 一律 null ——
     // 它们自己在 clip 里驱动表情参数（脸红 / 眉毛 / 嘴形 / 眼球），
@@ -368,9 +371,9 @@
    * **没列进来的**（都是有意的）：
    *   · 口型切换 / 3嘴 / 〇嘴 —— 是"换嘴素材"，不是情绪
    *   · 尾巴消失 / 耳朵消失 / 水印消除 —— 是服装/水印开关
-   *   · 圈圈眼 —— 主人明确点名不要
+   *   · 圈圈眼 —— 主人后来点名要回来，已在列表里（别按旧注释删）
    */
-  const FACE_MENU = ['脸红', '生气', '挤眼', '担心嘴', '栗子嘴', '龇牙', '流口水', '脸黑', '圈圈眼']
+  const FACE_MENU = ['脸红', '生气', '挤眼', '担心嘴', '栗子嘴', '龇牙', '流口水', '脸黑', '圈圈眼', '疑惑', '怀疑', '嫌弃', '挑眉']
 
   /*
    * 「口型」页：纯**换嘴素材**，和"情绪"不是一回事，所以单开一张表 + 单独一个页签。
@@ -398,6 +401,10 @@
     流口水: ['（流口水）好香…', '（盯着看）想吃', '唔…白饭的味道'],
     脸黑: ['（脸一黑）……', '（阴影）人家现在不想说话', '……（沉默）'],
     圈圈眼: ['（眼睛转成圈圈）晕…', '（天旋地转）人家不行了', '（圈圈眼）转晕了…'],
+    疑惑: ['（歪头）诶？什么意思', '（疑惑）人家没听懂', '（眨眼）主人再说一遍？'],
+    怀疑: ['（眯起一只眼）嗯？真的假的', '（怀疑）主人是不是在骗人家', '（打量）人家看着呢'],
+    嫌弃: ['（脸一黑）噫——不要靠这么近', '（眯起眼）人家现在不想理你', '（嫌弃地别过脸）走开啦'],
+    挑眉: ['（挑眉）哦？真的假的', '（挑了挑眉）有点意思', '（抬眉）主人再说一遍？'],
   }
 
   /** 装饰品：戴上时说什么。**不叠别的东西**——主人说「不要瞎组合」。 */
@@ -1497,7 +1504,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
        * 下面这批是阶段 1 加的「表情类」动作。
        * 用的是**实测过方向**的表情参数（见 _research-data/表情方向.txt）：
        *   ParamEyeBallX  + = 看右      ParamEyeBallY  + = 看上
-       *   ParamBrowLAngle/RAngle  + = 眉毛上抬（惊讶）、− = 下压（皱眉）
+       *   ParamBrowLAngle/RAngle  +1 = 八字（内端↑/外端↓，委屈）、−1 = 倒八字（内端↓，生气）
        *   ParamMouthOpenY + = 张嘴
        *   PARAM_EXP4 +1 = **脸红**（腮红层，屏幕上约 78×26 px，看得见）
        *   PARAM_EXP5 +1 = O O 圈圈眼 / **-1 = 《》闭眼**
@@ -1506,8 +1513,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
        *    结果「脸红」点亮的其实是圈圈眼。真值表见 assets/model/manifest.json 的 _note。
        *   PARAM_EXP3 有 297 顶点/166px 的真实形变（龇牙）；EXP1/2/6/7/8 是"换嘴/换眼"的显隐开关
        *
-       * ⚠️ 刻意**不驱动 ParamEyeLOpen/ROpen**：blinkTick 用的是「绝对赋值」，
-       *    而且在 applyRig 里排在我们**之后**，会把 clip 的闭眼偏移直接盖掉。
+       * ✅ 可以驱动 ParamEyeLOpen/ROpen（2026-10-17 实测），但必须与 PARAM_EXP5 **成对**：
+       *    blinkTick 在 clip 播放时由 motionActive() 直接跳过，不会盖掉；只写一个会「闭眼没盖严」（坑 12.5）。
        * ⚠️ ParamMouthForm 虽然能写，但实测嘴角只动 0.6px（屏幕约 0.1px）——基本看不见，
        *    所以不靠它做表情，改用 PARAM_EXP 的显隐切换。
        */
@@ -1583,6 +1590,44 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           { id: 'ParamAngleZ', keys: [[0, 0], [0.65, 13, 'out'], [2.5, 13], [2.95, 0]] },
           { id: 'ParamAngleY', keys: [[0, 0], [0.65, 4], [2.5, 4], [2.95, 0]] }
         ]
+      },
+      /*
+       * 打喷嚏（S3，2026-10-17）：0.9 秒的快动作。
+       * 快速低头（ParamAngleY 负）+ **成对**闭眼（PARAM_EXP5 关眼睑素材 +
+       * ParamEyeLOpen/ROpen 关眼睛形状，坑 12.5）+ 张嘴 + 眉压下（倒八字）。
+       */
+      '打喷嚏': {
+        duration: 0.9,
+        tracks: [
+          { id: 'ParamAngleY', keys: [[0, 0], [0.1, -14, 'in'], [0.3, -21, 'out'], [0.55, -7], [0.85, 0]] },
+          { id: 'ParamAngleX', keys: [[0, 0], [0.15, -2], [0.45, 2], [0.8, 0]] },
+          { id: 'ParamAngleZ', keys: [[0, 0], [0.18, -3], [0.38, 2.5], [0.75, 0]] },
+          { id: 'PARAM_EXP5', keys: [[0, 0], [0.09, -1, 'out'], [0.45, -1], [0.66, 0]] },
+          { id: 'ParamEyeLOpen', keys: [[0, 0], [0.09, -1, 'out'], [0.45, -1], [0.66, 0]] },
+          { id: 'ParamEyeROpen', keys: [[0, 0], [0.09, -1, 'out'], [0.45, -1], [0.66, 0]] },
+          { id: 'ParamMouthOpenY', keys: [[0, 0], [0.12, 0.75, 'out'], [0.32, 0.85], [0.55, 0.15], [0.85, 0]] },
+          { id: 'ParamBrowLAngle', keys: [[0, 0], [0.1, -0.5], [0.45, -0.5], [0.75, 0]] },
+          { id: 'ParamBrowRAngle', keys: [[0, 0], [0.1, -0.5], [0.45, -0.5], [0.75, 0]] }
+        ]
+      },
+      /*
+       * 叹气（S3，2026-10-17）：低头 + 闭眼半秒 + 慢慢吐气。
+       * ⚠️ 原方案想写 ParamBreath 负值做「尾巴一沉」—— 引擎把偏移夹到 [0,1]
+       *    （默认 0），负值会被夹成 0，等于没写。所以尾巴的下沉交给
+       *    **低头 + 身体前倾**，让尾巴物理自己跟下来（会晚半拍，反而更像叹气）。
+       */
+      '叹气': {
+        duration: 2.6,
+        tracks: [
+          { id: 'ParamAngleY', keys: [[0, 0], [0.55, -9, 'out'], [1.75, -10], [2.45, 0]] },
+          { id: 'ParamAngleZ', keys: [[0, 0], [0.7, -3.5], [1.8, -2.5], [2.45, 0]] },
+          { id: 'PARAM_EXP5', keys: [[0, 0], [0.5, -1, 'out'], [1.5, -1], [2.1, 0]] },
+          { id: 'ParamEyeLOpen', keys: [[0, 0], [0.5, -1, 'out'], [1.5, -1], [2.1, 0]] },
+          { id: 'ParamEyeROpen', keys: [[0, 0], [0.5, -1, 'out'], [1.5, -1], [2.1, 0]] },
+          { id: 'ParamMouthOpenY', keys: [[0, 0], [0.6, 0.18, 'out'], [1.45, 0.12], [2.0, 0]] },
+          { id: 'ParamBrowLAngle', keys: [[0, 0], [0.55, 0.55], [1.6, 0.45], [2.4, 0]] },
+          { id: 'ParamBrowRAngle', keys: [[0, 0], [0.55, 0.55], [1.6, 0.45], [2.4, 0]] }
+        ]
       }
     }
 
@@ -1606,7 +1651,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       think: '思考', thinking: '思考',
       'look-around': '左顾右盼', lookaround: '左顾右盼', lookup: '左顾右盼',
       yawn: '伸懒腰', tired: '伸懒腰',
-      hug: '要抱抱', hugging: '要抱抱', embrace: '要抱抱'
+      hug: '要抱抱', hugging: '要抱抱', embrace: '要抱抱',
+      // S3（2026-10-17）：新动作的 ASCII 别名
+      sneeze: '打喷嚏', achoo: '打喷嚏',
+      sigh: '叹气', sighing: '叹气'
     }
     function normKey(s) { return String(s).trim().toLowerCase().replace(/[\s_]+/g, '-') }
     /** 把任意写法（中文名 / ASCII 别名 / 大小写 / 下划线）解析成规范动作名，失败返回 null */
@@ -2696,7 +2744,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // 表情类的关键参数也看一眼：
       // 注意不能用 paramValue() 判断表情有没有生效 —— applyRig 跑在 loadParameters()
       // 之前，帧末参数会被快照还原，帧外读到的永远是快照值（这条踩过）。
-      'ParamBrowLAngle', 'ParamBrowRAngle', 'ParamMouthForm',
+      'ParamBrowLAngle', 'ParamBrowRAngle', 'ParamBrowLForm', 'ParamBrowRForm', 'ParamMouthForm',
       // 眼睛形状（0=闭 1=睁）。闭眼观感排查必须看它：
       //   PARAM_EXP5 只切「眼睑素材的透明度」，而「眼睛形状」是这两条在管 ——
       //   两者是两个独立系统，只动一个就会出现「闭眼没盖严」（实测踩过）。

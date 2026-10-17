@@ -40,12 +40,19 @@ ok(String(bubbleText).includes('测试标题') && String(bubbleText).includes('�
 ok((await ev('document.querySelectorAll(".dshp-mail").length')) === 0, '推送简报不会再生出信封')
 
 console.log('\n=== 5. /dsh-pet/control 的 report 字段仍可用 ===')
-const token = (await import('node:fs')).readFileSync(
-  (await import('node:path')).join((await import('node:os')).homedir(), '.dsh', 'dsh-live2d-pet-desktop.json'), 'utf8')
-const tk = JSON.parse(token).token
-const rr = await fetch('http://127.0.0.1:19387/dsh-pet/control', {
+/*
+ * v1.0 独立化之后，/dsh-pet/control 由**外壳自己的本地服务**接收，再代转给 DSH。
+ * 所以：
+ *   · 地址用页面自己的 origin（19400），别再写死 DSH 的 19387（换机器/换端口就红）
+ *   · 通行证是本地服务的 dsh_pet_local，不是 DSH 的 dsh_pet_desk
+ * 页面 URL 上的 ?k= 就是本地令牌。
+ */
+const localURL = new URL(t.url)
+const localToken = localURL.searchParams.get('k') || ''
+if (!localToken) { console.log('  ! 页面 URL 没有 k 令牌，跳过控制通道这一节'); process.exit(fail ? 1 : 0) }
+const rr = await fetch(localURL.origin + '/dsh-pet/control', {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', Cookie: 'dsh_pet_desk=' + tk },
+  headers: { 'Content-Type': 'application/json', Cookie: 'dsh_pet_local=' + localToken },
   body: JSON.stringify({ report: ['控制通道简报', '来自 HTTP 的测试'] }),
 })
 ok(rr.status === 200, 'POST /dsh-pet/control {report:[...]} 返回 200')

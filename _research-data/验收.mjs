@@ -36,7 +36,7 @@ console.log('=== 1. 启动状态 ===')
 const st = await evalIn('DSHPet.motionState()')
 ok(st.ready === true, '参数范围表已加载（ready=true）')
 ok(st.idle.enabled === true && st.idle.level === 1, '待机层开着，幅度 ' + st.idle.level)
-ok((await evalIn('DSHPet.clips()')).length === 13, '动作库 13 个（8 基础 + 6 表情类 − 1 个被合并的「打哈欠」）')
+ok((await evalIn('DSHPet.clips()')).length === 15, '动作库 15 个（13 个原有 + S3 的「打喷嚏 / 叹气」）')
 
 console.log('\n=== 2. 待机层真的在驱动参数（采样 12 秒）===')
 const ids = ['ParamAngleX', 'ParamAngleY', 'ParamAngleZ', 'ParamBreath']
@@ -53,9 +53,9 @@ for (const id of ids) {
 }
 ok(Math.min(...hist.ParamBreath.filter((x) => x != null)) >= 0, 'ParamBreath 从不为负（尾巴物理的输入约束）')
 
-console.log('\n=== 3. 菜单 8 项逐个点一遍 ===')
+console.log('\n=== 3. 菜单全部逐个点一遍 ===')
 const acts = await evalIn('DSHPet.actions()')
-ok(acts.length === 13, '菜单有 ' + acts.length + ' 项（原 14，「打哈欠」已合并进「伸懒腰」）')
+ok(acts.length === 15, '菜单有 ' + acts.length + ' 项（13 个原有 + 打喷嚏 / 叹气）')
 ok(!acts.some((a) => a.label === '鞠躬'), '菜单里没有「鞠躬」')
 /*
  * 左右命名约定：全项目统一用**屏幕（观察者）视角**，菜单→clip→参数名一路同向。
@@ -81,6 +81,7 @@ for (const a of acts) {
     挥左边手: 'waveLeft', 挥右边手: 'waveRight', 点头: 'nod', 摇头: 'shake', 歪头: 'tilt',
     甩尾巴: 'tailWag', 换重心: 'shift', 伸懒腰: 'stretch',
     惊讶: 'surprise', 害羞: 'shy', 思考: 'think', 左顾右盼: 'lookAround', 要抱抱: 'hug',
+    打喷嚏: 'sneeze', 叹气: 'sigh',
   }
   const ms = await evalIn('DSHPet.playAction(' + JSON.stringify(KEYMAP[a.label] || 'stretch') + ')')
   await sleep(350)
