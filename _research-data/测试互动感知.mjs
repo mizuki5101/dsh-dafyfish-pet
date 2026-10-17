@@ -1,8 +1,11 @@
 /**
- * 互动感知器单测（纯 Node，不需要外壳）。
+ * 互动感知器 + 睡眠状态机单测（纯 Node，不需要外壳）。
  *
- * 做法同 测试待机节奏.mjs：从 pet.js 抠 `@idle-sensors` 那一块原样求值，
+ * 做法同 测试待机节奏.mjs：从 pet.js 抠 `@idle-sensors` / `@sleep-state` 两块原样求值，
  * 所以测的就是线上跑的那份代码。
+ *
+ * 2026-10-17 起这一套还覆盖睡眠：5 秒悬停唤醒（含「入睡时鼠标已在身上不算」）、
+ * 身边甩动唤醒、换嘴节奏、梦话节奏。
  *
  * 为什么感知器必须做成纯函数才好测：真实的「鼠标凑过来 1.2 秒」在浏览器里
  * 很难精确复现（还得等 20 秒冷却），而纯函数只要喂一串坐标 + 时间戳就行。
@@ -19,6 +22,12 @@ const m = /\/\* ==== @idle-sensors:start ====[\s\S]*?\/\* ==== @idle-sensors:end
 if (!m) { console.error('❌ 抠不出 @idle-sensors 块'); process.exit(1) }
 const S = new Function(m[0].replace('var DSHPetIdleSensors =', 'return') + '')()
 if (!S || typeof S.frame !== 'function') { console.error('❌ 块求值失败'); process.exit(1) }
+
+// 睡眠状态机（@sleep-state）：和感知器同一套「抠出来原样跑」的做法
+const sm = /\/\* ==== @sleep-state:start ====[\s\S]*?\/\* ==== @sleep-state:end ==== \*\//.exec(src)
+if (!sm) { console.error('❌ 抠不出 @sleep-state 块'); process.exit(1) }
+const SL = new Function(sm[0].replace('var DSHPetSleep =', 'return') + '')()
+if (!SL || typeof SL.frame !== 'function') { console.error('❌ @sleep-state 求值失败'); process.exit(1) }
 
 let pass = 0, fail = 0
 const ok = (name, cond, extra) => {
@@ -188,6 +197,119 @@ console.log('\n【8】活泼节流（noteActivity 不能被刷爆）')
     const second = S.livelyTick(st0, 100) // 紧接着：必须被节流
     ok('第一次放行、紧接着的第二次被节流', first === true && second === false, { first: first, second: second })
   }
+}
+
+console.log('\n【9】睡眠状态机（唤醒手势 / 换嘴 / 梦话）')
+{
+  // 随机数固定成 0：间隔一律取最小值，时间点可预期
+  const r0 = () => 0
+  const st = SL.makeState()
+  SL.begin(st, 1000, false, {}, r0)
+  ok('begin 之后 asleep', st.asleep === true)
+  ok('入睡时光标不在身上 → 5 秒唤醒已武装', st.hoverArmed === true)
+
+  let woke = null
+  for (let t = 1040; t <= 7000; t += 40) {
+    const o = SL.frame(st, { inside: true, near: true, vx: 0, vy: 0 }, {}, t, r0)
+    if (o.wake) { woke = { at: t, why: o.wake }; break }
+  }
+  ok('停在身上 5 秒会叫醒（hover）', !!woke && woke.why === 'hover', woke)
+  ok('不早于 5 秒（' + (woke ? woke.at - 1000 : '-') + 'ms）', !!woke && woke.at - 1000 >= 5000, woke)
+}
+{
+  // 入睡时鼠标已经在身上 → 不算；必须先移出去
+  const st = SL.makeState()
+  SL.begin(st, 1000, true, {}, () => 0)
+  let woke = null
+  for (let t = 1040; t <= 21000; t += 40) {
+    const o = SL.frame(st, { inside: true, near: true, vx: 0, vy: 0 }, {}, t, () => 0)
+    if (o.wake) { woke = { at: t, why: o.wake }; break }
+  }
+  ok('入睡时鼠标已在身上 → 一直不动不会叫醒', woke === null, woke)
+  SL.frame(st, { inside: false, near: false, vx: 0, vy: 0 }, {}, 21040, () => 0)
+  let woke2 = null
+  for (let t = 21080; t <= 27000; t += 40) {
+    const o = SL.frame(st, { inside: true, near: true, vx: 0, vy: 0 }, {}, t, () => 0)
+    if (o.wake) { woke2 = { at: t, why: o.wake }; break }
+  }
+  ok('移出去再放回来 → 5 秒后叫醒', !!woke2 && woke2.why === 'hover', woke2)
+}
+{
+  // 悬停中途离开 → 重新计时
+  const st = SL.makeState()
+  SL.begin(st, 0, false, {}, () => 0)
+  SL.frame(st, { inside: true, near: true }, {}, 40, () => 0)
+  SL.frame(st, { inside: true, near: true }, {}, 4000, () => 0)
+  SL.frame(st, { inside: false, near: false }, {}, 4040, () => 0)
+  SL.frame(st, { inside: true, near: true }, {}, 4080, () => 0)
+  let woke = null
+  for (let t = 4120; t <= 9800; t += 40) {
+    const o = SL.frame(st, { inside: true, near: true }, {}, t, () => 0)
+    if (o.wake) { woke = t; break }
+  }
+  ok('离开过就重新计时（不早于再次进入后 5 秒）', woke !== null && woke - 4080 >= 5000, { woke: woke, after: woke && woke - 4080 })
+}
+{
+  // 甩动：附近 + 够快；远处 / 慢速都不算
+  const nearFast = (() => {
+    const st = SL.makeState(); SL.begin(st, 0, false, {}, () => 0)
+    return SL.frame(st, { inside: false, near: true, vx: 5000, vy: 0 }, 40, () => 0)
+  })()
+  ok('身边快速甩动会叫醒（swish）', nearFast.wake === 'swish', nearFast)
+  const far = (() => {
+    const st = SL.makeState(); SL.begin(st, 0, false, {}, () => 0)
+    return SL.frame(st, { inside: false, near: false, vx: 5000, vy: 0 }, 40, () => 0)
+  })()
+  ok('离她很远的高速移动不算', far.wake === null, far)
+  const slow = (() => {
+    const st = SL.makeState(); SL.begin(st, 0, false, {}, () => 0)
+    return SL.frame(st, { inside: false, near: true, vx: 600, vy: 0 }, 40, () => 0)
+  })()
+  ok('慢慢挪（600px/s）不算', slow.wake === null, slow)
+}
+{
+  // 换嘴：10~30 秒一张，按 1→2→0 循环；梦话 30~50 秒一句
+  const st = SL.makeState()
+  SL.begin(st, 0, false, {}, () => 0)
+  const faces = []
+  const dreams = []
+  for (let t = 40; t <= 70000; t += 40) {
+    const o = SL.frame(st, { inside: false, near: false, vx: 0, vy: 0 }, {}, t, () => 0)
+    if (o.face != null) faces.push({ at: t, i: o.face })
+    if (o.dream) dreams.push(t)
+  }
+  ok('第一次换嘴在 10 秒（配置下限）', faces[0] && faces[0].at === 10000, faces[0])
+  ok('换嘴顺序 1→2→0 循环', faces.slice(0, 3).map((x) => x.i).join(',') === '1,2,0', faces.slice(0, 3))
+  ok('换嘴间隔不短于 10 秒', faces.every((x, i) => i === 0 || x.at - faces[i - 1].at >= 10000), faces)
+  ok('第一句梦话在 30 秒（配置下限）', dreams[0] === 30000, dreams)
+  ok('梦话间隔不短于 30 秒', dreams.every((x, i) => i === 0 || x - dreams[i - 1] >= 30000), dreams)
+}
+{
+  // 配置覆写：节奏都能被 CFG 的 sleepXxx 改
+  const st = SL.makeState()
+  SL.begin(st, 0, false, { sleepFaceMinMs: 1000, sleepFaceMaxMs: 1000, sleepDreamMinMs: 2000, sleepDreamMaxMs: 2000 }, () => 0.5)
+  const o1 = SL.frame(st, { inside: false, near: false }, {}, 1040, () => 0.5)
+  ok('sleepFaceMinMs/MaxMs 可覆写（1 秒就换）', o1.face != null, o1)
+  const o2 = SL.frame(st, { inside: false, near: false }, {}, 2040, () => 0.5)
+  ok('sleepDreamMinMs/MaxMs 可覆写（2 秒就说梦话）', o2.dream === true, o2)
+  const st2 = SL.makeState()
+  SL.begin(st2, 0, false, { sleepHoverMs: 1000 }, () => 0)
+  let w = null
+  for (let t = 40; t <= 2500; t += 40) {
+    const o = SL.frame(st2, { inside: true, near: true }, { sleepHoverMs: 1000 }, t, () => 0)
+    if (o.wake) { w = t; break }
+  }
+  ok('sleepHoverMs 可覆写（1 秒就叫醒）', w !== null && w >= 1000, w)
+}
+{
+  // 没睡着 / 收尾
+  const st = SL.makeState()
+  const o = SL.frame(st, { inside: true, near: true, vx: 9000, vy: 0 }, 100, () => 0)
+  ok('没入睡时不出任何事件', !o.wake && o.face == null && o.dream === false, o)
+  SL.end(st)
+  ok('end 之后 asleep=false、悬停解除武装', st.asleep === false && st.hoverArmed === false, st)
+  const snap = SL.snapshot(st, 1000)
+  ok('snapshot 可读（醒着时不报倒计时）', !!snap && snap.asleep === false && snap.faceInMs === 0, snap)
 }
 
 console.log('\n' + '='.repeat(52))

@@ -1057,6 +1057,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 主人手动选的脸，30 秒；期间待机不会抢，但真实事件会。 */
   function setUserFace(name) {
+    if (idle.sleep) wakeUp('face') // 主人手动换脸也算叫醒，别让睡脸压着她手动选的脸
     rig.user = { face: moodFace(name), until: performance.now() + 30000 }
     resolveRig()
   }
@@ -2293,6 +2294,170 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   })()
   /* ==== @idle-sensors:end ==== */
 
+  /* ==== @sleep-state:start ====
+   * 睡眠状态机（纯函数，无 DOM / PIXI 依赖）。
+   *
+   * 解决什么问题：睡着以后她应该「真的睡着」——
+   *   闭眼、不再抽待机行为/小戏、不跟鼠标、只留呼吸和偶尔的梦话；
+   *   而叫醒她要靠**明确的手势**（在身上停 5 秒 / 身边快速甩鼠标 / 直接拖），
+   *   不是「随便动一下鼠标」。
+   *
+   * 为什么单独一块纯函数：这些判定全是「时间 + 光标位置 + 速度 → 该不该醒 / 换哪张嘴」，
+   *   不碰任何运行时对象，所以 _research-data/测试互动感知.mjs 能原样抠出来跑。
+   *
+   * ⚠️ 「睡着时鼠标已经在身上」不算数：begin() 里 hoverArmed = !inside，
+   *    必须先把光标移出去、再放回来，才会开始计 5 秒。
+   */
+  var DSHPetSleep = (function () {
+    'use strict'
+
+    var DEFAULTS = {
+      hoverMs: 5000, // 鼠标停在她身上多久叫醒（毫秒）
+      swishSpeed: 1200, // 在她周围多快算「快速甩动」（px/s）
+      faceMinMs: 10000, // 睡脸换嘴：最短间隔
+      faceMaxMs: 30000, // 睡脸换嘴：最长间隔
+      dreamMinMs: 30000, // 梦话：最短间隔
+      dreamMaxMs: 50000 // 梦话：最长间隔
+    }
+    var FACE_COUNT = 3
+
+    function clampNum(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v }
+    /** 读 CFG 里的 sleepXxx（都可选；没配就用 DEFAULTS） */
+    function cfgn(cfg, k, d) {
+      var v = Number(cfg && cfg['sleep' + k.charAt(0).toUpperCase() + k.slice(1)])
+      return isFinite(v) && v >= 0 ? v : d
+    }
+    function gapOf(cfg, kMin, kMax, rand) {
+      var a = cfgn(cfg, kMin, DEFAULTS[kMin])
+      var b = cfgn(cfg, kMax, DEFAULTS[kMax])
+      if (b < a) b = a
+      var r = typeof rand === 'function' ? rand() : Math.random()
+      return a + (b - a) * clampNum(r, 0, 1)
+    }
+
+    function makeState() {
+      return {
+        asleep: false,
+        t: 0, // 上次 tick 时刻
+        since: 0, // 入睡时刻
+        speed: 0, // 光标速度 EMA（px/s）
+        hoverArmed: false, // 光标离开过身上才为 true（睡着时就放在身上不算）
+        hoverSince: 0, // 本次连续停在她身上的起点
+        faceIdx: 0, // 当前睡脸序号（0~2，调用方映射成表情名）
+        nextFaceAt: 0,
+        nextDreamAt: 0,
+        faceCount: 0,
+        dreamCount: 0
+      }
+    }
+
+    /** 入睡：记住「光标是不是已经在身上」——已经在身上就不武装 5 秒唤醒 */
+    function begin(st, now, inside, cfg, rand) {
+      if (!st) return st
+      st.asleep = true
+      st.t = now
+      st.since = now
+      st.speed = 0
+      st.hoverArmed = !inside
+      st.hoverSince = 0
+      st.faceIdx = 0
+      st.faceCount = 0
+      st.dreamCount = 0
+      st.nextFaceAt = now + gapOf(cfg, 'faceMinMs', 'faceMaxMs', rand)
+      st.nextDreamAt = now + gapOf(cfg, 'dreamMinMs', 'dreamMaxMs', rand)
+      return st
+    }
+
+    /**
+     * 睡着时的一帧。返回 { wake, face, dream }：
+     *   wake —— 'hover' | 'swish' | null（调用方负责真的叫醒）
+     *   face —— 该换的第几张睡脸（null = 不换）
+     *   dream —— 这一帧该说一句梦话
+     */
+    function frame(st, input, cfg, now, rand) {
+      var out = { wake: null, face: null, dream: false }
+      if (!st || !st.asleep) return out
+      input = input || {}
+      var dt = st.t ? clampNum((now - st.t) / 1000, 0.001, 0.5) : 0.04
+      st.t = now
+
+      // 速度 EMA 放这里（和 @idle-sensors 各用各的状态，互不影响）
+      var vx = Number(input.vx) || 0
+      var vy = Number(input.vy) || 0
+      var v = Math.sqrt(vx * vx + vy * vy)
+      st.speed += (v - st.speed) * clampNum(dt * 8, 0, 1)
+
+      // ① 放在身上 5 秒
+      if (!input.inside) {
+        st.hoverArmed = true
+        st.hoverSince = 0
+      } else if (st.hoverArmed) {
+        if (!st.hoverSince) st.hoverSince = now
+        if (now - st.hoverSince >= cfgn(cfg, 'hoverMs', DEFAULTS.hoverMs)) out.wake = 'hover'
+      } else {
+        st.hoverSince = 0
+      }
+
+      // ② 身边快速甩动（要在她附近，不是屏幕任意角落）
+      if (!out.wake && input.near && st.speed >= cfgn(cfg, 'swishSpeed', DEFAULTS.swishSpeed)) {
+        out.wake = 'swish'
+      }
+
+      // ③ 口型轮换（硬切由调用方做：旧睡脸权重直接清掉）
+      if (now >= st.nextFaceAt) {
+        st.faceIdx = (st.faceIdx + 1) % FACE_COUNT
+        st.faceCount++
+        out.face = st.faceIdx
+        st.nextFaceAt = now + gapOf(cfg, 'faceMinMs', 'faceMaxMs', rand)
+      }
+
+      // ④ 梦话
+      if (now >= st.nextDreamAt) {
+        st.dreamCount++
+        out.dream = true
+        st.nextDreamAt = now + gapOf(cfg, 'dreamMinMs', 'dreamMaxMs', rand)
+      }
+
+      return out
+    }
+
+    function end(st) {
+      if (!st) return st
+      st.asleep = false
+      st.hoverArmed = false
+      st.hoverSince = 0
+      st.speed = 0
+      return st
+    }
+
+    /** 诊断用：摊平成可读对象 */
+    function snapshot(st, now) {
+      if (!st) return null
+      return {
+        asleep: !!st.asleep,
+        sinceMs: st.asleep ? Math.round(now - st.since) : 0,
+        speed: Math.round(st.speed),
+        hoverArmed: st.hoverArmed,
+        hoverMs: st.hoverSince ? Math.round(now - st.hoverSince) : 0,
+        faceIdx: st.faceIdx,
+        faceInMs: st.asleep ? Math.max(0, Math.round(st.nextFaceAt - now)) : 0,
+        dreamInMs: st.asleep ? Math.max(0, Math.round(st.nextDreamAt - now)) : 0,
+        faceCount: st.faceCount,
+        dreamCount: st.dreamCount
+      }
+    }
+
+    return {
+      DEFAULTS: DEFAULTS,
+      FACE_COUNT: FACE_COUNT,
+      makeState: makeState,
+      begin: begin,
+      frame: frame,
+      end: end,
+      snapshot: snapshot
+    }
+  })()
+  /* ==== @sleep-state:end ==== */
   /* ==== @idle-scripts:start ====
    * 成套小戏引擎（纯函数，无 DOM / PIXI 依赖）。
    *
@@ -2840,6 +3005,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 播放一个动作 clip（动作引擎的动作库）。返回是否成功。 */
   function playClip(name, opts) {
+    if (idle.sleep) wakeUp('clip') // 睡着时外部点动作：先叫醒（睡脸不能挂着一个动作）
     if (!DSHPetMotion) return false
     const c = DSHPetMotion.makeClip(name, opts || {})
     if (!c) return false
@@ -3140,6 +3306,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   4. 永久禁用：吹泡泡糖、大锤砸、呆呆眼（见 BANNED_MOTIONS / MOOD_FACE）
    */
   function act(spec) {
+    if (idle.sleep) wakeUp('act') // 睡着时来一次性表演 = 先叫醒（菜单点击也走这条兜底）
     spec = spec || {}
     stopActing() // ← 关键：先归零，再开始
     const ms = spec.ms || 2600
@@ -4163,8 +4330,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const g = gazeCfg()
     // 指针超过 2 秒没有更新（桌面版壳子停止喂数据 / 鼠标离开跟踪源）→ 视为脱离，
     // 不再盯着最后那个方向，而是回正脸（主人要求：找不到光标就朝前看）
+    const asleep = !!idle.sleep
     const pointerFresh = gaze.pointer.seen && now - (gaze.pointer.at || 0) < 2000
-    if (!detached && CFG.lookAtCursor && pointerFresh) {
+    if (!detached && !asleep && CFG.lookAtCursor && pointerFresh) {
       const r = ui.stage.getBoundingClientRect()
       if (r.width) {
         const dx = gaze.pointer.x - (r.left + r.width / 2)
@@ -4184,11 +4352,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (following) {
       gaze.mode = 'follow'
     } else {
-      // 没人管它：自己看东看西、想事情
-      gaze.mode = detached ? 'detach' : 'idle'
+      // 没人管它：自己看东看西、想事情；睡着时**不动**，视线回正（不跟鼠标、也不游移）
+      gaze.mode = asleep ? 'sleep' : detached ? 'detach' : 'idle'
       // 主人要求：脱离跟随就「回正脸」，不要老歪着斜眼看一个地方，也不能长时间卡住。
       // 所以游移幅度从 ±0.5 收到 ±0.11（基本朝前），间隔也缩短，不再一盯好几秒。
-      if (now > gaze.nextDrift) {
+      if (!asleep && now > gaze.nextDrift) {
         gaze.nextDrift = now + 1100 + Math.random() * 1800
         // 幅度 × CFG.gazeDrift（设置面板的「视线游移」）：上游把游移压得很小
         // （注释写着「主人要求脱离跟随就回正脸」），但那让 glance 几乎不可见；
@@ -4201,9 +4369,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         gaze.driftY = (Math.random() * 2 - 1) * (detached ? 0.05 : 0.09) * driftK
       }
       const t = now / 1000
-      // 明确往「正脸」收：游移只作为一点点生气，而不是主基调
-      wantX = gaze.driftX * 0.85 + Math.sin(t * 0.37) * 0.045
-      wantY = gaze.driftY * 0.85 + Math.cos(t * 0.29) * 0.035
+      // 明确往「正脸」收：游移只作为一点点生气，而不是主基调；睡着时目标就是 0
+      wantX = asleep ? 0 : gaze.driftX * 0.85 + Math.sin(t * 0.37) * 0.045
+      wantY = asleep ? 0 : gaze.driftY * 0.85 + Math.cos(t * 0.29) * 0.035
     }
 
     // 低头看资料：只是给视线加一个纵向偏置，仍然受同一个限速器约束，
@@ -4574,6 +4742,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener(
       'pointermove',
       (e) => {
+        // 鼠标只要有移动就算「主人在」（睡眠计时用；外壳会把全屏光标喂进来）
+        idle.lastInputAt = performance.now()
         if (!dragging) {
           // 主人反馈：「我鼠标往下走要去点那三个键，一离开她身上它们就消失了，点不着」。
           // 原因：原来只认 hitTest（她模型身上），而工具栏在她**下方**、不在模型掩码里。
@@ -4594,7 +4764,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         } else if (start) {
           const dx = e.clientX - start.mx
           const dy = e.clientY - start.my
-          if (!dragMoved && Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true
+          if (!dragMoved && Math.abs(dx) + Math.abs(dy) > 4) {
+            dragMoved = true
+            if (idle.sleep) wakeUp('drag') // 拽她 = 叫醒
+          }
           if (dragMoved) {
             // —— 直接响应每个 pointermove（本机改回）——
             // 曾经试过 rAF 节流，结果更糟：慢速拖动时 pointermove 隔 ~30ms 才来一次，
@@ -4648,6 +4821,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener(
       'pointerdown',
       (e) => {
+        idle.lastInputAt = performance.now()
         if (e.button !== 0) return
         if (!hitTest(e.clientX, e.clientY)) return
         // 点在鲸鱼娘身上：吃掉这次点击，别让下面的 DSH 界面也响应
@@ -4756,6 +4930,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     })
 
     window.addEventListener('keydown', (e) => {
+      idle.lastInputAt = performance.now() // 按键也算主人在（睡眠计时用）
       if (e.key !== 'Escape') return
       if (hud.open) {
         e.stopPropagation()
@@ -4766,6 +4941,28 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       e.stopPropagation()
       closePanels()
     })
+
+    // 睡着时点菜单里的表情/动作：先走过场，再把这次点击放行。
+    // 为什么在捕获阶段拦：按钮自己的 click 会立刻 act()/playClip，把过场顶掉。
+    // 只拦 .dshp-chip（表情/口型/动作），设置页的滑块和关闭按钮不拦。
+    ui.menu.el.addEventListener(
+      'click',
+      (e) => {
+        if (!idle.sleep) return
+        const chip = e.target && e.target.closest ? e.target.closest('.dshp-chip') : null
+        if (!chip) return
+        e.stopPropagation()
+        e.preventDefault()
+        wakeUp('menu')
+        setTimeout(() => {
+          if (idle.sleep) return
+          try {
+            chip.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+          } catch (err) {}
+        }, 560)
+      },
+      true,
+    )
 
     ui.tab.addEventListener('click', () => setHidden(false))
 
@@ -5066,6 +5263,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function poke(clientX, clientY) {
     abortIdleScript() // 主人点她 → 小戏立刻让位（别让一段小戏和点击的反应打架）
     if (ui.root.classList.contains('dshp-hidden')) return
+    // 睡着时戳她 = 叫醒：走「圈圈眼 + 害羞」过场，不播平常那套戳戳台词
+    if (idle.sleep) {
+      closePanels()
+      qBounce(1)
+      wakeUp('poke')
+      return
+    }
 
     // —— 干活时点她：也互动，但**不动底层状态** ——
     // 反应是一次性的（两秒左右），过期后自动回到「正在做的那件事」，
@@ -5090,7 +5294,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const tier = pokeTier(now)
 
     closePanels()
-    wakeUp()
     qBounce(tier.furious ? 1.35 : tier.rapid ? 1.15 : 1)
     gazeDetach(2200)
 
@@ -5584,6 +5787,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // 互动感知（S2）：她在旁边能感觉到你在打字（不拦事件，只记时间）
       try {
         DSHPetIdleSensors.key(idle.sensors, performance.now())
+        idle.lastInputAt = performance.now() // 输入框这里 stopPropagation，窗口级 keydown 收不到，补一下
       } catch (err) {}
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault()
@@ -6173,6 +6377,24 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       row3.append(toBall, quitApp)
       box.append(row3)
     }
+    // ——— 调试：睡眠 ———
+    // 主人要「不用等 3 分钟、也不用开调试口」就能看睡眠状态，所以给一个真实入口的按钮：
+    // 走的就是 beginSleep/wakeUp，不另写一套；按钮不是 .dshp-chip，
+    // 不会被「睡着时点菜单先走过场」的捕获逻辑拦住。
+    const sleepRow = $('div', 'dshp-row')
+    const sleepText = sleepDebugText()
+    const sleepBtn = $('button', 'dshp-btn', sleepText.btn)
+    sleepBtn.title = sleepText.title
+    sleepBtn.addEventListener('click', () => {
+      if (idle.sleep) wakeUp('debug')
+      else beginSleep('debug')
+      // beginSleep/wakeUp 里都会 sync；这里再调一次是防止状态没变时按钮文案落后
+      syncSleepDebugUI()
+    })
+    sleepRow.appendChild(sleepBtn)
+    const sleepHint = $('div', 'dshp-hint', sleepText.hint)
+    // 面板重建后把引用换到新节点（旧节点已从 DOM 断开，sync 会自己跳过）
+    sleepDebugUI = { btn: sleepBtn, hint: sleepHint }
     box.append(
       row1,
       row2,
@@ -6182,6 +6404,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         '拖动可以换位置；右键或 ⋯ 叫出菜单；双击直接开输入框。\n表情平时由她自己挑——你在这里选只是 30 秒的临时心情，她遇到正事会自己换回来。',
       ),
     )
+    // 调试区放最底下：平时不看它，做睡眠/唤醒观感时才用
+    box.append($('div', 'dshp-hint', '调试（不用等 3 分钟，也不用开调试口）'), sleepRow, sleepHint)
     panes.appendChild(box)
     // 换页后面板高度会变，可能顶到屏幕外面去（立刻夹一次 + 下一帧兜底）
     clampPanels()
@@ -6278,6 +6502,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (next !== 'idle') abortIdleScript()
     agent.status = next
     agent.lastActivity = Date.now()
+    idle.lastDshAt = performance.now() // 睡眠计时用的性能时钟（别混 Date.now）
     agent.sleeping = false
   }
 
@@ -6296,11 +6521,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
       case 'user':
         setStatus('listening')
+        idle.lastDshAt = performance.now() // 状态没变时 setStatus 会提前返回，这里补一下
         rig.talking = false
-        wakeUp()
         stopActing()
         setBase('listening', IDLE_PROPS)
         clearToolProp()
+        // 睡着时插一段「懵」的过场（keepBase：别把刚切好的 listening 底脸盖回 neutral）
+        wakeUp('dsh', { keepBase: true })
         ui.bubble.show(String(m.text || '').slice(0, 300), { name: '你', ttl: 3500 })
         break
 
@@ -6331,6 +6558,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       case 'delta':
         if (m.kind === 'reasoning' && !CFG.showReasoning) return
         agent.lastActivity = Date.now()
+        idle.lastDshAt = performance.now()
         if (!agent.hasStream) {
           agent.hasStream = true
           setStatus('speaking')
@@ -6854,6 +7082,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   const idle = {
     sleep: 0,
+    /** 睡眠状态机（@sleep-state）：武装 5 秒唤醒 / 换嘴 / 梦话排期 */
+    sleepSt: (typeof DSHPetSleep !== 'undefined' && DSHPetSleep) ? DSHPetSleep.makeState() : null,
+    sleepWhy: null,
+    sleepAt: 0,
+    sleepIdleLevel: null,
+    /** 主人最后一次有动作（光标/点击/按键），performance.now()。睡眠计时用 */
+    lastInputAt: (typeof performance !== 'undefined' ? performance.now() : 0),
+    /** DSH 最后一次有事件（等于 agent.lastActivity 的性能时钟版） */
+    lastDshAt: (typeof performance !== 'undefined' ? performance.now() : 0),
     nextAt: 0,
     /** 演示模式：忽略 agent 忙闲（见 DSHPet.idleDemo）。刷新即失效 */
     demo: false,
@@ -6867,14 +7104,188 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     clipUntil: 0,
     /** 反应窗口到期时刻：这段时间里待机大脑让位（见 idle.allowAct） */
     reactUntil: 0,
+    /** 刚醒的过场窗口：这段时间里感知器/待机大脑都让位（见 wakeUp） */
+    wakeHoldUntil: 0,
     /** 待机节奏状态（@idle-rhythm）。纯数据，转移逻辑都在那个纯函数块里 */
     rhythm: DSHPetIdleRhythm.makeState(),
   }
 
-  function wakeUp() {
-    if (idle.sleep === 0) return
+  // ——————————————————————————————————————————————————————————————
+  // 睡眠（2026-10-17）：睡着 = 闭眼 + 只呼吸 + 偶尔梦话；叫醒靠明确手势
+  //
+  // 三张睡脸是**隐藏表情**（不进 FACE_MENU，表情页仍是 14 项），见 manifest 的 _sleepNote。
+  // ⚠️ 睡脸**只写眼形**（EyeL/ROpen -1），故意不加 PARAM_EXP5：那条素材是 >< 挤眼，
+  //    睡着时像在用力闭眼；只写眼形才是自然的闭眼（canvas 实测对比，用 _safe/验证睡眠.mjs 可重跑出图）。
+  // 为什么嘴要换：一直挂同一张嘴十几分钟会很假；换嘴的节奏在 @sleep-state。
+  // ——————————————————————————————————————————————————————————————
+  const SLEEP_FACES = ['睡·流口水', '睡·3嘴', '睡·〇嘴']
+  const SLEEP_ONSET_LINE = '（睡着了）呼…'
+  const SLEEP_LINES = [
+    '（做梦）白饭…再来一碗…',
+    '（梦话）不要抢我的饭…',
+    '（睡着）呼…呼…',
+    '（梦里）主人…别走…',
+    '（梦话）今天…也吃饱了…',
+    '（睡着）嘿嘿…糖醋鱼…'
+  ]
+
+  function sleepFacesUsable() { return SLEEP_FACES.filter((n) => EXPR[n]) }
+
+  /**
+   * 换睡脸：**硬切**（旧脸权重直接删掉）。
+   * 为什么不能靠默认淡入淡出：两张脸同时在权重里时，嘴部素材（EXP2/EXP7/EXP8）
+   * 会叠加约 0.3 秒 —— 观感就是「两张嘴叠在一起」。
+   */
+  function applySleepFace(idx) {
+    const list = sleepFacesUsable()
+    if (!list.length) return null
+    const name = list[(((Number(idx) || 0) % list.length) + list.length) % list.length]
+    for (const n of SLEEP_FACES) rig.weight.delete(n)
+    rig.weight.set(name, 1)
+    rig.base = { mood: 'sleepy', face: name, props: [] }
+    rig.user.face = null // 手动表情让位：睡着了就别再挂主人点的那张脸
+    resolveRig()
+    return name
+  }
+
+  function clearSleepFace() {
+    for (const n of SLEEP_FACES) rig.weight.delete(n)
+  }
+
+  /** 光标现在是不是真的在她身上（入睡瞬间判断「已经在身上」用） */
+  function pointerOnHer() {
+    try { return !!(gaze.pointer.seen && hitTest(gaze.pointer.x, gaze.pointer.y)) } catch (e) { return false }
+  }
+
+  /** 设置页调试按钮的当前文案（按钮渲染与实时同步的唯一来源） */
+  let sleepDebugUI = null
+  function sleepDebugText() {
+    if (idle.sleep) {
+      return {
+        btn: '叫醒她（调试）',
+        title: '走真实的 wakeUp：圈圈眼过场，然后回到平常',
+        hint: '睡眠调试：她现在**睡着**。只有手势 / 点击 / 菜单 / DSH 消息会叫醒。'
+      }
+    }
+    return {
+      btn: '立即进入睡眠（调试）',
+      title: '走真实的 beginSleep：立刻闭眼 / 停动作，不用等 3 分钟',
+      hint: '睡眠调试：她现在醒着，安静 ' + Math.max(0, Math.round((Number(CFG.sleepAfterMs) || 0) / 1000)) + ' 秒（鼠标 / 键盘 / DSH 都算活动）后会自动睡着。'
+    }
+  }
+
+  /**
+   * 设置页开着时，让调试按钮/提示跟着**真实状态**走。
+   *
+   * 为什么不能只在渲染时读一次 idle.sleep：主人用手势叫醒她（悬停 / 甩动 / 拖动 / 点击）
+   * 不会经过这个按钮，面板也不会重建 —— 按钮就会一直显示「叫醒她」，点了才发现她其实醒着。
+   * 只改 textContent，不重建面板：设置页很长，重建会把滚动位置弹回顶部。
+   */
+  function syncSleepDebugUI() {
+    const d = sleepDebugUI
+    if (!d || !d.btn || !d.btn.isConnected) return
+    const t = sleepDebugText()
+    if (d.btn.textContent !== t.btn) d.btn.textContent = t.btn
+    d.btn.title = t.title
+    if (d.hint && d.hint.isConnected && d.hint.textContent !== t.hint) d.hint.textContent = t.hint
+  }
+
+  /** 入睡。why 只用于诊断（quiet / debug） */
+  function beginSleep(why) {
+    if (idle.sleep) return false
+    const now = performance.now()
+    idle.sleep = 2
+    idle.sleepWhy = why || 'quiet'
+    idle.sleepAt = now
+    if (idle.sleepSt) DSHPetSleep.begin(idle.sleepSt, now, pointerOnHer(), CFG, Math.random)
+    // 「不再触发动作」从入睡这一刻生效：收掉正在演的一次性表演 + 小戏
+    try { abortIdleScript() } catch (e) {}
+    try { stopActing() } catch (e) {}
+    idle.reactUntil = 0
+    idle.scriptAbortWhy = 'sleep'
+    if (idle.sensors) idle.sensors.typing = false
+    gaze.biasTarget = 0
+    gaze.nextDrift = 0
+    applySleepFace(0)
+    // 只留呼吸 + 很轻的摇摆：待机层 level 临时压到 55%（醒来由 syncIdleLevel 还原）
+    idle.sleepIdleLevel = motion.idle.level
+    motion.idle.level = (motion.idle.level || 0) * 0.55
+    try { ui.bubble.show(SLEEP_ONSET_LINE, { name: 'DS 鲸鱼娘', ttl: 3600 }) } catch (e) {}
+    motion.debug.sleep = { startedAt: Math.round(now), why: idle.sleepWhy, face: rig.face }
+    syncSleepDebugUI()
+    return true
+  }
+
+  function sleepDreamLine() {
+    try { ui.bubble.show(pickFresh(SLEEP_LINES, 'sleep-dream'), { name: 'DS 鲸鱼娘', ttl: 4600 }) } catch (e) {}
+  }
+
+  /**
+   * 叫醒。reason: hover / swish / drag / poke / menu / dsh / debug
+   *
+   * 过场：先「圈圈眼」懵一下（快速）。纯手势唤醒再按概率追加一个害羞；
+   * 菜单动作和 DSH 消息不追加（菜单动作紧接着要执行，DSH 消息要马上进入 listening）。
+   *
+   * ⚠️ 唤醒是**状态迁移**，不是感知器反应：这里可以写一次性 override；
+   *    感知器那条链路（doReaction）仍然绝不碰 override。
+   * opts.keepBase：DSH 消息已经先把底脸切成「听主人说话」，叫醒时别盖回 neutral。
+   */
+  function wakeUp(reason, opts) {
+    if (!idle.sleep) return false
+    opts = opts || {}
+    const now = performance.now()
     idle.sleep = 0
-    act({ mood: 'alert', line: pick(SAY.wake), ms: 1800 })
+    idle.sleepWhy = null
+    if (idle.sleepSt) DSHPetSleep.end(idle.sleepSt)
+    idle.reactUntil = 0
+    clearSleepFace()
+    if (!opts.keepBase) setBase('neutral', IDLE_PROPS)
+    // 待机幅度还原：syncIdleLevel 是唯一入口，别手写数字
+    idle.sleepIdleLevel = null
+    try { syncIdleLevel() } catch (e) {}
+    idle.lastInputAt = now
+    // 过场动画：快速圈圈眼（「被叫醒的懵」）
+    const faceMs = Math.max(200, Number(CFG.sleepWakeFaceMs) || 500)
+    if (!rig.override) {
+      setReaction({ face: '圈圈眼', ms: faceMs })
+      // 硬切进来：被叫醒那一下是「啪」地睁眼，不能慢慢淡入（淡入会吃掉一半时长）
+      rig.weight.set('圈圈眼', 1)
+    }
+    motion.debug.sleepWake = { reason: reason || '?', at: Math.round(now), faceMs: faceMs, keepBase: !!opts.keepBase }
+    // 只有「纯手势」唤醒才追加害羞（见函数头注释）
+    const shyReasons = { hover: 1, swish: 1, drag: 1, poke: 1 }
+    const shyP = Number(CFG.sleepShyChance)
+    const shyChance = isFinite(shyP) && shyP >= 0 ? shyP : 0.8
+    const shyOn = !!(shyReasons[reason] && Math.random() < shyChance)
+    // 刚醒的这几秒别让感知器/待机大脑插进来：过场还没演完就被 hover 反应打断，
+    // 观感是「刚睁眼又歪头」。
+    idle.wakeHoldUntil = now + (shyOn ? 2900 : Math.max(800, faceMs + 300))
+    idle.nextAt = Math.max(idle.nextAt, idle.wakeHoldUntil)
+    if (shyOn) {
+      setTimeout(() => {
+        if (idle.sleep || rig.override) return
+        try {
+          playClip('害羞', { speed: 1.15 })
+          motion.debug.sleepShy = { at: Math.round(performance.now()) }
+        } catch (e) {}
+      }, faceMs + 80)
+    }
+    syncSleepDebugUI()
+    return true
+  }
+
+  /**
+   * 睡着时的 40ms 心跳（挂在 sensorTick 里，不新增定时器）。
+   * 换嘴 / 梦话 / 唤醒手势都在这里；纯判定在 @sleep-state。
+   */
+  function sleepTick(now, g) {
+    if (!idle.sleep || !idle.sleepSt) return
+    const out = DSHPetSleep.frame(idle.sleepSt, { inside: g.inside, near: g.near, vx: g.vx, vy: g.vy }, CFG, now, Math.random)
+    if (out.wake) { wakeUp(out.wake); return }
+    if (out.face != null) applySleepFace(out.face)
+    if (out.dream) sleepDreamLine()
+    if (!motion.debug.sleep) motion.debug.sleep = {}
+    motion.debug.sleep.last = DSHPetSleep.snapshot(idle.sleepSt, now)
   }
 
   /**
@@ -7227,7 +7638,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    */
   function sensorTick(now) {
     if (!DSHPetIdleSensors) return
-    if (CFG.idleReact === false) return
     const st = idle.sensors
     const p = gaze.pointer
     // 速度：用 40ms 的位移估算（px/s）。gazeTick 固定 40ms 一跳，够用且便宜。
@@ -7257,6 +7667,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let overUi = false
     try { overUi = overDock(p.x, p.y) } catch (e) {}
 
+    // 睡着：只跑睡眠状态机（5 秒悬停 / 身边甩动 / 换嘴 / 梦话），不做任何互动反应。
+    // 放在 idleReact 总开关之前：关掉互动感知也不该让她永远叫不醒。
+    if (idle.sleep) {
+      sleepTick(now, { inside: inside, near: near, vx: vx, vy: vy })
+      if (!motion.debug.sensors) motion.debug.sensors = {}
+      motion.debug.sensors.sleeping = true
+      return
+    }
+    if (CFG.idleReact === false) return
+    // 刚醒的过场窗口：优先让她把「懵」演完（见 wakeUp）
+    if (now < (idle.wakeHoldUntil || 0)) return
+
     const ev = DSHPetIdleSensors.frame(st, { x: p.x, y: p.y, near: near, inside: inside, overUi: overUi, vx: vx, vy: vy }, CFG, now)
     // 诊断输出（挂在既有的 motion.debug 上，别新开对象）
     if (!motion.debug.sensors) motion.debug.sensors = {}
@@ -7264,7 +7686,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       near: ev.near, hover: ev.hover, stare: ev.stare, swoosh: ev.swoosh,
       typing: ev.typing, typingStop: ev.typingStop,
       speed: Math.round(st.speed),
-      counts: Object.assign({}, st.counts)
+      counts: Object.assign({}, st.counts),
+      sleeping: false
     }
 
     // 「主人有活动」→ 通知节奏引擎进活跃期（带节流，且只在真的凑近/打字时）
@@ -7393,6 +7816,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   function runIdleBehavior() {
     // 提前返回的原因要留痕 —— 否则「行为被静默跳过」只能靠猜（我为此猜了两轮）
+    if (idle.sleep) { idle.behWhy = 'sleep'; return null }
     if (idle.scripts && idle.scripts.running) { idle.behWhy = 'script-running'; return null }
     if (rig.override && !rig.override.soft) {
       idle.behWhy = 'hard-override:' + String(rig.override.face || rig.override.mood || '?')
@@ -7487,6 +7911,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 有了它，就算哪条事件路径漏了复位，也不会出现「一直挂着某张脸」。
     setInterval(() => {
       if (agent.status !== 'idle') return
+      if (idle.sleep) return // 睡着时底脸必须留着睡脸，别被兜底复位抹掉（2026-10-17）
       if (rig.override) return
       if (rig.base.mood !== 'neutral') setBase('neutral', IDLE_PROPS)
       if (gaze.biasTarget !== 0) gaze.biasTarget = 0
@@ -7505,6 +7930,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       if (PERF.low) return                      // 低性能档：不自言自语、不自己找戏
       if (ui.root.classList.contains('dshp-hidden')) return
       if (document.hidden) return
+      // 睡着：待机大脑停摆（呼吸/物理还在走）。换嘴和梦话由 sensorTick 的 @sleep-state 管。
+      if (idle.sleep) return
       const now = performance.now()
       if (now < idle.nextAt) return
 
@@ -7555,17 +7982,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       idle.nextAt = now + DSHPetIdleRhythm.intervalMs(st, CFG)
     }, 1200)
 
-    // 睡眠序列：先打哈欠，再睡着；鼠标一动就醒
+    // 睡眠计时：先打哈欠，再睡着。
+    //
+    // ⚠️ 2026-10-17 改了「什么算主人在」：以前只看 agent.lastActivity（DSH 事件），
+    //    于是主人明明在玩桌宠/动鼠标，3 分钟后她照样睡。现在鼠标/点击/按键都算 ——
+    //    两个时钟取最大（都是 performance.now()，别混 Date.now）。
     setInterval(() => {
       if (!CFG.sleepAfterMs || agent.status !== 'idle') return
       if (PERF.low) return                      // 低性能档：连打哈欠/睡觉都省掉
-      const quiet = Date.now() - agent.lastActivity
+      const quiet = performance.now() - Math.max(idle.lastInputAt || 0, idle.lastDshAt || 0)
       if (idle.sleep === 0 && quiet > CFG.sleepAfterMs) {
-        idle.sleep = 2
-        setBase('sleepy', IDLE_PROPS)
-        ui.bubble.show(pick(['Zzz…', '（打瞌睡）', '（趴桌上睡着了）']), { name: 'DS 鲸鱼娘', ttl: 9000 })
+        beginSleep('quiet')
       } else if (idle.sleep === 0 && quiet > CFG.sleepAfterMs * 0.55 && Math.random() < 0.4) {
-        // 打哈欠
+        // 打哈欠（入睡前的提醒；不是睡着本身）
         act({ mood: 'sleepy', props: IDLE_PROPS, line: '（打了个哈欠）', ms: 2600 })
       }
     }, 15000)
@@ -7691,6 +8120,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const now = performance.now()
       return {
         enabled: CFG.idleReact !== false,
+        sleeping: idle.sleep !== 0,
         strength: reactStrength(),
         inNear: st.inNear,
         sinceNearMs: st.sinceNear ? Math.round(now - st.sinceNear) : 0,
@@ -7716,6 +8146,30 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         reactWho: idle.reactWho || null,
         reactPriority: idle.reactWho ? (REACT_PRIORITY[idle.reactWho] || 0) : 0
       }
+    },
+
+    /** 诊断：睡眠状态（@sleep-state 快照 + 当前睡脸 / 待机幅度 / 最近唤醒） */
+    sleepState: () => ({
+      asleep: idle.sleep !== 0,
+      why: idle.sleepWhy || null,
+      asleepMs: idle.sleep ? Math.round(performance.now() - idle.sleepAt) : 0,
+      engine: (idle.sleepSt && typeof DSHPetSleep !== 'undefined') ? DSHPetSleep.snapshot(idle.sleepSt, performance.now()) : null,
+      face: rig.face,
+      faces: sleepFacesUsable(),
+      idleLevel: motion.idle.level,
+      lastWake: motion.debug.sleepWake || null,
+      lastShy: motion.debug.sleepShy || null,
+      last: (motion.debug.sleep && motion.debug.sleep.last) || null
+    }),
+    /** 诊断/测试：立刻入睡（不用等 3 分钟） */
+    sleepNow: () => beginSleep('debug'),
+    /** 诊断/测试：立刻叫醒（reason 只用于诊断） */
+    wakeNow: (reason) => wakeUp(reason || 'debug'),
+    /** 诊断/测试：切到第 i 张睡脸（睡着时看口型轮换用） */
+    sleepFace: (i) => applySleepFace(Number(i) || 0),
+    /** 诊断：她自己的画布 PNG（透明窗口截图不可靠，看观感用这个） */
+    captureCanvas: () => {
+      try { return app && app.view ? app.view.toDataURL('image/png') : null } catch (e) { return null }
     },
     /**
      * 互动演示（**不用开控制台**）：依次模拟「凑近 / 盯着看 / 甩鼠标 / 打字后停下」，
