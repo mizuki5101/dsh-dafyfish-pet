@@ -1,5 +1,15 @@
 # 更新日志 / Changelog
 
+## 0.4.19 — 2026-10-17（听见什么 + 感知器→小戏桥）
+
+- 声音感知的 sustain 从 1.2s 降到 **0.8s**（主人实测后调整；短提示音仍不会触发）。
+- 新增第 8 段「**听见什么**」：`clip 惊讶 → glance → clip 左顾右盼 → 「（竖起耳朵）什么声音？」`，
+  4.2s / weight 7 / minGap 90s；菜单「小戏」页自动列出。
+- **感知器→小戏桥**：`doReaction` 支持 `kind:'script'`；`reactionHoldMs` 按 `durOf` 算占位；
+  `startIdleScriptByName(name, {respectCooldown:true, manual:false})` 给感知器用（菜单仍跳过冷却）。
+- `audioBurst` 现在直接起「听见什么」；睡着被声音惊醒后 900ms 也接这段。
+- 测试：`测试成套小戏` 90 → **96**；6 个纯 Node **498** + CDP 234 = **732**。
+
 ## 0.4.18 — 2026-10-17（设置页：重置听觉感知）
 
 - 设置页「调试」区新增「**重置听觉感知（调试）**」：清掉 burst 冷却 + 立刻武装，

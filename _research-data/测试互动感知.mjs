@@ -345,8 +345,8 @@ console.log('\n【10】系统声音「突然播放」感知（@audio-burst）')
     const st = AB.makeState()
     feed(st, 0, 300000, 0)
     const r = feed(st, 300040, 301600, 0.3)
-    ok('持续 1.2 秒后触发一次 burst', r.burst === 1, r)
-    ok('首次 burst 不早于 1.2 秒', r.firstBurst !== null && r.firstBurst - 300040 >= 1200, r.firstBurst)
+    ok('持续 0.8 秒后触发一次 burst', r.burst === 1, r)
+    ok('首次 burst 不早于 0.8 秒', r.firstBurst !== null && r.firstBurst - 300040 >= 800, r.firstBurst)
   }
 
   // ③ 短提示音（300ms）不触发

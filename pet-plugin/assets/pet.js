@@ -2468,7 +2468,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * 判定：
    *   · quietMs（默认 5min）没有 audible → 武装
-   *   · 武装后持续 audible ≥ sustainMs（1.2s）→ 产出一次 burst（冷却 cooldownMs）
+   *   · 武装后持续 audible ≥ sustainMs（0.8s）→ 产出一次 burst（冷却 cooldownMs）
    *   · 短提示音（<1.2s）不会触发；一直有声音也不会触发（没有 quiet 窗口）
    *   · 页面刚起来时不知道之前有没有声音：以第一帧为起点，安静满 5min 才武装
    */
@@ -2477,7 +2477,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     var DEFAULTS = {
       peakThreshold: 0.02, // 峰值门槛（0~1）
-      sustainMs: 1200, // 连续响多久才算「在播」
+      sustainMs: 800, // 连续响多久才算「在播」（2026-10-17 主人实测后从 1200 降下来）
       quietMs: 300000, // 5 分钟没声音才武装
       cooldownMs: 300000 // 两次 burst 至少隔 5 分钟
     }
@@ -6601,7 +6601,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const audioHint = $('div', 'dshp-hint', audioDebugText())
     const audioRow = $('div', 'dshp-row')
     const audioBtn = $('button', 'dshp-btn', '重置听觉感知（调试）')
-    audioBtn.title = '清掉 burst 冷却并立刻武装：下一次持续 ≥1.2 秒的声音就会触发（醒着竖耳朵 / 睡着惊醒）'
+    audioBtn.title = '清掉 burst 冷却并立刻武装：下一次持续 ≥0.8 秒的声音就会触发（醒着竖耳朵 / 睡着惊醒）'
     audioBtn.addEventListener('click', () => {
       const ok = resetAudioBurst()
       audioHint.textContent = audioDebugText()
@@ -7178,6 +7178,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ]
     },
     /*
+     * 「听见什么」：突然一声 → 愣住 → 东张西望 → 嘀咕。
+     * 2026-10-17 起也能被 audioBurst 感知器直接触发（见 REACTIONS.audioBurst 的 kind:'script'）。
+     */
+    {
+      name: '听见什么',
+      weight: 7,
+      minGap: 90,
+      steps: [
+        { at: 0.0, do: 'clip', arg: '惊讶' },
+        { at: 1.6, do: 'glance' },
+        { at: 2.2, do: 'clip', arg: '左顾右盼' },
+        { at: 4.2, do: 'line', arg: '（竖起耳朵）什么声音？' }
+      ]
+    },
+    /*
      * 「不想承认」：强调自己不胖，然后自己心虚地嘀咕。
      * 台词取的是人设里那条最经典的（不能被叫胖）。
      */
@@ -7296,20 +7311,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
-   * 手动演指定小戏（菜单「小戏」页用）。
-   * 和 startIdleScript 的区别：跳过随机、跳过冷却（点了就要看）；
-   * `idle.scriptManual` 让 agent 正在干活时也能演 —— 但真实事件（setStatus）仍会 abort。
+   * 演指定小戏。两个入口共用：
+   *   · 菜单「小戏」页：不传 opts → 跳过随机/冷却（点了就要看），`manual:true`；
+   *   · 感知器桥（`doReaction` kind:'script'）：传 `{respectCooldown:true, manual:false}`，
+   *     尊重小戏自己的 minGap，且不绕过 agent 忙守卫（真实事件仍会 abort）。
    */
-  function startIdleScriptByName(name) {
+  function startIdleScriptByName(name, opts) {
     const sc = idle.scripts
     if (!sc || CFG.idleScripts === false) return null
     const def = (IDLE_SCRIPTS || []).find((x) => x && x.name === name)
     if (!def) return null
     const now = performance.now()
+    if (opts && opts.respectCooldown && !DSHPetIdleScripts.canStart(sc, def, now, 15000)) return null
     if (sc.running) abortIdleScript()
     DSHPetIdleScripts.start(sc, def, now)
-    idle.scriptManual = true
-    motion.debug.scriptStart = { name: def.name, at: Math.round(now), manual: true }
+    const manual = !(opts && opts.manual === false)
+    idle.scriptManual = manual
+    motion.debug.scriptStart = { name: def.name, at: Math.round(now), manual: manual }
     return def.name
   }
 
@@ -7599,7 +7617,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!idle.audioBurst) return '听觉调试：状态机不可用'
     if (CFG.suddenAudio === false) return '听觉调试：系统声音感知已关（先打开「系统声音」）'
     const st = idle.audioBurst
-    if (st.armed) return '听觉调试：已武装 —— 下一次持续 ≥1.2 秒的声音就会触发'
+    if (st.armed) return '听觉调试：已武装 —— 下一次持续 ≥0.8 秒的声音就会触发'
     const cd0 = Number(CFG.audioCooldownMs)
     const cd = isFinite(cd0) && cd0 >= 0 ? cd0 : 300000
     const left = Math.max(0, Math.ceil((cd - (performance.now() - (st.lastBurstAt || 0))) / 1000))
@@ -7822,11 +7840,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       { kind: 'nothing', w: 15 }
     ],
     // ⑥ 安静很久后系统突然有声音（@audio-burst）
-    //    先「吓一跳」，再竖耳朵；不播身体大动作，避免一惊一乍。
+    //    走「感知器→小戏」桥：直接起「听见什么」；小戏自己的 minGap/中断逻辑负责收尾。
     audioBurst: [
-      { kind: 'clip', arg: '惊讶', w: 55, ms: 2000, line: '（竖起耳朵）什么声音？' },
-      { kind: 'face', arg: '疑惑', w: 25, ms: 1800 },
-      { kind: 'gaze', w: 20 }
+      { kind: 'script', arg: '听见什么', w: 100 }
     ]
   }
 
@@ -7887,6 +7903,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const pool = REACTIONS[name]
       if (pool) {
         for (const r of pool) {
+          // 感知器桥：script 的占位按小戏真实时长算（不然待机大脑会在第 2 步插进来）
+          if (r.kind === 'script' && r.arg && DSHPetIdleScripts) {
+            const def = (IDLE_SCRIPTS || []).find((x) => x && x.name === r.arg)
+            if (def) ms = Math.max(ms, DSHPetIdleScripts.durOf(def) * 1000 + 300)
+            continue
+          }
           if (r.kind !== 'clip' || !r.arg || !DSHPetMotion) continue
           const def = DSHPetMotion.getClipDef(r.arg)
           if (def && def.duration) ms = Math.max(ms, def.duration * 1000 + 300)
@@ -7942,6 +7964,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         : null
       if (!did) return false
       return true
+    }
+    if (r.kind === 'script') {
+      // 感知器 → 小戏桥：只起小戏，不写 override、不调 act()
+      note(r)
+      const got = startIdleScriptByName(r.arg, { respectCooldown: true, manual: false })
+      return !!got
     }
     if (r.kind === 'clip') {
       note(r)
@@ -8011,7 +8039,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 睡着：只跑睡眠状态机（5 秒悬停 / 身边甩动 / 换嘴 / 梦话），不做任何互动反应。
     // 放在 idleReact 总开关之前：关掉互动感知也不该让她永远叫不醒。
     if (idle.sleep) {
-      if (audioBurst) { wakeUp('audio'); return }
+      if (audioBurst) {
+        wakeUp('audio')
+        // 醒来过场之后再接「听见什么」：先懵一下，再找声音
+        setTimeout(() => {
+          if (idle.sleep || rig.override) return
+          startIdleScriptByName('听见什么', { respectCooldown: true, manual: false })
+        }, 900)
+        return
+      }
       sleepTick(now, { inside: inside && !overUi, near: swishNear && !overUi && !panelGrace, vx: vx, vy: vy })
       if (!motion.debug.sensors) motion.debug.sensors = {}
       motion.debug.sensors.sleeping = true
