@@ -96,6 +96,8 @@
       gazeDrift: 1,
       /** 互动感知（S2）：她能不能感觉到「你凑过来了 / 盯着看 / 甩鼠标 / 在旁边打字」 */
       idleReact: true,
+      /** 系统声音「突然播放」感知（2026-10-17）：外壳轮询 WASAPI 峰值，安静 5 分钟后突然有声 → 她竖耳朵 / 睡着时惊醒。关掉后外壳不跑轮询 */
+      suddenAudio: true,
       /** 互动强度：缩放反应的概率与冷却（0 几乎没反应 ~ 2 很黏人）。预设会带上它 */
       idleReactStrength: 1,
       /** 待机节奏长短句（@idle-rhythm）：发呆期 / 常态 / 活跃期三档。false = 退回上游的均匀 3.5~7.5s */
@@ -2458,6 +2460,103 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
   })()
   /* ==== @sleep-state:end ==== */
+  /* ==== @audio-burst:start ====
+   * 系统声音「突然开始播放」感知（纯函数，无 DOM / Node 依赖）。
+   *
+   * 数据来源：外壳 shell/src/audio.js 用 WASAPI 峰值表每 250ms 推一个 peak（0~1）。
+   * 这里只做「多久没声音 / 响了多久 / 该不该报一次」的判定，所以能单测。
+   *
+   * 判定：
+   *   · quietMs（默认 5min）没有 audible → 武装
+   *   · 武装后持续 audible ≥ sustainMs（1.2s）→ 产出一次 burst（冷却 cooldownMs）
+   *   · 短提示音（<1.2s）不会触发；一直有声音也不会触发（没有 quiet 窗口）
+   *   · 页面刚起来时不知道之前有没有声音：以第一帧为起点，安静满 5min 才武装
+   */
+  var DSHPetAudioBurst = (function () {
+    'use strict'
+
+    var DEFAULTS = {
+      peakThreshold: 0.02, // 峰值门槛（0~1）
+      sustainMs: 1200, // 连续响多久才算「在播」
+      quietMs: 300000, // 5 分钟没声音才武装
+      cooldownMs: 300000 // 两次 burst 至少隔 5 分钟
+    }
+
+    function cfgn(cfg, k, d) {
+      var v = Number(cfg && cfg['audio' + k.charAt(0).toUpperCase() + k.slice(1)])
+      return isFinite(v) && v >= 0 ? v : d
+    }
+
+    function makeState() {
+      return {
+        t: 0,
+        started: false,
+        peak: 0,
+        playing: false,
+        since: 0,
+        lastAudibleAt: 0,
+        armed: false,
+        lastBurstAt: 0,
+        bursts: 0
+      }
+    }
+
+    /** 返回 { burst, playing, armed }；burst 一帧最多为 true 一次 */
+    function frame(st, input, cfg, now) {
+      var out = { burst: false, playing: false, armed: false }
+      if (!st) return out
+      st.t = now
+      var peak = Number(input && input.peak)
+      if (!isFinite(peak)) peak = 0
+      st.peak = peak
+      // 第一帧：不知道之前有没有声音，从这一刻开始算安静。
+      // ⚠️ 用 started 标记，不要用「lastAudibleAt 是 0」判断 —— now 恰好是 0 时会被反复重置。
+      if (!st.started) { st.started = true; st.lastAudibleAt = now }
+
+      var threshold = cfgn(cfg, 'peakThreshold', DEFAULTS.peakThreshold)
+      var sustain = cfgn(cfg, 'sustainMs', DEFAULTS.sustainMs)
+      var quiet = cfgn(cfg, 'quietMs', DEFAULTS.quietMs)
+      var cooldown = cfgn(cfg, 'cooldownMs', DEFAULTS.cooldownMs)
+      var audible = peak >= threshold
+
+      if (audible) {
+        st.lastAudibleAt = now
+        if (!st.playing) { st.playing = true; st.since = now }
+      } else {
+        st.playing = false
+        st.since = 0
+      }
+
+      if (!st.armed && now - st.lastAudibleAt >= quiet) st.armed = true
+      // ⚠️ 第一次 burst 不能拿 lastBurstAt=0 和 now 比：页面刚起时 now 可能 < cooldown，会把首播吃掉。
+      if (st.armed && st.playing && now - st.since >= sustain && (!st.bursts || now - st.lastBurstAt >= cooldown)) {
+        st.armed = false
+        st.lastBurstAt = now
+        st.bursts++
+        out.burst = true
+      }
+
+      out.playing = st.playing
+      out.armed = st.armed
+      return out
+    }
+
+    function snapshot(st, now) {
+      if (!st) return null
+      return {
+        peak: +Number(st.peak || 0).toFixed(4),
+        playing: !!st.playing,
+        playingMs: st.playing ? Math.round(now - st.since) : 0,
+        armed: !!st.armed,
+        quietMs: st.lastAudibleAt ? Math.round(now - st.lastAudibleAt) : 0,
+        bursts: st.bursts,
+        sinceBurstMs: st.lastBurstAt ? Math.round(now - st.lastBurstAt) : 0
+      }
+    }
+
+    return { DEFAULTS: DEFAULTS, makeState: makeState, frame: frame, snapshot: snapshot }
+  })()
+  /* ==== @audio-burst:end ==== */
   /* ==== @idle-scripts:start ====
    * 成套小戏引擎（纯函数，无 DOM / PIXI 依赖）。
    *
@@ -3362,6 +3461,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       wireInteractions()
       connectSSE()
       startLoops()
+      syncAudioMeter() // 默认开；关掉时不启 PowerShell 轮询
       log(
         `就绪：${manifest.displayName} · 动作 ${Object.keys(manifest.motions || {}).length} 个 · 可用表情 ${Object.keys(EXPR).length} 个`,
       )
@@ -6349,7 +6449,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       persistCfg()
       mouthBtn.textContent = CFG.talkMouth ? '说话口型：开' : '说话口型：关'
     })
-    row1.append(eyeBtn, mouthBtn)
+    // 系统声音感知：关掉后外壳不再起 PowerShell 轮询（见 shell/src/audio.js）
+    const soundBtn = $('button', 'dshp-btn', CFG.suddenAudio === false ? '系统声音：关' : '系统声音：开')
+    soundBtn.title = '安静 5 分钟后突然有声音，她会竖起耳朵；睡着时会惊醒。\n关掉后外壳不再轮询系统音量（省一个后台进程）'
+    soundBtn.addEventListener('click', () => {
+      CFG.suddenAudio = CFG.suddenAudio === false
+      persistCfg()
+      soundBtn.textContent = CFG.suddenAudio === false ? '系统声音：关' : '系统声音：开'
+      syncAudioMeter()
+    })
+    row1.append(eyeBtn, mouthBtn, soundBtn)
 
     // 连接哪一个 DSH：自动 / 桌面版 / 网页版
     // （主人反馈：她有时连网页版、有时连桌面版，会「串对话」，所以要一个手动选择键并记住）
@@ -6600,6 +6709,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // 独立外壳：DSH 连上 / 断开时各推一条（见 shell/src/petserver.js 的 linkEvent）
       case 'link':
         noteLink(!!m.online, m.port)
+        break
+
+      // 外壳的 WASAPI 峰值（shell/src/audio.js，每 250ms 一条）
+      case 'audio':
+        idle.audio.peak = Math.max(0, Math.min(1, Number(m.peak) || 0))
+        idle.audio.at = performance.now()
         break
 
       case 'user':
@@ -7236,6 +7351,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     scriptManual: false,
     /** 互动感知状态（@idle-sensors）。纯数据，判定逻辑都在那个纯函数块里 */
     sensors: DSHPetIdleSensors.makeState(),
+    /** 系统声音峰值（外壳每 250ms 推一次：{ peak, at }；force* 是 CDP 调试注入） */
+    audio: { peak: 0, at: 0, forcePeak: 0, forceUntil: 0 },
+    /** 「突然播放」状态机（@audio-burst） */
+    audioBurst: (typeof DSHPetAudioBurst !== 'undefined' && DSHPetAudioBurst) ? DSHPetAudioBurst.makeState() : null,
     /** 待机肢体动作播完的时刻（含淡出）。排期用它留音尾，别在姿势没归零时抽下一件 */
     clipUntil: 0,
     /** 反应窗口到期时刻：这段时间里待机大脑让位（见 idle.allowAct） */
@@ -7426,6 +7545,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (out.dream) sleepDreamLine()
     if (!motion.debug.sleep) motion.debug.sleep = {}
     motion.debug.sleep.last = DSHPetSleep.snapshot(idle.sleepSt, now)
+  }
+
+  /**
+   * 系统声音的 40ms 心跳（由 sensorTick 调，不新增定时器）。
+   * 返回这一帧是否该报「突然播放」。
+   */
+  function audioTick(now) {
+    if (!idle.audioBurst) return false
+    const forced = idle.audio.forceUntil > now
+    const peak = forced ? idle.audio.forcePeak : (idle.audio.peak || 0)
+    const out = DSHPetAudioBurst.frame(idle.audioBurst, { peak: peak }, CFG, now)
+    motion.debug.audio = out
+    if (!out.burst) return false
+    if (CFG.suddenAudio === false) return false
+    motion.debug.audioBurst = { at: Math.round(now), peak: +Number(peak).toFixed(3) }
+    return true
+  }
+
+  /** 把「系统声音感知」开关告诉外壳：关掉后它不再跑 PowerShell 轮询 */
+  function syncAudioMeter() {
+    try {
+      if (shell.on) shell.post(CFG.suddenAudio === false ? 'audio:off' : 'audio:on')
+    } catch (e) {}
   }
 
   /**
@@ -7635,6 +7777,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       { kind: 'gaze', w: 30 },
       { kind: 'face', arg: '生气', w: 15, ms: 1600 },
       { kind: 'nothing', w: 15 }
+    ],
+    // ⑥ 安静很久后系统突然有声音（@audio-burst）
+    //    先「吓一跳」，再竖耳朵；不播身体大动作，避免一惊一乍。
+    audioBurst: [
+      { kind: 'clip', arg: '惊讶', w: 55, ms: 2000, line: '（竖起耳朵）什么声音？' },
+      { kind: 'face', arg: '疑惑', w: 25, ms: 1800 },
+      { kind: 'gaze', w: 20 }
     ]
   }
 
@@ -7679,7 +7828,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 所以：同优先级或更低的，在占位窗口内一律不接管（她自己会排冷却）；
    * 只有「盯着看」和「停下打字」这两个更明确的信号可以接管「凑近/甩鼠标」。
    */
-  const REACT_PRIORITY = { swoosh: 1, hover: 2, typing: 2, typingStop: 3, stare: 3 }
+  const REACT_PRIORITY = { swoosh: 1, hover: 2, typing: 2, typingStop: 3, stare: 3, audioBurst: 3 }
 
   /**
    * 一次反应要「占住她」多久（毫秒）。
@@ -7813,9 +7962,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 刚离开面板的 600ms 内不算甩动：从面板上快速划走时不该把她叫醒
     const panelGrace = now - (idle.lastPanelAt || -1e9) < 600
 
+    // 系统声音「突然播放」（@audio-burst）：睡着时用来惊醒，醒着时走反应池
+    const audioBurst = audioTick(now)
+
     // 睡着：只跑睡眠状态机（5 秒悬停 / 身边甩动 / 换嘴 / 梦话），不做任何互动反应。
     // 放在 idleReact 总开关之前：关掉互动感知也不该让她永远叫不醒。
     if (idle.sleep) {
+      if (audioBurst) { wakeUp('audio'); return }
       sleepTick(now, { inside: inside && !overUi, near: swishNear && !overUi && !panelGrace, vx: vx, vy: vy })
       if (!motion.debug.sensors) motion.debug.sensors = {}
       motion.debug.sensors.sleeping = true
@@ -7851,7 +8004,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     idle.sensorGate = (agent.status !== 'idle' && !idle.demo) ? 'agent-busy' : (rig.override ? 'override' : (now < idle.reactUntil ? 'react-window' : 'open'))
     if (agent.status !== 'idle' && !idle.demo) return
     if (rig.override) return
-    const which = ev.stare ? 'stare' : ev.hover ? 'hover' : ev.swoosh ? 'swoosh' : ev.typingStop ? 'typingStop' : ev.typing ? 'typing' : null
+    const which = audioBurst ? 'audioBurst' : ev.stare ? 'stare' : ev.hover ? 'hover' : ev.swoosh ? 'swoosh' : ev.typingStop ? 'typingStop' : ev.typing ? 'typing' : null
     if (!which) return
     // 反应占位窗口内：只有**优先级更高**的反应才能接管，否则放她把这一个演完。
     //   （这就是「感知器触发的动作优先级最高、不被抢」的落点。）
@@ -8317,6 +8470,35 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     /** 诊断：她自己的画布 PNG（透明窗口截图不可靠，看观感用这个） */
     captureCanvas: () => {
       try { return app && app.view ? app.view.toDataURL('image/png') : null } catch (e) { return null }
+    },
+    /** 诊断：系统声音感知状态（外壳推的峰值 + @audio-burst 状态） */
+    audioState: () => ({
+      enabled: CFG.suddenAudio !== false,
+      peak: +Number((idle.audio && idle.audio.peak) || 0).toFixed(4),
+      sampleAgoMs: (idle.audio && idle.audio.at) ? Math.round(performance.now() - idle.audio.at) : -1,
+      engine: (idle.audioBurst && typeof DSHPetAudioBurst !== 'undefined') ? DSHPetAudioBurst.snapshot(idle.audioBurst, performance.now()) : null,
+      lastBurst: motion.debug.audioBurst || null,
+      lastReaction: idle.lastReaction || null
+    }),
+    /** 诊断/测试：强行武装，跳过 5 分钟安静等待 */
+    audioArm: () => {
+      if (!idle.audioBurst) return null
+      idle.audioBurst.started = true
+      idle.audioBurst.armed = true
+      idle.audioBurst.lastAudibleAt = 0
+      idle.audioBurst.playing = false
+      idle.audioBurst.since = 0
+      // 调试：连冷却一起跳过（真实路径靠 5 分钟安静自然满足）
+      idle.audioBurst.lastBurstAt = 0
+      idle.audioBurst.bursts = 0
+      return DSHPetAudioBurst.snapshot(idle.audioBurst, performance.now())
+    },
+    /** 诊断/测试：注入一段峰值（ms 内持续），不需要真的放声音 */
+    audioFeed: (peak, ms) => {
+      if (!idle.audio) return null
+      idle.audio.forcePeak = Math.max(0, Math.min(1, Number(peak) || 0))
+      idle.audio.forceUntil = performance.now() + Math.max(0, Number(ms) || 0)
+      return { peak: idle.audio.forcePeak, untilMs: Math.round(Math.max(0, idle.audio.forceUntil - performance.now())) }
     },
     /**
      * 互动演示（**不用开控制台**）：依次模拟「凑近 / 盯着看 / 甩鼠标 / 打字后停下」，

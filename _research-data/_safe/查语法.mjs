@@ -25,6 +25,7 @@ const DEFAULTS = [
   'shell/src/main.js',
   'shell/src/preload.js',
   'shell/src/petserver.js',
+  'shell/src/audio.js',
   '_research-data/测试独立桌宠.mjs',
   '_research-data/验证独立外壳.mjs',
   '_research-data/验证断开降级.mjs',

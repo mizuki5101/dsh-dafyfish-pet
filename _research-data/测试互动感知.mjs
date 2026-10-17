@@ -29,6 +29,12 @@ if (!sm) { console.error('❌ 抠不出 @sleep-state 块'); process.exit(1) }
 const SL = new Function(sm[0].replace('var DSHPetSleep =', 'return') + '')()
 if (!SL || typeof SL.frame !== 'function') { console.error('❌ @sleep-state 求值失败'); process.exit(1) }
 
+// 系统声音「突然播放」感知（@audio-burst）
+const am = /\/\* ==== @audio-burst:start ====[\s\S]*?\/\* ==== @audio-burst:end ==== \*\//.exec(src)
+if (!am) { console.error('❌ 抠不出 @audio-burst 块'); process.exit(1) }
+const AB = new Function(am[0].replace('var DSHPetAudioBurst =', 'return') + '')()
+if (!AB || typeof AB.frame !== 'function') { console.error('❌ @audio-burst 求值失败'); process.exit(1) }
+
 let pass = 0, fail = 0
 const ok = (name, cond, extra) => {
   if (cond) { pass++; console.log('  ✅ ' + name) }
@@ -310,6 +316,96 @@ console.log('\n【9】睡眠状态机（唤醒手势 / 换嘴 / 梦话）')
   ok('end 之后 asleep=false、悬停解除武装', st.asleep === false && st.hoverArmed === false, st)
   const snap = SL.snapshot(st, 1000)
   ok('snapshot 可读（醒着时不报倒计时）', !!snap && snap.asleep === false && snap.faceInMs === 0, snap)
+}
+
+console.log('\n【10】系统声音「突然播放」感知（@audio-burst）')
+{
+  // 以 40ms 步进喂一段 peak，统计 burst / 首次触发时刻
+  function feed(st, from, to, peak, cfg) {
+    const out = { burst: 0, firstBurst: null, armedAt: null }
+    for (let t = from; t <= to; t += 40) {
+      const o = AB.frame(st, { peak: peak }, cfg || {}, t)
+      if (o.burst) { out.burst++; if (out.firstBurst === null) out.firstBurst = t }
+      if (o.armed && out.armedAt === null) out.armedAt = t
+    }
+    return out
+  }
+
+  // ① 页面刚起、一直没声音：满 5 分钟才武装
+  {
+    const st = AB.makeState()
+    feed(st, 0, 299000, 0)
+    ok('安静不到 5 分钟不武装', st.armed === false, st)
+    feed(st, 299040, 300100, 0)
+    ok('安静满 5 分钟武装', st.armed === true)
+  }
+
+  // ② 武装后持续响 1.2 秒 → 一次 burst
+  {
+    const st = AB.makeState()
+    feed(st, 0, 300000, 0)
+    const r = feed(st, 300040, 301600, 0.3)
+    ok('持续 1.2 秒后触发一次 burst', r.burst === 1, r)
+    ok('首次 burst 不早于 1.2 秒', r.firstBurst !== null && r.firstBurst - 300040 >= 1200, r.firstBurst)
+  }
+
+  // ③ 短提示音（300ms）不触发
+  {
+    const st = AB.makeState()
+    feed(st, 0, 300000, 0)
+    const r = feed(st, 300040, 300600, 0.3)
+    ok('300ms 提示音不触发', r.burst === 0, r)
+    ok('提示音之后仍然武装', st.armed === true)
+  }
+
+  // ④ 页面起时就在播 → 不触发、不武装
+  {
+    const st = AB.makeState()
+    const r = feed(st, 0, 5000, 0.3)
+    ok('页面起时就在播 → 不触发', r.burst === 0, r)
+    ok('一直在播不会武装', st.armed === false)
+    feed(st, 5040, 305000, 0)
+    ok('停止 5 分钟后武装', st.armed === true)
+    const r2 = feed(st, 305040, 306600, 0.3)
+    ok('再次播放触发', r2.burst === 1, r2)
+    const r3 = feed(st, 306640, 308000, 0.3)
+    ok('爆发后持续声音不会立刻再报', r3.burst === 0, r3)
+  }
+
+  // ④.5 页面刚起不久（now < cooldown）时，第一次 burst 不能被 lastBurstAt=0 吃掉
+  {
+    const st = AB.makeState()
+    st.started = true
+    st.armed = true
+    st.lastAudibleAt = 0
+    const r = feed(st, 100000, 101600, 0.3)
+    ok('页面才起 100 秒也能报第一次 burst', r.burst === 1, r)
+  }
+
+  // ⑤ 配置覆写
+  {
+    const st = AB.makeState()
+    feed(st, 0, 300000, 0)
+    const r = feed(st, 300040, 302000, 0.3, { audioPeakThreshold: 0.5 })
+    ok('阈值 0.5 时 0.3 不算声音', r.burst === 0, r)
+    const r2 = feed(st, 302040, 304000, 0.3, { audioPeakThreshold: 0.01 })
+    ok('阈值 0.01 时可触发', r2.burst === 1, r2)
+  }
+  {
+    const st = AB.makeState()
+    feed(st, 0, 300000, 0)
+    const r = feed(st, 300040, 301000, 0.3, { audioSustainMs: 300 })
+    ok('sustain 300ms 可覆写（约 0.3s 就报）', r.burst === 1 && r.firstBurst - 300040 < 500, r)
+  }
+
+  // ⑥ 诊断快照
+  {
+    const st = AB.makeState()
+    feed(st, 0, 300000, 0)
+    feed(st, 300040, 302000, 0.3)
+    const snap = AB.snapshot(st, 302000)
+    ok('snapshot 可读（armed / bursts / 峰值）', !!snap && typeof snap.armed === 'boolean' && snap.bursts >= 1 && snap.peak > 0, snap)
+  }
 }
 
 console.log('\n' + '='.repeat(52))

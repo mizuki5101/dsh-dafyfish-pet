@@ -20,6 +20,7 @@ const { exec } = require('node:child_process')
 // 她自己的本地 HTTP 服务（2026-10-17）：页面 / 前端 / Live2D 运行时 / 模型不再向 DSH 要。
 // 为什么要它、为什么不用 file://、信任栅栏怎么设，全在 petserver.js 顶部。
 const { createPetServer } = require('./petserver')
+const { createAudioMeter } = require('./audio')
 
 // 宿主地址在启动时「发现」出来，不再写死 —— 与 macOS 版保持一致：
 // 官方桌面版（Electron，端口由宿主决定，实测 19387）和手动起的 `dsh web`（3080）都要能连上。
@@ -32,6 +33,8 @@ const CANDIDATE_BASES = [
 let petBase = CANDIDATE_BASES[0]
 /** 外壳自己的本地服务（独立化的关键；null = 还没起） */
 let petServer = null
+/** 系统声音峰值（WASAPI）；页面发 audio:on 才启动，关掉设置就 stop */
+let audioMeter = null
 /** 重新发现 DSH 的节奏：离线时每 8 秒试一次，每 6 次才扫一次端口（netstat 要起子进程，别太频） */
 let syncAttempt = 0
 let syncBusy = false
@@ -39,8 +42,7 @@ let syncBusy = false
  *  放在候选表里是为了「改 pet.js → 重启外壳就生效」这条习惯不变（交接文档第二节的改动生效规则）。
  *  独立发行时它不存在，会自动退到 exe 同级的 pet-assets/。 */
 // 可以用 DSH_PET_DEV_ASSETS 覆盖；别人的机器上没有这个目录也不会出问题（按顺序找，找不到就跳过） */
-// 公开版本里默认留空：开发时用环境变量 DSH_PET_DEV_ASSETS，或在 settings.json 写 assetRoots
-const DEV_ASSETS = process.env.DSH_PET_DEV_ASSETS || ''
+const DEV_ASSETS = process.env.DSH_PET_DEV_ASSETS || 'D:/AI_work_space/live2D桌宠/pet-plugin/assets'
 
 /** 通行证文件里记录的宿主端口（插件写的，因机器而异 —— 不能写死） */
 function deskPort() {
@@ -177,6 +179,13 @@ async function startLocalServer() {
   }
   const st = petServer.state()
   bootLog('资源根：' + (st.assetRoots || []).join(' | '))
+  // 声音峰值：先建对象，页面发 audio:on 才真正起子进程（设置里可关）
+  audioMeter = createAudioMeter({
+    log: bootLog,
+    onSample: (peak) => {
+      try { if (petServer) petServer.push({ t: 'audio', peak: peak }) } catch (e) {}
+    },
+  })
   return petServer
 }
 
@@ -408,6 +417,19 @@ function createMain() {
         syncAttempt = 0
         petSay('好，我再找一下 DSH…')
         syncUpstream()
+        break
+      // 设置页「系统声音：开/关」
+      case 'audio:on':
+        if (audioMeter) {
+          bootLog('音频峰值：开')
+          audioMeter.start()
+        }
+        break
+      case 'audio:off':
+        if (audioMeter) {
+          bootLog('音频峰值：关')
+          audioMeter.stop()
+        }
         break
       case 'quit':
         app.quit()
@@ -922,6 +944,7 @@ app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
   clearInterval(pollTimer)
   clearInterval(dragTimer)
+  if (audioMeter) audioMeter.stop()
   if (petServer) {
     bootLog('退出：关掉本地服务')
     petServer.close().catch(() => {})

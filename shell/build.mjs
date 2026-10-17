@@ -97,7 +97,7 @@ function verify() {
   const want = walk(SRC, '', []).map((f) => f.rel).sort()
   const missing = want.filter((f) => !got.includes(f))
   if (missing.length) throw new Error('asar 里少了：' + missing.join(', '))
-  for (const f of ['main.js', 'preload.js', 'petserver.js']) {
+  for (const f of ['main.js', 'preload.js', 'petserver.js', 'audio.js']) {
     syntaxOk(path.join(tmp, f))
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8'))
