@@ -1917,7 +1917,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         cluster: [2, 3],
         clip: 1,
         // 活跃：偏折腾 —— 换表情、拨道具、做大动作
-        weights: { glance: 6, peer: 4, sway: 10, express: 26, mutter: 12, fiddle: 14, stretch: 12, tilt: 8, nod: 6, tailWag: 8, hungry: 4, nopang: 2 }
+        // 伸懒腰 12→8：活跃期它太显眼，主人 2026-10-17 反馈偏多
+        weights: { glance: 6, peer: 4, sway: 10, express: 26, mutter: 12, fiddle: 14, stretch: 8, tilt: 8, nod: 6, tailWag: 8, hungry: 4, nopang: 2 }
       }
     }
     /** 多件之间的间隔（秒） */
@@ -7122,7 +7123,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      */
     {
       name: '伸个懒腰',
-      weight: 9,
+      weight: 6, // 2026-10-17 主人反馈偏多：9→6（小戏里从 15% 降到 10%）
       minGap: 75,
       steps: [
         { at: 0.0, do: 'glance' },
@@ -7358,7 +7359,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ['fiddle', 10], // 拨弄道具（上游权重表里漏了这一项 → 曾经永远抽不到）
     ['nod', 6], // 点头（肢体动作）
     ['tilt', 6], // 歪头（肢体动作）
-    ['stretch', 6], // 伸懒腰（肢体动作）
+    ['stretch', 4], // 伸懒腰（肢体动作）—— 2026-10-17 主人反馈偏多，6→4
     ['tailWag', 8], // 甩尾巴（肢体动作）
     ['hungry', 4], // 喊饿
     ['nopang', 2], // 强调自己不胖（主人说「别老生气」，权重砍半）
