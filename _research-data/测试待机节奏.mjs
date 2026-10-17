@@ -248,6 +248,22 @@ console.log('\n【6.5】做不了的行为不进池（weightsOf / allowed）')
   // 全剔掉时要有兜底，不能返回 undefined
   const none = R.chooseBehavior(R.makeState(), IDLE_TABLE, rnd, () => false)
   ok('全被剔掉时兜底为 glance（不返回 undefined）', none === 'glance', String(none))
+
+  // 详细频率面板：scale 倍数（0 = 不进池，0.5 = 减半）
+  const half = R.weightsOf(st, IDLE_TABLE, null, { express: 0.5, fiddle: 0 })
+  const ex = (half.find((x) => x[0] === 'express') || [])[1]
+  ok('scale 0.5 把 express 28 变成 14', ex === 14, ex)
+  ok('scale 0 把 fiddle 剔出池', !half.some((x) => x[0] === 'fiddle'), half)
+  const pick = R.chooseBehavior(st, IDLE_TABLE, () => 0, null, { glance: 0 })
+  ok('scale 0 的行为不会被抽到（glance=0 时首抽不是 glance）', pick !== 'glance', pick)
+
+  // 详细频率面板：待机间隔倍数
+  const oldRandom = Math.random
+  Math.random = () => 0.5
+  const baseMs = R.intervalMs(st, {})
+  const twiceMs = R.intervalMs(st, { idleIntervalScale: 2 })
+  Math.random = oldRandom
+  ok('idleIntervalScale=2 时间隔约 ×2', Math.abs(twiceMs / baseMs - 2) < 0.02, twiceMs + ' / ' + baseMs)
 }
 
 // ——— 7. 权重表 ↔ switch 分支一致性（防上游 fiddle 那种坑复发） ———
