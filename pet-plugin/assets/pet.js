@@ -5035,6 +5035,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       (e) => {
         idle.lastInputAt = performance.now()
         if (e.button !== 0) return
+        // 详细面板是模态：它盖在她身上时，点击/拖滑杆不能再被「拖她」的 capture 吃掉
+        // （否则滑块拖不动、按钮点不动，面板关不掉 —— 2026-10-17 实测 bug）
+        if (ui.tuning) return
         if (!hitTest(e.clientX, e.clientY)) return
         // 点在鲸鱼娘身上：吃掉这次点击，别让下面的 DSH 界面也响应
         e.stopPropagation()
