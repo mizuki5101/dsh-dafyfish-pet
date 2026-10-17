@@ -273,6 +273,37 @@ console.log('\n【13】待机路径的动作强度必须满（本次真凶的回
   ok('clearSoftFace 只清 soft 层', !!csf && /if \(!rig\.override\.soft\) return false/.test(csf[1]))
   ok('小戏的 face 步骤标了 soft', /setReaction\(\{ face: a\.arg, ms: 2600, soft: true \}\)/.test(src))
 }
+console.log('\n【14】第 6 段小戏「偷看主人」（2026-10-17）')
+{
+  const sc = DATA.find((x) => x.name === '偷看主人')
+  ok('数据表里有「偷看主人」', !!sc, DATA.map((x) => x.name))
+  if (sc) {
+    ok(
+      '4 步：glance → face(脸红) → clip(歪头) → line',
+      sc.steps.map((s) => s.do + (s.arg ? ':' + s.arg : '')).join(' / ') === 'glance / face:脸红 / clip:歪头 / line:（偷看）主人在干嘛…',
+      sc.steps,
+    )
+    const st = E.makeState()
+    E.start(st, sc, 0)
+    // frame 有状态：每一帧只能调一次（见 §3 的坑）
+    const at = (ms) => E.frame(st, ms, { holdSec: 0.8 }).filter((x) => x.verb !== 'end')
+    const a0 = at(0)
+    const a1 = at(1400)
+    const a2 = at(2600)
+    const a3 = at(4400)
+    ok(
+      '按 0 / 1.4 / 2.6 / 4.4 秒依次放出四步',
+      a0.length === 1 && a0[0].verb === 'glance' &&
+        a1.length === 1 && a1[0].verb === 'face' && a1[0].arg === '脸红' &&
+        a2.length === 1 && a2[0].verb === 'clip' && a2[0].arg === '歪头' &&
+        a3.length === 1 && a3[0].verb === 'line',
+      { a0, a1, a2, a3 },
+    )
+    const end = E.frame(st, 5300, { holdSec: 0.8 }).some((x) => x.verb === 'end')
+    ok('4.4 + 0.8 秒后报 end（时长 ' + E.durOf(sc).toFixed(1) + 's）', end === true)
+  }
+}
+
 console.log('\n' + '='.repeat(52))
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项')
 process.exit(fail === 0 ? 0 : 1)

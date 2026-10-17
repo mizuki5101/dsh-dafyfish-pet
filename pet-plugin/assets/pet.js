@@ -6977,6 +6977,22 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ]
     },
     /*
+     * 「偷看主人」：先瞄一眼 → 脸红 → 歪头 → 小声嘀咕。
+     * 和「找找主人」区分：那条是东张西望找人，这条是**偷看** —— 先看、再害羞、再假装没事。
+     * 只用原子能力（glance/face/clip/line）；face 的 soft 由 runScriptAction 统一处理。
+     */
+    {
+      name: '偷看主人',
+      weight: 8,
+      minGap: 80,
+      steps: [
+        { at: 0.0, do: 'glance' },
+        { at: 1.4, do: 'face', arg: '脸红' },
+        { at: 2.6, do: 'clip', arg: '歪头' },
+        { at: 4.4, do: 'line', arg: '（偷看）主人在干嘛…' }
+      ]
+    },
+    /*
      * 「不想承认」：强调自己不胖，然后自己心虚地嘀咕。
      * 台词取的是人设里那条最经典的（不能被叫胖）。
      */
