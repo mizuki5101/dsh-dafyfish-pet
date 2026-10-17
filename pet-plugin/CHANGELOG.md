@@ -1,5 +1,16 @@
 # 更新日志 / Changelog
 
+## 0.5.2 — 2026-10-17（修：详细面板看得见、点不到）
+
+- 原因：外壳的点击穿透轮询 `hitJS` 只认旧的面板选择器；鼠标落在她身体**外**、但还在面板上时，
+  窗口被 `setIgnoreMouseEvents(true)`，物理鼠标直接穿到下面的应用 —— 面板看得见、点不到、关不掉。
+  （CDP 的 `element.click()/Input.dispatch` 不经过原生穿透，所以之前没测出来。）
+- `shell/src/main.js` 的 `hitJS`：加 `.dshp-tuning / .dshp-tuning-mask`，并在
+  `window.__DSHPET_MODAL__` 为 true 时直接返回 `panel`（模态期间整窗可点，遮罩负责关闭）。
+- 页面 `openTuningPanel/closeTuningPanel` 维护 `window.__DSHPET_MODAL__`；外壳命中变化写 boot.log（`鼠标命中：…`）。
+- **需要 `node shell/build.mjs --install` 重打 asar**（改了 shell/src/main.js）。
+- 测试数不变（736）。
+
 ## 0.5.1 — 2026-10-17（修：详细面板拖不动 / 关不掉）
 
 - 原因：面板盖在她身上时，`document` 的 capture `pointerdown` 先 `hitTest` 到模型 → 进入「拖她」，

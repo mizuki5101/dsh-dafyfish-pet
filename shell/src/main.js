@@ -253,8 +253,11 @@ async function load() {
 // 判断「鼠标下面是什么」：她本体 / 她的面板 / 空白
 // ——————————————————————————————————————————————————————————————
 const hitJS = (x, y) => `(function(){try{
+  // 详细频率面板是模态：它铺满全屏的遮罩/面板必须让整个窗口可点，
+  // 否则鼠标落在她身体外时窗口会 setIgnoreMouseEvents(true) → 面板看得见、点不到。
+  if(window.__DSHPET_MODAL__) return 'panel';
   var el=document.elementFromPoint(${x},${y});
-  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-tab'));
+  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-tab,.dshp-tuning,.dshp-tuning-mask'));
   if(ui) return 'panel';
   if(window.DSHPet&&DSHPet.hitTest&&DSHPet.hitTest(${x},${y})) return 'model';
   return 'none';
@@ -277,6 +280,7 @@ async function poll() {
   if (dragTimer) return // 拖动中不抢事件（否则鼠标一离开她就变穿透，拖动会断）
   try {
     const kind = await win.webContents.executeJavaScript(hitJS(Math.round(p.x - b.x), Math.round(p.y - b.y)))
+    if (kind !== lastHit) bootLog('鼠标命中：' + kind)
     lastHit = kind
     overPanel = kind === 'panel'
     setIgnore(kind === 'none')

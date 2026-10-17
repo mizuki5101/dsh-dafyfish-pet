@@ -6149,6 +6149,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!ui || !ui.tuning) return
     const t = ui.tuning
     ui.tuning = null
+    // 通知外壳的「点击穿透」判定：模态结束，恢复按鼠标下方内容决定
+    window.__DSHPET_MODAL__ = false
     try { window.removeEventListener('keydown', t.onKey, true) } catch (e) {}
     try { t.mask.remove() } catch (e) {}
     try { t.el.remove() } catch (e) {}
@@ -6243,6 +6245,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     window.addEventListener('keydown', onKey, true)
     ui.root.append(mask, panel)
     ui.tuning = { mask: mask, el: panel, onKey: onKey }
+    // 关键：告诉外壳「现在是模态」，hitJS 直接返回 panel，整窗不穿透；
+    // 否则鼠标落在她身体外时窗口会 setIgnoreMouseEvents(true)，面板看得见、点不到。
+    window.__DSHPET_MODAL__ = true
   }
 
   function renderPane(id) {
