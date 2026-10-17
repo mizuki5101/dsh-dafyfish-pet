@@ -3930,12 +3930,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   const MIN_VISIBLE_X = 120
   const MIN_VISIBLE_Y = 120
   /** 实际生效的「至少露多少」：
-   *  水平保留**整个身体/内容**可见（2026-10-17 改：只留一半时她几乎全在屏幕外，
-   *  对话面板会被夹到很远；现在拖到边缘会整车拉回）；竖直仍保留 120px 上限。
+   *  水平恢复成「至少露 120px」——允许左右移出屏幕（2026-10-18 主人要求）；
+   *  菜单/dock 的定位已经修好，会跟着可见部分夹进屏幕，不会因为出屏就失联。
+   *  竖直仍保留 120px 上限。
    */
   function minVisible(axis, bodySize) {
-    if (axis === 'x') return Math.max(24, bodySize)
-    return Math.max(24, Math.min(MIN_VISIBLE_FRAC * bodySize, MIN_VISIBLE_Y))
+    return Math.max(24, Math.min(MIN_VISIBLE_FRAC * bodySize, axis === 'x' ? MIN_VISIBLE_X : MIN_VISIBLE_Y))
   }
 
   /**
