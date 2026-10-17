@@ -196,9 +196,9 @@ console.log('\n【6】权重抽取')
     tally2[b] = (tally2[b] || 0) + 1
   }
   const tot2 = Object.values(tally2).reduce((a,b)=>a+b,0)
-  const pEF = ((tally2.express||0)+(tally2.fiddle||0))/tot2
+  const pExpress = (tally2.express||0)/tot2
   const pClip = ((tally2.stretch||0)+(tally2.tilt||0)+(tally2.nod||0)+(tally2.tailWag||0))/tot2
-  ok('lively 档 express+fiddle ≥35%（实测 ' + (pEF*100).toFixed(1) + '%）', pEF > 0.35, pEF)
+  ok('lively 档 express ≥25%（实测 ' + (pExpress*100).toFixed(1) + '%）', pExpress > 0.25, pExpress)
   ok('lively 档肢体动作合计 ≥25%（实测 ' + (pClip*100).toFixed(1) + '%）——这正是 A 的效果', pClip > 0.25, pClip)
   ok('lively 档里动作占比明显高于 drowsy 档', pClip > 0.25)
 
@@ -214,8 +214,7 @@ console.log('\n【6】权重抽取')
 
 // ——— 6.5 「做不了的行为不进池」（2026-10-17 收尾）———
 //
-// 真问题：fiddle（拨弄道具）在常态占 10、活跃期占 14，但它依赖鲸鱼娘模型的道具表达式，
-// 大肥鱼一个都没有 → 每次抽到都「什么都没发生」。所以引擎要支持传一个 allowed 判定。
+// 引擎要支持传一个 allowed 判定：做不了的行为不该进池（历史上是 fiddle 依赖模型道具）。
 console.log('\n【6.5】做不了的行为不进池（weightsOf / allowed）')
 {
   const rnd = seeded(23)
@@ -227,11 +226,11 @@ console.log('\n【6.5】做不了的行为不进池（weightsOf / allowed）')
   ok('allowed 能剔掉 fiddle（' + noFiddle.map((x) => x[0]).join(',') + '）', !noFiddle.some((x) => x[0] === 'fiddle'))
   ok('剔掉之后其它项还在', noFiddle.some((x) => x[0] === 'express') && noFiddle.some((x) => x[0] === 'mutter'))
 
-  // 活跃期用的是 mood 专属权重（fiddle 在那里占 14），同样要被剔掉
+  // 活跃期用的是 mood 专属权重，同样要被 allowed 剔掉一项
   const st2 = R.makeState()
   st2.mood = 'lively'
-  const lively = R.weightsOf(st2, IDLE_TABLE, (k) => k !== 'fiddle')
-  ok('mood 专属权重也走 allowed 过滤', !lively.some((x) => x[0] === 'fiddle'), lively.map((x) => x[0]).join(','))
+  const lively = R.weightsOf(st2, IDLE_TABLE, (k) => k !== 'glance')
+  ok('mood 专属权重也走 allowed 过滤', !lively.some((x) => x[0] === 'glance'), lively.map((x) => x[0]).join(','))
   const sumLively = lively.reduce((a, b) => a + b[1], 0)
   const sumAll = R.weightsOf(st2, IDLE_TABLE).reduce((a, b) => a + b[1], 0)
   ok('剔掉后权重自动归一（总和 ' + sumAll + ' → ' + sumLively + '）', sumLively > 0 && sumLively < sumAll)

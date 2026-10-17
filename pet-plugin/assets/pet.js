@@ -119,7 +119,6 @@
 
   /**
    * 设置持久化：把 CFG 里可序列化的值随 layout 一起存本地。
-   * 主人要求：「每次设置保存，哪怕关掉以后下次还是这样」。
    */
   function persistCfg() {
     try {
@@ -187,8 +186,8 @@
    */
   const MOOD_FACE = {
     neutral: null,
-    listening: '星星眼', // 主人在说话
-    thinking: null, // 主人在想事时就是平常脸（主人要求：不要呆呆眼）
+    listening: '星星眼',
+    thinking: null,
     reading: '星星眼', // 凑近看资料（配合眼镜道具）
     happy: '开心兴奋',
     excited: '星星眼',
@@ -214,100 +213,11 @@
   }
 
   /**
-   * 装饰品（粘性开关）：戴上就一直挂着，直到你再点一下摘掉。group 相同的互斥。
-   *
-   * 主人把话说清楚了：**要分开「动作」和「场景」**——
-   *   · 装饰品（眼镜、贴纸、头饰、头发这类）→ 一直存在
-   *   · 场景摆设（桌布、鲸鱼、巴菲、魔爪这类）→ 一直存在
-   *   · 动作（猫爪、比耶、卖萌、心跳、蛋包饭这类）→ 演一次就消失
-   * 所以「喵喵手 / 双手比耶 / 心跳 / 拿笔」都从这里搬走了：
-   * 前三个是一次性动作，拿笔是常态（她本来就一直握着笔）。
-   */
-  /*
-   * ⚠️ 下面 PROPS / SCENES / BASE_ITEMS 里**全是鲸鱼娘模型专属**的东西
-   *（圆眼镜、猫猫贴纸、桌布、魔爪、点菜板…）。大肥鱼没有任何对应参数，
-   * 所以菜单渲染时会被 `if (!EXPR[def.expr]) continue` 全部过滤掉 ——
-   * 也就是说**主人看不到它们，不是 bug**。
-   *
-   * 为什么收尾时没删（2026-10-17）：
-   *   · 它们是「换回鲸鱼娘模型」时的菜单来源（模型文件一直留在 assets/model/c_0120.*）；
-   *   · 真正该修的是**依赖它们的待机行为** fiddle —— 那一条在权重表里占 10~14，
-   *     却没东西可拨，等于在偷偷浪费待机频率。现在由 canDoIdle() 自动剔除（见 runIdleBehavior）。
-   * 想彻底清掉这套数据的话，连 decor/scene 两个渲染分支一起删，不要只删数据。
-   */
-  const PROPS = {
-    glassesRound: { label: '圆眼镜', expr: '圆眼镜', group: 'glasses', key: 'Alt+J' },
-    glassesSquare: { label: '方眼镜', expr: '方眼镜', group: 'glasses', key: 'Alt+K' },
-    glassesOval: { label: '椭圆眼镜', expr: '椭圆眼镜', group: 'glasses', key: 'Alt+L' },
-    glassesSun: { label: '墨镜', expr: '墨镜', group: 'glasses', key: 'Alt+Z' },
-    stickerCat: { label: '猫猫贴纸', expr: '猫猫贴纸', group: 'sticker', key: 'Alt+V' },
-    stickerRabbit: { label: '兔兔贴纸', expr: '兔兔贴纸', group: 'sticker', key: 'Alt+B' },
-    stickerBow: { label: '蝴蝶结贴纸', expr: '蝴蝶结贴纸', group: 'sticker', key: 'Alt+N' },
-    flower: { label: '情绪花花', expr: '情绪花花', group: 'headwear', key: 'Alt+X' },
-    ponytail: { label: '单边马尾', expr: '单边马尾', group: 'hair', key: 'Alt+2' },
-    headband: { label: '发箍', expr: '头箍', group: 'headwear', key: 'Alt+3' },
-    whaleHat: { label: '头顶鲸鱼', expr: '鲸鱼', key: 'Alt+1' },
-  }
-
-  /**
-   * 场景摆设：换掉桌面布置，同样是「摆着不走」，再点一下才收。
-   *
-   * 「掏出手机」是原作者的一个**模式**（按键表里叫「自拍手机＆放下」）：
-   * 掏出之后手机就摆在手上／桌上，自拍和快速自拍都在这个模式下才演。
-   * 这里照搬这个依赖关系（见 requires），不是自己瞎编的组合。
-   */
-  const SCENES = {
-    darkCloth: { label: '深色桌布', expr: '深色桌布', group: 'cloth', key: 'Alt+4' },
-    whaleOnDesk: { label: '鲸鱼放桌上', expr: '鲸鱼放桌上', key: 'Del+Numpad1' },
-    parfait: { label: '桌面巴菲', expr: '巴菲', key: '*+3' },
-    claws: { label: '粉魔爪', expr: '魔爪', group: 'claw', clears: ['clawsWhite'], key: '*+4' },
-    clawsWhite: { label: '白魔爪', expr: '魔爪换色', group: 'clawColor', needs: 'claws', key: '*+5' },
-    phone: { label: '掏出手机', device: true, group: 'device', key: 'Del+Numpad4' },
-    phoneSkin: { label: '手机换色', expr: '手机换色', needs: 'phone', key: 'Numpad0+2' },
-  }
-
-  /**
-   * 常态道具：**不进菜单**（她本来就这样待着），放在这里只是让
-   * IDLE_PROPS / WORK_PROPS 能按 key 解析出表达式。
-   *
-   * 这三个正好就是原作者绑在**左键按住**上的东西：点菜按下 + 画笔 + 挤
-   * （`松键取消 = true`）——也就是说，按住她的时候她手里就是板子和笔。
-   * 我们的常态道具跟人家的设计是一致的。
-   */
-  const BASE_ITEMS = {
-    menuBoard: { label: '点菜板', expr: '点菜按下' },
-    pen: { label: '拿笔', expr: '画笔' },
-  }
-
-  /**
    * 一次性动作：演一次就消失，绝不常驻。
-   *
-   * 全部照原作者的 `TriggerAnimation` / 动画类热键来（猫爪、比耶、冒爱心、
-   * 挤番茄酱、自拍、喷水…），再加上主人点名的蛋包饭：
-   * **「蛋包饭不能一直存在，蛋包饭只是挤完酱以后就消失了」**——
-   * 所以它是「蛋包饭模式 + 挤番茄酱动画」合成的一次性表演。
-   *
-   * 机制上它们全部走 override 层（带 TTL 自动过期），**不写 userProps**，
-   * 所以绝不会像装饰品那样赖在桌上。
-   *
-   * `requires` = 原作者设计里的前置模式（自拍类要先掏出手机），
-   * 点了会自动补上前置，不用主人自己先开一遍。
-   * `mood: null` = **不要压住动画自己的表情**：动作本身就带表情变化，
-   * 我们再盖一张脸上去就是「冲突/覆盖」，所以这类动作把脸交还给动画。
+   * 全部走 override 层（带 TTL 自动过期），不写 userProps。
+   * `mood: null` = 不压动画自己的表情，把脸交还给动作。
    */
-  /*
-   * 动作菜单。
-   *
-   * 这里原来有 12 项，全是**鲸鱼娘模型专属**：它们的 expr 不在 manifest.expressions 里、
-   * motion 也不在 manifest.motions（那是空的），被下面的过滤逐条剔除 ——
-   * 也就是说「动作」这一页以前其实是**空的**，点了没反应是对的。
-   *
-   * 现在换成动作引擎真正能播的 clip（见 pet.js 里的 @motion-engine 块）。
-   * motion 字段写动作名，支持中文名或 ASCII 别名（别名表见 DSHPetMotion.aliases()）——
-   * 用别名是因为中文名经过 shell/curl 时编码很容易坏。
-   *
-   * mood: null = 不盖自己的脸，把表情交给动作本身。
-   */
+  
   const ACTIONS = {
     waveLeft: { label: '挥左边手', motion: '挥手(左)', ms: 2600, mood: null, note: '屏幕左侧那只手（也就是她自己的右手）', lines: ['（挥挥左边的手）在这儿呢～', '这只手也可以哦', '（摆了摆）看到没'] },
     waveRight: { label: '挥右边手', motion: '挥手(右)', ms: 2600, mood: null, note: '屏幕右侧那只手（也就是她自己的左手）', lines: ['（挥挥右边的手）主人好～', '（招手）过来嘛', '这只手挥挥'] },
@@ -334,28 +244,23 @@
   }
   const ACTION_KEYS = Object.keys(ACTIONS)
 
-  const ALL_TOGGLES = Object.assign({}, BASE_ITEMS, PROPS, SCENES)
+  const ALL_TOGGLES = {}
 
   /**
    * 两种底层状态下她手上拿什么。
-   * 主人要的是：平时拿个板子待着，跑任务时拿记录板干活；自拍/比耶那类只作为
    * 「完成奖励」这类特殊场景的瞬时反应，不进待机循环。
    */
-  // 主人定的常态：手里是「本子 + 笔」，思考和待机都这样。
-  // 眼镜/手机之类由具体工具反应临时加，装饰品（猫耳、单马尾、贴纸）由主人自己开、能一直留着。
-  const IDLE_PROPS = ['menuBoard', 'pen']
-  const WORK_PROPS = ['menuBoard', 'pen']
+  const IDLE_PROPS = []
+  const WORK_PROPS = []
 
   /**
    * 菜单里每一项「点了会怎样」。
    *
-   * 主人抱怨「有的点击之后是没用的……像白魔爪还有蛋包饭，那也只是卡在那没什么用」。
    * 病根不是参数没生效（每个都真的变了），而是**点完之后她本人毫无反应**——
    * 桌上多了盘蛋包饭，她却面无表情地待机，看起来就像按钮坏了。
    *
-   * 所以从这一版起：**每一个表情、每一个道具、每一个场景都配一句话 + 一个小动作**，
+   * 所以从这一版起：**每一个表情、每一个动作都配一句话 + 一个小动作**，
    * 而且一次只演一个（act() 负责把上一个收干净），不叠、不重复、到点自动收。
-   * 台词按她的口气写：傲娇、爱吃白米、管人叫主人、不能被叫胖。
    */
   const FACE_ACT = {
     listening: { lines: ['（眼睛发亮）主人你说', '嗯嗯，人家听着呢', '（凑过来）什么什么'] },
@@ -389,16 +294,13 @@
    * **没列进来的**（都是有意的）：
    *   · 口型切换 / 3嘴 / 〇嘴 —— 是"换嘴素材"，不是情绪
    *   · 尾巴消失 / 耳朵消失 / 水印消除 —— 是服装/水印开关
-   *   · 圈圈眼 —— 主人后来点名要回来，已在列表里（别按旧注释删）
    */
   const FACE_MENU = ['脸红', '生气', '挤眼', '担心嘴', '栗子嘴', '龇牙', '流口水', '脸黑', '圈圈眼', '疑惑', '怀疑', '嫌弃', '挑眉']
 
   /*
    * 「口型」页：纯**换嘴素材**，和"情绪"不是一回事，所以单开一张表 + 单独一个页签。
-   * （主人：口型切换加进来，"可以和表情/动作一样单开一个表来调"。）
    *
    * 只放没进表情页的换嘴开关；龇牙 / 流口水 / 担心嘴 / 栗子嘴 虽然也动嘴，
-   * 但主人已经确认它们在「表情」页里读得通，就不重复放了。
    */
   const MOUTH_MENU = ['口型切换', '3嘴', '〇嘴']
   const MOUTH_LINES = {
@@ -425,32 +327,6 @@
     挑眉: ['（挑眉）哦？真的假的', '（挑了挑眉）有点意思', '（抬眉）主人再说一遍？'],
   }
 
-  /** 装饰品：戴上时说什么。**不叠别的东西**——主人说「不要瞎组合」。 */
-  const PROP_ACT = {
-    glassesRound: { mood: 'reading', lean: true, lines: ['（扶了扶眼镜）人家看看', '圆框的，适合人家吗', '（推眼镜）这道题人家会'] },
-    glassesSquare: { mood: 'reading', lean: true, lines: ['（一本正经）人家现在是学者', '方框的，显脸小吧', '（推眼镜）认真模式'] },
-    glassesOval: { mood: 'reading', lean: true, lines: ['（圆圆的镜片）好看吗', '这个戴着温柔一点', '（看）嗯…清楚了'] },
-    glassesSun: { mood: 'smug', lines: ['（戴墨镜）本鲸谁也不怕', '酷不酷？', '（耍帅）今天走酷路线'] },
-    stickerCat: { mood: 'happy', lines: ['（贴上）喵～', '人家是猫还是鲸鱼呀', '（猫猫贴纸）可爱吧'] },
-    stickerRabbit: { mood: 'happy', lines: ['（兔兔贴纸）蹦蹦', '兔兔也很可爱嘛', '耳朵长长的'] },
-    stickerBow: { mood: 'shy', lines: ['（蝴蝶结）好看吗好看吗', '人家今天很可爱哦', '（摸摸蝴蝶结）'] },
-    flower: { mood: 'happy', lines: ['（脑门上开花了）', '人家现在心情超好', '（花花）送主人的'] },
-    ponytail: { mood: 'smug', lines: ['（扎起来）干活方便', '马尾好看吗', '（甩了甩）'] },
-    headband: { mood: 'excited', lines: ['（戴上发箍）清爽！', '人家要开始努力了', '（发箍）请多指教'] },
-    whaleHat: { mood: 'happy', lines: ['（头顶蹲了一只鲸鱼）', '它和人家是一家的', '看，人家的同类'] },
-  }
-
-  /** 场景摆设：摆上时说什么。摆着不走，再点一下才收。 */
-  const SCENE_ACT = {
-    darkCloth: { mood: 'smug', lines: ['（换桌布）今天走高级风', '深色显瘦…人家说的是桌子', '（拉平桌布）'] },
-    whaleOnDesk: { mood: 'happy', lines: ['（把鲸鱼摆桌上）陪着人家', '看，同类', '（拍一拍鲸鱼）'] },
-    parfait: { mood: 'love', heart: true, lines: ['（巴菲！）人家开动了', '甜品时间到！', '（挖一大勺）唔…好吃'] },
-    claws: { mood: 'playful', lines: ['（亮爪子）看人家的爪', '粉色爪子，可爱又危险', '（磨爪子）'] },
-    clawsWhite: { mood: 'playful', lines: ['（换成白色的爪子）这个更锋利', '白色爪子，帅气吧', '（亮爪）这下认真了'] },
-    phone: { mood: 'excited', lines: ['（掏出手机）人家看看', '（开盖）有新消息吗', '手机在手，天下我有'] },
-    phoneSkin: { mood: 'smug', lines: ['（换个手机壳）好看吗', '这个颜色人家喜欢', '（翻来覆去地看）'] },
-  }
-
   /**
    * 工具 → 桌宠怎么演。
    *
@@ -464,9 +340,7 @@
   /**
    * 工具 → 她在气泡里说的话。
    *
-   * 主人嫌「老是敲键盘 / 跑命令」太单调，所以：
    *   · **按工具分开写**，每个工具好几句，用 pickFresh 轮换，连着同名工具也不重复
-   *   · 用她的口气（傲娇、爱吃白米、管人叫主人）
    *   · 气泡第二行放**从工具参数里抽出来的具体内容**（跑的是哪条命令、读的是哪个文件），
    *     这样 Agent 里在干什么，桌宠这边能同步看出来
    */
@@ -532,7 +406,6 @@
 
   /**
    * 读资料时戴哪副眼镜——**每次随机**，也可能不戴。
-   * 主人说的：工作认真看就行，眼镜随机（半框/圆框/不戴）。
    */
   function randomGlasses() {
     const r = Math.random()
@@ -591,11 +464,9 @@
 
   /**
    * 人设台词。规格（用户给定）：
-   *   · 称呼用户「主人」；自称「人家」或「本鲸」；**不叫鱼片**
    *   · 傲娇嘴甜、嘴硬心软；聪明但懒、爱摸鱼
    *   · 贪吃，喜欢白米饭，把 Token 当口粮
    *   · 不能被叫「胖」，叫了会真生气
-   *   · 对主人服从（违法危险的请求归 agent 层去拒绝，桌宠只管演）
    */
   const SAY = {
     idle: [
@@ -640,7 +511,7 @@
     fat: ['你再说一遍？！人家这是可爱，不是胖！', '本鲸这是丰腴！', '（真生气）不许说胖！'],
     hungry: ['主人，人家饿了…有白饭吗', '（盯着你的碗）', '干了这么多活，该管饭了吧'],
     reading: ['（凑近看）', '这份人家得仔细看看', '眼镜呢…哦在脸上', '（认真脸）'],
-    /** 场景大件收走的时候说的话（不然东西凭空消失很怪）。 */
+    /** 收拾桌面的时候说的话。 */
     tidy: ['（收拾一下桌面）', '好啦，人家收起来了', '摆一会儿就够了，人家还要干活呢', '（把东西归位）'],
     thinking: ['让人家想想…', '嗯…这里得捋一捋', '别催别催，快好了', '（咬着笔杆）'],
     working: ['（敲键盘）', '交给人家的就放心', '噼里啪啦…', '（认真工作）'],
@@ -649,13 +520,11 @@
   const pick = (arr) => arr[(Math.random() * arr.length) | 0]
 
   /**
-   * 不重复上一次的选择。主人抱怨「点他老是同一个表情/同一句话」——
    * 这里记住上一次挑中的是哪个，下一轮把它排除掉，保证连着点不会撞车。
    */
   const lastPick = new Map()
   /**
    * 权重：条目可以写 `w`（默认 1）。
-   * 用来让「真生气」这种反应变稀有——主人抱怨「平常点几下就生气」，
    * 生气不该和摸摸头一样常见。
    */
   const weightOf = (x) => (x && typeof x === 'object' && typeof x.w === 'number' ? x.w : 1)
@@ -693,7 +562,6 @@
   /* 面板单独一套缩放：气泡和工具栏可以跟着模型缩得很小，但菜单里有滑块、
      有按钮，缩成指甲盖大小就没法用了。所以面板的缩放被夹在 0.85~1.15。 */
   --dshp-ps:1;
-  /* 工具栏（底下三个按钮）比模型再小一号，主人说原来那三框太大 */
   --dshp-ds:0.86;
   font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
   --dshp-fg:#132043;--dshp-bg:rgba(246,249,255,.96);--dshp-line:rgba(30,60,130,.14);
@@ -737,7 +605,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-body::-webkit-scrollbar{width:5px}
 .dshp-body::-webkit-scrollbar-thumb{background:var(--dshp-line);border-radius:3px}
 .dshp-foot{margin-top:calc(4px * var(--dshp-s));font-size:calc(10px * var(--dshp-s));opacity:.55;min-height:0}
-/* 工具栏：主人抱怨底下那三个框「太大、不太适配」。
    真正的病根是 left:50% —— 绝对定位元素的可容纳宽度只剩下父容器的一半，
    三个按钮被挤成 104px，文字折行后每个都变成又窄又高的方块。
    width:max-content 让它超出那半幅也能保持居中，按钮就恢复成正常的一行小按钮。 */
@@ -754,7 +621,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    ⚠️ 这里刻意只给「内容区」限高 + overflow，**不把面板改成 flex 容器** ——
    上次那样改会让内容区塌成 0 高（框弹出来但是空的）。 */
 /* ——— 菜单面板：固定大小 + 固定位置（切页签/切动作都不再变来变去）———
-   ① 宽高写死（高度也随屏幕兜底），所以「表情 / 装饰 / 场景 / 动作 / 设置」五个页签
+   ① 宽高写死（高度也随屏幕兜底），所以「表情 / 口型 / 动作 / 小戏 / 设置」五个页签
       切换时面板尺寸完全一致，不会跳、不会时大时小；
    ② 内容超出就在内容区内部滚动（鼠标滚轮/触控板直接搓）；
    ③ 面板高度留够，永远排在她头顶上方，不会盖住她本人。
@@ -901,7 +768,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-hud-k{opacity:.6;font-size:calc(11px * var(--dshp-ps));white-space:nowrap}
 .dshp-hud-v{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
 .dshp-hud-sep{height:1px;background:var(--dshp-line);margin:calc(6px * var(--dshp-ps)) 0}
-/* 峰 = 红，谷 = 绿（主人明确要求的配色） */
 .dshp-hud-tag{display:inline-flex;align-items:center;gap:5px;border-radius:999px;
   padding:calc(2px * var(--dshp-ps)) calc(9px * var(--dshp-ps));
   font-weight:850;font-size:calc(11px * var(--dshp-ps));white-space:nowrap}
@@ -994,7 +860,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    *   base      由 agent 状态决定（待机/思考/干活/出错…），是「此刻本该是什么样」
    *   override  一次性反应（摸头、点击、特效、工具瞬时反馈）——**强制带时限**，到期自动消失
-   *   user      主人手动选的脸/道具，也带时限；真实事件可以立刻夺回
    *
    * 每帧解析：face = override（未过期）> user（未过期）> base。
    * 「特效做完回不去」在结构上就不会发生——没有任何一处需要「记得清理」。
@@ -1011,9 +876,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     base: { mood: 'neutral', face: null, props: [] },
     /** 一次性反应，一定带 until */
     override: null,
-    /** 主人手动的（带时限） */
     user: { face: null, until: 0 },
-    /** 主人自己戴的粘性道具（不限期，他自己摘） */
     userProps: new Set(),
     /** 一次性的参数脉冲（爱心粒子之类），到期自动停 */
     burst: null,
@@ -1044,7 +907,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     rig.face = face && face in EXPR ? face : null
 
     const props = new Set()
-    for (const p of rig.userProps) props.add(p) // 主人自己戴的装饰品一直都在
+    for (const p of rig.userProps) props.add(p)
     if (!ov || !ov.exclusive) for (const p of rig.base.props) props.add(p)
     if (ov) for (const p of ov.props) props.add(p)
     rig.props = props
@@ -1067,7 +930,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 一次性反应。**一定会过期**——这是「特效不卡住」的保证。
-   * 新的反应会直接顶掉旧的（主人说的「任何下一层东西覆盖前一个」）。
    */
   function setReaction(opts) {
     opts = opts || {}
@@ -1078,7 +940,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       mood: opts.mood || null,
       face: face === undefined ? undefined : face,
       props: (opts.props || []).map(propExpr).filter(Boolean),
-      // exclusive：连「常态道具」（本子/笔）也暂时放下——主人要的是「砸的时候就只砸一下」
       exclusive: opts.exclusive === true,
       // soft：这一层是**待机时她自娱自乐**的小表演（自言自语 / 自己换个表情 / 拨弄道具）。
       //   真实事件（agent 事件、点击、感知器反应）不标 soft。
@@ -1097,14 +958,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     resolveRig()
   }
 
-  /** 主人手动选的脸，30 秒；期间待机不会抢，但真实事件会。 */
   function setUserFace(name) {
-    if (idle.sleep) wakeUp('face') // 主人手动换脸也算叫醒，别让睡脸压着她手动选的脸
+    if (idle.sleep) wakeUp('face')
     rig.user = { face: moodFace(name), until: performance.now() + 30000 }
     resolveRig()
   }
 
-  /** 主人手动选「平常」= 立刻交还给她自己。 */
   function clearUserFace() {
     rig.user = { face: null, until: 0 }
     clearReaction()
@@ -1122,7 +981,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return !!d.expr && rig.userProps.has(d.expr)
   }
 
-  /** 把小设备（手机）掏出来——这就是原作者「自拍手机」那个动作。 */
+  /** 把工作用的小设备掏出来（模型自带的 openLid 动作）。 */
   function takeDeviceOut() {
     if (device.out) return
     device.out = true
@@ -1416,7 +1275,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       /*
        * ⚠️ 手臂符号是**实测**出来的，别凭感觉改。
        * 模型是镜像骨架：Param_arm_L* 的"抬手"是**负**值，Param_arm_R* 是**正**值。
-       * 两边写同一个正号 → 一边抬起来、另一边转到身后（主人就是这么发现的）。
        * 复现工具：_research-data/测全部方向.mjs
        *
        * 另外 Param_arm_L4/R4（手活动）满量程只动 1px，等于没用，所以动作里不用。
@@ -1496,7 +1354,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       /*
        * 伸懒腰（2026-10-16 合并版：原「伸懒腰」与「打哈欠」合成一个）。
        *
-       * 合并理由（主人原话）：打哈欠的**闭眼**更符合伸懒腰的感觉。
        *   真人伸懒腰就是「闭眼 + 张开手 + 仰头」，而原来那个「伸懒腰」
        *   只有手臂和仰头、不闭眼；再单开一个「打哈欠」菜单项纯属重复。
        *
@@ -1521,7 +1378,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           /*
            * ⚠️ 光切素材（EXP5）**不够** —— 必须同时把「眼睛形状」也闭上。
            *
-           * 实测（2026-10-16，主人报「闭眼时还隐隐看到睁眼」）：
            *   EXP5 = -1 时，ParamEyeLOpen/ROpen 仍是 1（睁着）→ 半透明的眼睑素材
            *   盖在**睁开的眼睛形状**上 → 看起来像「闭眼没盖严」。
            *
@@ -1608,7 +1464,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       /*
        * 伸懒腰（2026-10-16 合并：原「伸懒腰」与「打哈欠」两个 clip 并成一个）。
        *
-       * 为什么要合：主人试完说「打哈欠的**闭眼**更符合伸懒腰的感觉」——
        * 确实，真人伸懒腰是**闭着眼、张开手、仰头**；而原来那个「伸懒腰」
        * 只有手臂和仰头、没有闭眼，两个动作各占一个菜单项反而重复。
        *
@@ -1618,7 +1473,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
        * 名字统一叫「伸懒腰」；旧名 `打哈欠` / `yawn` / `tired` 仍可用（见 ALIAS）。
        */
       /*
-       * 原名「比个心」，但主人在真实观感后指出**更像「请求拥抱」** ——
        * 确实：±30° 硬上限做不出手指比心的手势，双臂张开 + 脸红 + 歪头
        * 读起来就是"张开手要抱抱"。所以按实际观感改名（记忆点：名字要跟着观感走）。
        */
@@ -1787,7 +1641,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      *   于是新的动作会叠在旧残姿上：
      *     · 连续两个「伸懒腰」→ 手臂角度叠加、看着像抽住
      *     · 「害羞」打断「伸懒腰」→ 手臂还举着，表情已经换了，很怪
-     *   实测观感就是主人报的「中途打断/无缝衔接很僵硬」。
      * 淡出之后，旧动作在 fadeMs 内线性回到 0，新动作再接管 —— 观感是平滑过渡。
      */
     function fadeOutClip(c, ms) {
@@ -1928,7 +1781,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   drowsy 7~16s  安静期：偏发呆看别处
    *   normal 3.5~7.5s  常态（= 上游原行为）
    *   lively 1.5~3.5s 且**连做 2~3 件**：偏换表情 / 拨弄道具
-   * lively 由「主人刚刚有动作」（互动感知，S2 接进来）触发，8 秒窗口。
    */
   var DSHPetIdleRhythm = (function () {
     'use strict'
@@ -1957,20 +1809,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         cluster: [2, 3],
         clip: 1,
         // 活跃：偏折腾 —— 换表情、拨道具、做大动作
-        // 伸懒腰 12→8：活跃期它太显眼，主人 2026-10-17 反馈偏多
-        weights: { glance: 6, peer: 4, sway: 10, express: 26, mutter: 12, fiddle: 14, stretch: 8, tilt: 8, nod: 6, tailWag: 8, hungry: 4, nopang: 2 }
+        weights: { glance: 6, peer: 4, sway: 10, express: 26, mutter: 12, stretch: 8, tilt: 8, nod: 6, tailWag: 8, hungry: 4, nopang: 2 }
       }
     }
     /** 多件之间的间隔（秒） */
     var GAP = [0.8, 2.2]
     /** 连续这么多次没抽到「有戏」的事 → 转安静 */
     var DROWSY_AFTER_QUIET = 3
-    /** 这么久没等到主人互动 → 转安静（毫秒） */
     var DROWSY_AFTER_MS = 40000
-    /** 主人互动后保持活泼的窗口（毫秒） */
     var LIVELY_WINDOW_MS = 8000
     /** 算「有戏」的行为（只有这些才把安静期打断） */
-    var LIVELY_KINDS = { express: 1, fiddle: 1, hungry: 1, nopang: 1, script: 1 }
+    var LIVELY_KINDS = { express: 1, hungry: 1, nopang: 1, script: 1 }
 
     function clampNum(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v }
     function randRange(r, lo, hi) { var t = typeof r === 'function' ? r() : Math.random(); return lo + (hi - lo) * clampNum(t, 0, 1) }
@@ -2009,11 +1858,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
 
     /**
-     * 主人刚刚有动作（S2 的感知器会调它）→ **当场**进入活泼期。
      *
      * ⚠️ 必须当场转，不能等 noteBehavior：
      *   早先的写法是「先抽一件事、抽完再在 noteBehavior 里转活泼」，
-     *   结果主人一有动作，**第一件事仍按常态 3.5~7.5s 排**，簇发要等下一轮 ——
      *   完全没有「他一动我就来劲」的手感（CDP 实测：戳一下后 nextIn 仍是 4.33s）。
      */
     function noteActivity(st, now) {
@@ -2063,7 +1910,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 掷骰结果由调用方存进 idle.allowClip，抽事时据此过滤权重表。
      *
      * 为什么用「概率开门」而不是「给每个动作一个权重」：
-     *   主人要的是「低频但有节奏的小动作」，不是让动作跟表情抢权重。
      *   开门式只有一个数要调（idleClipChance），也好解释、好回退（设 0 = 上游行为）。
      */
     function clipAllowed(st, cfg, rand) {
@@ -2082,20 +1928,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       st.clusterGap = randRange(null, GAP[0], GAP[1])
     }
 
-    /**
-     * 算出「这一档、这一跳」真正的权重表。
-     *
-     * @param st        节奏状态（mood 决定用哪套权重）
-     * @param baseTable 主权重表（mood 没有专属权重时用它）
-     * @param allowed   可选。「这一项现在做得了吗」的判定：做不了的会被剔掉，
-     *                  权重按剩下的自动重新归一（原来就是按总和算的）。
-     *
-     * 为什么需要 allowed（2026-10-17 收尾时发现的真问题）：
-     *   `fiddle`（拨弄道具）在常态占 10、活跃期占 14，但它依赖 PROPS 里的道具表达式 ——
-     *   那一堆全是**鲸鱼娘模型专属**的（圆眼镜/猫猫贴纸/桌布…），大肥鱼一个都没有。
-     *   于是每次抽到 fiddle 都「什么都没发生」：观感是发呆，还把节奏引擎的 quiet 计数冲掉。
-     *   现在由调用方传 canDoIdle 进来，做不了的行为根本不进池。
-     */
+    
     function weightsOf(st, baseTable, allowed, scale) {
       var m = MOODS[st && st.mood] || MOODS.normal
       var table = baseTable || []
@@ -2159,11 +1992,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // normal：抽到够多次「没戏」或很久没互动 → 转安静；有互动窗口 → 转活泼
       // ⚠️ 两个判断都**不能**依赖「lastLivelyAt > 0」：
       //    刚启动时它是 0，若拿它有条件，就会 0 - 0 = 0 永远不超时 → 头 40 秒进不了发呆档。
-      //    所以一律用「距上次主人互动多久」来算（没互动过 = 从一开始就在安静）。
-      // 活泼的**进入**只由 noteActivity 负责（主人有动作的那一刻）。
       // 这里只处理「退出活泼」和「进入安静」：
       //   · 活泼窗口过了且本簇做完了 → 回常态
-      //   · 连续抽到没戏的事，或很久没等到主人 → 转安静
       if (st.quiet >= DROWSY_AFTER_QUIET || now - st.lastLivelyAt > DROWSY_AFTER_MS) st.mood = 'drowsy'
     }
 
@@ -2188,7 +2018,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /* ==== @idle-sensors:start ====
    * 互动感知引擎（纯函数，无 DOM / PIXI 依赖）。
    *
-   * 目的：让「主人在干什么」变成她能感觉到的事 —— 鼠标凑过来、盯着她看、
    * 甩一下鼠标、在旁边打字。有了它才有「她一有动静就来劲」的灵动感。
    *
    * 为什么单独一块还带标记：和 @motion-engine / @idle-rhythm 一样，这里只做
@@ -2197,7 +2026,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * ⚠️ 设计约束（踩过才知道要写死在这里）：
    *   反应**只允许抢 idle 大脑**（临时接管待机调度），**绝不写 rig.override**。
-   *   因为 override 是「一次性表演」那一层，工作事件 / 主人说话都用它；
    *   要是反应去占了那一层，agent 一干活就会把她的反应当成「正在表演」而跳过，
    *   更糟的是反应会把真实事件顶掉。所以这里只产出「想做什么」，
    *   由调用方在确认「空闲 + 没有 override」之后才真的做。
@@ -2215,7 +2043,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
     /** 默认冷却（毫秒）—— 防止「动一下就疯狂反应」 */
     var COOLDOWN = { hover: 20000, stare: 45000, swoosh: 6000, typing: 20000, typingStop: 45000 }
-    /** 活泼通知的节流：主人一直把手放在她身上时，别每 40ms 就喊一次「有活动」 */
     var LIVELY_GAP_MS = 5000
 
     function clampNum(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v }
@@ -2307,7 +2134,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       return f
     }
 
-    /** 主人敲了一下键盘（由输入框的 keydown 调） */
     function key(st, now) {
       if (!st) return
       st.typing = true
@@ -2317,15 +2143,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
 
     /**
-     * 「主人有活动」→ 通知节奏引擎进活跃期。
-     * 带 LIVELY_GAP_MS 节流：主人把手一直放在她身上时不能每帧都喊。
      */
     function livelyTick(st, now, gap) {
       if (!st) return false
       var g = gap == null ? LIVELY_GAP_MS : gap
       // 靠 makeState 里的 -Infinity 哨兵区分「从没发生过」：
-      //   首次调用 now - (-Inf) = Inf → 放行（主人一来就活跃）
-      //   之后按 5s 节流（主人把手一直放她身上也不会每帧都喊）
       // ⚠️ 别改回 `lastLivelyAt > 0 && ...`：当 now 恰好是 0 时那会让首帧被吃掉。
       if (now - st.lastLivelyAt < g) return false
       st.lastLivelyAt = now
@@ -2533,7 +2355,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     var DEFAULTS = {
       peakThreshold: 0.02, // 峰值门槛（0~1）
-      sustainMs: 800, // 连续响多久才算「在播」（2026-10-17 主人实测后从 1200 降下来）
+      sustainMs: 800,
       quietMs: 300000, // 5 分钟没声音才武装
       cooldownMs: 300000 // 两次 burst 至少隔 5 分钟
     }
@@ -2876,7 +2698,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 为什么要问这个：clip 和脸层（rig.face / rig.props）都是**加性偏移**，会叠在一起。
    * 而 exp3 那套「按键-表情」靠的是**显隐**（改 drawable opacity），不是位移 ——
    * 两个同时作用就会出现「眼睑没让开」「脸红叠在伸懒腰上」这类半吊子效果。
-   * 主人实测：手动点「伸懒腰」眼睑干净（因为 act() 会停掉脸层），
    * 随机触发的却有残留（playClip 不动脸层）—— 差异就在这。
    *
    * 判定沿用本项目已有的老经验：「表情类动作 mood 一律 null，否则两个表情打架」。
@@ -2925,7 +2746,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
 
     // —— 参数独占 ——
-    // 主人要求「每次脸上只能有一个表情，不能两个表情叠在一起」。
     // 光靠「一个 face + 若干道具」还不够：有些道具本身也写脸部参数
     // （比如墨镜会写 ParamEyeLOpen），叠上去就会打架。
     // 所以这里做一个裁决：每个参数在同一时刻只允许**一个**表达式写，
@@ -3096,7 +2916,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 任何路径都不许再播的动作。
-   *   bubble   —— 主人点名踢掉（老会卡住）
    *   aidale   —— 「伸展」，内部驱动 15 个表情参数，一播就多个表情同时亮
    *   selfie*  —— 同上，自带 10 个表情参数
    */
@@ -3142,7 +2961,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * ⚠️ 这是「换动作」的**唯一入口** —— playClip / playClips 都走它。
    *   为什么必须收成一处：clip 是加性偏移，直接替换数组会让旧动作的偏移永远留在参数上，
-   *   新动作叠在残姿上（主人报的「连续伸懒腰很僵硬」「害羞打断伸懒腰很怪」就是这个）。
    *   两处各写一遍，迟早漏一处 —— 本项目记过这个形态（交接文档坑 #5）。
    */
   const CLIP_FADE_MS = 300
@@ -3241,7 +3059,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 停掉当前表演：取消一次性表情、爱心脉冲、一次性动作，
-   * 回到「底层状态 + 常驻待机动作」——主人说的「先变回平常状态」。
    */
   function stopActing() {
     acting = null
@@ -3273,7 +3090,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *     动作写入 → saveParameters() 存快照 → 眨眼/视线/呼吸/物理 → beforeModelUpdate(我们的 rig)
    *     → coreModel.update() → loadParameters() 把快照装回来
    * 也就是说**快照是在动作写入之后存的**。动作一旦停下，快照里留的就是它最后一帧的姿势，
-   * 而 loadParameters() 每帧都会把这份姿势装回来 —— 表现就是主人报的
    * 「蛋包饭点过以后永远挂在桌上、手机收不回去、表情也回不去，连一键重置都没用」。
    * 所以停动作时要做两件事：① 把这些参数设回默认值 ② 重新 save 一次，把快照换成默认姿势。
    */
@@ -3289,7 +3105,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       try {
         const def = paramDefault(id)
         // 取不到默认值的参数一律**不要碰**！之前就是在这里把「睁眼」参数当成了 0，
-        // 结果把眼睛永久设成闭着的（主人报的「一直闭着眼，啥也干不了」）。
         if (def === null) { bad++; continue }
         if (typeof coreModel.setParameterValueById === 'function') coreModel.setParameterValueById(id, def)
         n++
@@ -3308,7 +3123,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 眨眼控制器。
    *
-   * 主人要求：「不要眨太快、不要眨太慢，符合正常人眨眼速度，偶尔眨一眨」。
    * 人类大概是每 3~5 秒眨一次，单次 0.1~0.2 秒，偶尔会连眨两下。
    * 框架自带的实现是「下次眨眼 = random × 7 秒」，范围太野，所以这里自己来：
    *   · 间隔：2.6~5.4 秒随机；15% 概率紧接着再眨一下（连眨）
@@ -3454,7 +3268,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 起一次表演。**所有一次性反应都必须走这里，没有例外。**
    *
-   * 铁律（主人反复强调的）：
    *   1. 先把上一次整个停掉、回到平常状态，**再**开始新的 —— 所以永远不会重叠
    *   2. 一次表演 = 一个面部表情 + 至多一个动作 + 至多一个粒子特效
    *   3. 待机表演只在真正空闲时才会被调用；有任务时只有任务表演
@@ -3477,7 +3290,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (spec.motion) {
       playOneShot(spec.motion)
       // 只有**真的做动作**时才暂时不盯鼠标；单纯换个表情不该把视线也停掉，
-      // 否则待机每隔几秒来一次，她大部分时间都不看主人了。
       gazeDetach(Math.max(2200, ms))
     }
     if (spec.heart) heartBurst(ms)
@@ -3563,7 +3375,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * 为什么要有：桌面壳（Mac 原生 App）为了不让她卡住，阻止了 macOS 的 App Nap，
    * 于是**永远满帧渲染** —— 浏览器里标签页不聚焦会自动降频，壳子里不会，
-   * 所以主人在壳子里觉得电脑又热又卡。
    *
    * 低性能模式：帧率 20、渲染分辨率 1 倍、去掉自言自语和自主动作，
    * 只留眨眼 + 轻微摆动 + 视线；只有点她才会动。
@@ -3614,7 +3425,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       resolution: Math.min(window.devicePixelRatio || 1, PERF.low ? 1 : 1.5),
       powerPreference: 'low-power',
     })
-    // 这个模型 30 帧已经足够顺；60 帧纯粹是白烧 CPU/GPU（主人反馈电脑发热、发卡）
     app.ticker.maxFPS = PERF.low ? 20 : 30
     applyPerf()
     ui.stage.appendChild(app.view)
@@ -3687,14 +3497,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 把面板夹回视口内。
    *
-   * 主人抱怨菜单「不太好用」——桌宠默认蹲在右下角，面板又是以模型为中心
    * 左右展开的，于是右边那一截（包括关闭按钮和滑块的右半段）直接跑到屏幕外，
    * 点都点不到。这里量一下真实位置，用一个横向偏移把它推回来。
    */
   /**
    * 面板往哪边展开 —— **纯计算，不「量了再挪」**。
    *
-   * 主人报的问题：「弹窗一次往左一次往右，靠墙那次还会卡进墙里一半」。
    * 根因是旧写法：先把位移清零、量面板位置、再据此设位移，而位移本身带过渡动画，
    * 量到动画中间态就会一次算左一次算右，来回翻。
    * 现在只看一件事：桌宠在屏幕的左半边还是右半边 ——
@@ -3704,7 +3512,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    */
   /**
    * 她脑袋在屏幕上的横坐标。
-   * 主人要的是「聊天框放在正头顶」，而桌宠的根节点包含整张书桌场景，
    * 根节点中心 ≠ 脑袋中心，所以这里用测量出来的「头部重心」换算成屏幕坐标。
    */
   function headScreenX() {
@@ -3727,7 +3534,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * 本机改动：**气泡改为跟随鼠标**，不再锚在她头顶。
    * 原因：头顶锚点在"只露半边"的极限位置会跑到屏幕外，气泡跟着出去、
-   * 尾部被屏幕切掉（主人反馈）。而且桌宠的惯例就是气泡出现在指针附近。
    * 其余面板（菜单/钱包/简报）保持原来的"对准头顶"。
    */
   /**
@@ -3888,7 +3694,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
     // 纵向兜底：上下都要夹。原来只处理了"顶部超出"，所以把她拖到屏幕下半部分时，
-    // 气泡会被顶出下边界、内容被截断（主人反馈"泡泡内容不完整"）。
     // 提示：气泡挂在 root 的 bottom:100% 上，她的容器一旦探出屏幕，气泡就跟着跑出去，
     //      必须用这个位移把它拉回来才看得全。
     const pb = panel.getBoundingClientRect()
@@ -3927,7 +3732,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const ch = Math.max(0.02, box.y1 - box.y0)
     const cw = Math.max(0.02, box.x1 - box.x0)
 
-    // 四周留余量：主人反馈「尾巴被截掉、有些表情出格被掐」。
     // 原因是原来视窗高度**正好等于**实体高度、宽度又按固定宽高比算 ——
     // 横向超出（尾巴、头顶鲸）和纵向超出（举起来的道具、惊讶表情）就都被裁掉了。
     // 现在实体四周各留 PAD，窗口比实体大一圈，她才能完整显示。
@@ -3974,7 +3778,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.root.style.setProperty('--dshp-inset-y', Math.round(__insetY) + 'px')
     // 气泡/按钮/菜单跟着模型一起缩放，比例才不会走样
     // 例外：正在拖「大小」滑块时**冻住缩放**。否则每拖一格模型就变大一点、
-    // 面板跟着变宽一点，滑块轨道从鼠标底下跑掉——主人说的
     // 「滑动的时候很难受，必须点一下设置一个值，不能拖拽」就是这个反馈环。
     if (!sizingSize) {
       // —— UI 缩放解耦（本机调整）——
@@ -4089,7 +3892,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 松手时的贴边吸附。
    *
-   * 主人改的规矩（原话）：「只吸附右边、不吸附底，我可以随意调整高低，
    * 但只吸附右边或左边的墙壁」——所以这里**只看左右**：
    *   · 靠左墙 / 靠右墙 → 吸过去，竖直位置保持你松手的那个高度
    *   · 离两边都远 → 就停在原地（竖直方向永远不吸）
@@ -4191,7 +3993,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return clamp(top, minTop, maxTop)
   }
 
-  /** 贴住某一侧墙：left/right + top 固定，竖直位置由主人自己定 */
   function applyEdge(edge, y) {
     const root = ui.root
     // 外观档位：跟随系统（默认）/ 浅色 / 深色 —— 手动选过就按本地的来
@@ -4539,7 +4340,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const g = gazeCfg()
     // 指针超过 2 秒没有更新（桌面版壳子停止喂数据 / 鼠标离开跟踪源）→ 视为脱离，
-    // 不再盯着最后那个方向，而是回正脸（主人要求：找不到光标就朝前看）
     const asleep = !!idle.sleep
     const pointerFresh = gaze.pointer.seen && now - (gaze.pointer.at || 0) < 2000
     if (!detached && !asleep && CFG.lookAtCursor && pointerFresh) {
@@ -4564,12 +4364,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     } else {
       // 没人管它：自己看东看西、想事情；睡着时**不动**，视线回正（不跟鼠标、也不游移）
       gaze.mode = asleep ? 'sleep' : detached ? 'detach' : 'idle'
-      // 主人要求：脱离跟随就「回正脸」，不要老歪着斜眼看一个地方，也不能长时间卡住。
       // 所以游移幅度从 ±0.5 收到 ±0.11（基本朝前），间隔也缩短，不再一盯好几秒。
       if (!asleep && now > gaze.nextDrift) {
         gaze.nextDrift = now + 1100 + Math.random() * 1800
         // 幅度 × CFG.gazeDrift（设置面板的「视线游移」）：上游把游移压得很小
-        // （注释写着「主人要求脱离跟随就回正脸」），但那让 glance 几乎不可见；
         // 现在默认 1 = 上游原值，由预设/滑块决定要不要放大。
         const driftK = (() => {
           const d = Number(CFG.gazeDrift)
@@ -4688,7 +4486,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 所以干活期间不是钉在一张脸上，而是按节奏换：敲键盘 → 认真看 → 偷偷摸鱼 → 思考。
    */
   // 干活时的两个状态：认真看资料 / 思考。切换很慢（见 workTick 的间隔），
-  // 主人明确说过「工作模式下不要切太多」。
   const WORK_CYCLE = [
     { mood: 'reading', say: 'reading' },
     { mood: 'thinking', say: 'thinking' },
@@ -4765,7 +4562,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const menuBtn = $('button', 'dshp-btn', '⋯')
     const hideBtn = $('button', 'dshp-btn', '–')
     hideBtn.title = '收起（桌面版会缩成贴边小球）'
-    // 主人要的：一键打开 DeepSeek Harness，纯符号不写字
     const openBtn = $('button', 'dshp-btn dshp-icon', '↗')
     openBtn.title = '打开 DeepSeek Harness 界面'
     dock.append(talkBtn, menuBtn, hideBtn, openBtn)
@@ -4865,7 +4661,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       el,
       show(text, opts) {
         opts = opts || {}
-        // 主人要求：**工作汇报优先级最高** —— 干活/汇报期间，随机互动气泡
         // （戳一下、待机台词这些带 ttl 的）安静等着，不许把汇报顶掉。
         // 正常模式下 workHold 为 false，互动照旧。
         const isWork = !!(opts.work || opts.sticky || opts.stream || opts.busy)
@@ -4921,7 +4716,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   // ——————————————————————————————————————————————————————————————
   // 八点四、工作简报
   //
-  // 这里原来是「头顶挂信封 + 点开大号简报面板」。主人反馈那个信封**点不开、
   // 平时也用不上**，所以整套 UI 全部删掉了：信封按钮、未读角标、简报面板、
   // 对应 CSS，以及 clampPanels() 里的两条 placePanel。
   //
@@ -4954,10 +4748,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener(
       'pointermove',
       (e) => {
-        // 鼠标只要有移动就算「主人在」（睡眠计时用；外壳会把全屏光标喂进来）
         idle.lastInputAt = performance.now()
         if (!dragging) {
-          // 主人反馈：「我鼠标往下走要去点那三个键，一离开她身上它们就消失了，点不着」。
           // 原因：原来只认 hitTest（她模型身上），而工具栏在她**下方**、不在模型掩码里。
           // 现在把「鼠标在工具栏矩形内」也算作悬停，并且离开后多留 900ms。
           const on = hitTest(e.clientX, e.clientY) || overDock(e.clientX, e.clientY)
@@ -5068,7 +4860,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (dragMoved) {
           // —— 本机调整：去掉自动吸附 + 去掉松手惯性 ——
           // 原来这里是 `if (!snapOnRelease()) dragInertia(drag.vx, drag.vy)`，两个都去掉：
-          //   ① 吸附：一贴边就把位置"吸"过去，观感像抽搐（主人反馈）。
           //   ② 惯性：drag.vx 是**一帧的位移**（拖快时上百 px），松手后被当成初速度
           //      直接加到位置上，于是一下子"被甩飞"（实测 l 从 142 直接跳到 -40）。
           // 现在：松手就停在鼠标放开的位置，完全跟手。
@@ -5111,7 +4902,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (!hitTest(e.clientX, e.clientY)) return
         e.preventDefault()
         e.stopPropagation()
-        // 主人要求：右键弹「余额 / 本轮消耗 / 峰谷」这个框，不再直接弹设置菜单
         // （设置还在工具栏的 ⋯ 里，没有丢）
         if (hud.open) closeHud()
         else openHud({ flash: true, refresh: true })
@@ -5122,7 +4912,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener(
       'dblclick',
       (e) => {
-        // 主人要求：输入框只从工具栏的「说话」按钮开，双击鱼身不再弹它。
         // 双击仍然算一次戳她（第一下 click 已经触发过了），这里只吃掉默认行为。
         if (!hitTest(e.clientX, e.clientY)) return
         e.preventDefault()
@@ -5145,7 +4934,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     })
 
     window.addEventListener('keydown', (e) => {
-      idle.lastInputAt = performance.now() // 按键也算主人在（睡眠计时用）
+      idle.lastInputAt = performance.now()
       if (e.key !== 'Escape') return
       if (hud.open) {
         e.stopPropagation()
@@ -5186,7 +4975,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       el.addEventListener('pointerdown', (e) => e.stopPropagation())
     }
 
-    // 鼠标停在 HUD 上时不要自动收（主人在看）
     ui.hud.el.addEventListener('pointerenter', () => {
       hud.hover = true
       hud.hideAt = 0
@@ -5232,7 +5020,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   const pokeState = { times: [], softAt: 0, angerAt: 0 }
 
   /**
-   * 连点分档 —— 主人第二次抱怨「平常点几下就生气了，不好玩」。
    *
    * 旧代码的判定是「和上一次点击间隔 < 1.8 秒就累加」，于是每 1.5 秒点一下，
    * 点到第三下照样炸毛，正常逗她玩也会被凶。
@@ -5241,7 +5028,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 慢悠悠地戳（平均间隔 > 420ms，也就是慢于 2.4 下/秒）→ 永远只是可爱反应；
    *   · 快到 2.4 下/秒以上，才「被戳痒了」撒娇抗议（ticklish），仍然不是生气；
    *   · 只有手速党（3.8 下/秒以上、窗口内至少 7 下）才真炸毛，而且炸毛后有
-   *     6 秒冷静期，免得一直凶主人。
    */
   const POKE_TIER = {
     window: 2600, // 统计窗口（毫秒）
@@ -5315,7 +5101,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 点击互动表。
    *
-   * 主人定的规矩：
    *   · **每个特效配它自己那套台词**，台词贴人设（傲娇嘴甜、贪吃白米、不能被叫胖）
    *   · 一次点击最多 1~2 个效果，绝不叠一堆
    *   · 连着点不重复（pickFresh 记着上一次），所以点十下能看到十种不同反应
@@ -5334,7 +5119,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 摸头池。只有「被叫胖」那一条是真生气的脸，而且权重压到 0.4——
-   * 主人要的是「平常点它别老生气」，所以生气是彩蛋，不是常态。
    */
   const POKE_HEAD = [
     {
@@ -5476,7 +5260,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   ]
 
   function poke(clientX, clientY) {
-    abortIdleScript() // 主人点她 → 小戏立刻让位（别让一段小戏和点击的反应打架）
+    abortIdleScript()
     if (ui.root.classList.contains('dshp-hidden')) return
     // 睡着时戳她 = 叫醒：走「圈圈眼 + 害羞」过场，不播平常那套戳戳台词
     if (idle.sleep) {
@@ -5570,7 +5354,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return expr
   }
 
-  /** 菜单顶上的「现在是什么状态」——免得主人不知道当前挂着什么。 */
   function menuStatusLine() {
     const parts = []
     parts.push(rig.user.face ? `${rig.user.face}（手动）` : faceLabel(rig.face))
@@ -5592,19 +5375,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 演一个菜单项。
    *
-   * 主人抱怨「点了没用、就卡在那」——所以菜单里每一项都不是「只是亮起来」，
    * 而是**一句话 + 一个表情 +（最多）一个小道具**，而且：
    *   · act() 先把上一次整个收掉 → 永远只有一件在演，不叠
    *   · 给一个到点就过期的 TTL → 不会卡住
    *   · 台词只在真的说了话的时候才占用气泡，不会连点刷屏
    */
   function playItem(kind, key) {
-    const table = kind === 'face' ? FACE_ACT : kind === 'decor' ? PROP_ACT : SCENE_ACT
+    const table = kind === 'face' ? FACE_ACT : null
     const info = (table && table[key]) || {}
     const lines = info.lines || (SAY[key] ? SAY[key] : null)
     const line = lines && lines.length ? pickFresh(lines, kind + '-' + key) : undefined
     const mood = info.mood || (kind === 'face' ? key : 'happy')
-    // 菜单表情是临时的：3.6 秒（主人说的「三四秒、反正会被覆盖掉」）
     const ms = info.ms || (kind === 'face' ? 3600 : 3200)
     if (info.lean) {
       // 低头看本子（眼镜类的「仔细看看」）。空闲兜底会把它复位，不会留后遗症。
@@ -5613,28 +5394,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (!rig.override) gaze.biasTarget = 0
       }, ms + 400)
     }
-    // 装饰/场景的开关本身由 setProp 负责（那一层是「一直存在」），
     // 这里只负责「她说点什么 + 换个配得上的表情」。
     return act({ mood, line, props: IDLE_PROPS, heart: !!info.heart, ms })
   }
 
   /**
-   * 演一个一次性动作（猫爪、比耶、心跳、蛋包饭…）。
+   * 演一个一次性动作（挥手、伸懒腰、打喷嚏…）。
    *
    * 关键区别：**动作只走 override 层**（act 的 TTL 到期就没了），
-   * 绝不写进 rig.userProps，所以不会像装饰品/场景那样一直挂着。
-   * 「蛋包饭挤完酱就消失」就是靠这个——表达式蛋包饭 + 挤番茄酱动作，
-   * 到点一起收走。
+   * 绝不写进 rig.userProps，所以不会一直挂着。
    */
   function playAction(key) {
     const a = ACTIONS[key]
     if (!a) return 0
-    // 前置模式（照原作者的设计：自拍类得先掏出手机）
-    if (a.requires) {
-      const need = ALL_TOGGLES[a.requires]
-      if (need && need.device) takeDeviceOut()
-      else setProp(a.requires, true)
-    }
     const expr = a.expr && EXPR[a.expr] ? a.expr : null
     const motion = motionPlayable(a.motion) ? a.motion : undefined
     // mood === null 的动作（自带表情变化的动画）**不压自己的脸**：
@@ -5655,7 +5427,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   // 八点七、HUD：余额 / 本轮消耗 / 峰谷计价
   // ——————————————————————————————————————————————————————————————
   //
-  // 主人要的东西（原话）：右键不再是设置，而是一个醒目的框，里面要有
   //   · 剩余钱数
   //   · 每轮结束弹出「本轮消耗」
   //   · 现在是峰还是谷（**峰=红，谷=绿**）
@@ -5827,7 +5598,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         }, 1500)
       }
     }
-    // 自动弹出后到点自己收（鼠标在上面就不收，主人在看）
     if (hud.hideAt && Date.now() > hud.hideAt && !hud.hover) closeHud()
   }
 
@@ -5864,7 +5634,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
-   * 一轮结束时弹出来（主人要的「本轮消耗都会在这弹出来」）。
    * 等 1.2 秒再弹：宿主的记账是收到事件后才落账的，太早拉会拿到上一轮的数。
    */
   function hudPopTurnEnd() {
@@ -5874,7 +5643,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         await hudFetch(false)
         return
       }
-      // 主人要求：取消「每轮结束自动弹余额」——只在右键时才弹。
       // 这里仍然把账拉回来（右键打开时数字是新的），但**不自动开面板**。
       await hudFetch(false)
       // seq 没变说明账还没落，再补一次
@@ -5924,10 +5692,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 一键重置所有状态：回到「平常脸 + 正常坐姿 + 手里本子和笔」。
-   * 主人要的是「不管我刚才把哪个特效点出来了、或者它自己卡在什么状态，
    * 点一下就全回正常」。
    *
-   * 主人报过的 bug：「工作模式下点了蛋包饭/手机就一直卡着，连一键重置都救不回来。」
    * 查出来的真凶有两个：
    *   1. 重置只清了三层状态，**没停干活轮播**（work.active 还是 true）——
    *      于是 9~14 秒后 workTick 又把底层状态推回「看资料 + 星星眼」，
@@ -5973,7 +5739,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return true
   }
 
-  /** 给面板右上角加一个「×」——主人说之前不好关。 */
   function addCloseButton(panel, onClose) {
     const b = $('button', 'dshp-close', '×')
     b.title = '关闭'
@@ -5981,7 +5746,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     b.addEventListener('click', (e) => {
       e.stopPropagation()
       // 以前不管哪个面板都去 closePanels()，于是「钱包」的 × 点了没反应
-      // （钱包不是 closePanels 管的），主人报的「关闭键是坏的」就是这个。
       if (typeof onClose === 'function') onClose()
       else closePanels()
     })
@@ -6101,7 +5865,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       })
       u.menu.tabs.appendChild(b)
     }
-    // 主人要求：说话按钮点一次开、再点一次关（以前再点只会重新打开，像关不掉）
     u.dock.children[0].addEventListener('click', () => {
       if (u.composer.el.classList.contains('dshp-on')) closePanels()
       else openMenu('talk')
@@ -6130,7 +5893,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ['sway', '换重心'],
     ['express', '换表情'],
     ['mutter', '自言自语'],
-    ['fiddle', '拨弄道具（当前未启用）', true],
     ['nod', '点头'],
     ['tilt', '歪头'],
     ['stretch', '伸懒腰'],
@@ -6263,7 +6025,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const ownLines = id === 'face' ? FACE_LINES : MOUTH_LINES
       /*
        * 反向索引：表情 → 哪些"情绪"会用到它（只用来写 tooltip）。
-       * 渲染时算一次，很便宜。圈圈眼/呆呆眼是主人点名不要的，不进索引。
        */
       const moodsOf = {}
       for (const key of Object.keys(MOOD_FACE)) {
@@ -6296,7 +6057,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (rig.override && rig.override.face === expr) b.classList.add('dshp-on')
         b.title = (moods.length ? moods.join(' / ') + '\n' : '') + (lines.length ? `她会说：${lines[0]}` : '')
         b.addEventListener('click', () => {
-          // 主人要的规矩：菜单表情**不是手动常驻**，是「点一下演三四秒」——
           //   · 3~4 秒后自己让位，平常状态永远回到「平常脸」
           //   · 期间任何新表情（她自己挑的 / agent 事件 / 你再点一个）都会把它顶掉
           // 所以这里不写 30 秒的 rig.user 手动层，只走一次性 override。
@@ -6324,51 +6084,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       )
       return
     }
-    // ⚠️ decor / scene 两页目前**没有页签入口**（菜单只有 表情/口型/动作/设置 四页）。
-    // 这段代码留着是为了换回鲸鱼娘模型时能直接用（那时候 PROPS/SCENES 才有内容可显示）；
-    // 大肥鱼身上它们是空的：每个项都被下面的 EXPR 判定过滤掉。
-    if (id === 'decor' || id === 'scene') {
-      const src = id === 'decor' ? PROPS : SCENES
-      const grid = $('div', 'dshp-grid')
-      for (const [key, def] of Object.entries(src)) {
-        if (!EXPR[def.expr]) continue
-        // 「开着」看的是**主人自己开的那一层**。用 rig.props 判断的话，
-        // 本子/笔这种常态道具永远显示成已开启，再点也没反应——就是主人说的「点了没用」。
-        const on = itemOn(key, def)
-        const b = $('button', 'dshp-chip', def.label)
-        if (on) b.classList.add('dshp-on')
-        const lines = (SCENE_ACT[key] && SCENE_ACT[key].lines) || (PROP_ACT[key] && PROP_ACT[key].lines) || []
-        const tip = on ? '再点一下收起来' : lines.length ? `点了她会说：${lines[0]}` : ''
-        b.title = def.key ? `${tip}\n（原作者热键：${def.key}）` : tip
-        b.addEventListener('click', () => {
-          const nowOn = itemOn(key, def)
-          setProp(key, !nowOn)
-          if (!nowOn) playItem(id, key)
-          renderPane(id)
-        })
-        grid.appendChild(b)
-      }
-      const row = $('div', 'dshp-row')
-      const clear = $('button', 'dshp-btn', '全部摘掉')
-      clear.addEventListener('click', () => {
-        clearProps()
-        act({ mood: 'neutral', props: IDLE_PROPS, line: pickFresh(SAY.tidy, 'tidy'), ms: 2000 })
-        renderPane(id)
-      })
-      row.appendChild(clear)
-      panes.append(
-        grid,
-        row,
-        $(
-          'div',
-          'dshp-hint',
-          id === 'decor'
-            ? '装饰品戴上就一直留着，直到你再点一下摘掉（同类自动互斥：眼镜只戴一副、贴纸只贴一张）。'
-            : '场景摆设也是「摆着不走」——桌布、鲸鱼、巴菲这些会一直留着，再点一下才收。',
-        ),
-      )
-      return
-    }
     if (id === 'action') {
       const grid = $('div', 'dshp-grid')
       for (const key of ACTION_KEYS) {
@@ -6385,7 +6100,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
       panes.append(
         grid,
-        $('div', 'dshp-hint', '动作是**一次性的**：演一遍就自己消失，不会一直挂着。\n（要一直留着的，去「装饰」和「场景」两页——蛋包饭也在这页，挤完酱就没了。）'),
+        $('div', 'dshp-hint', '动作是**一次性的**：演一遍就自己消失，不会一直挂着。'),
       )
       return
     }
@@ -6436,7 +6151,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     range.max = '720'
     range.value = String(clamp(Number(readLayout().height) || CFG.height, 150, 720))
     range.title = '也可以直接拖（点 − / + 更省事）'
-    // 主人要求：大小主要用「加 / 减」点一下调，不要只能拖滑块
     const stepSize = (delta) => {
       const next = clamp(Number(range.value) + delta, 150, 720)
       range.value = String(next)
@@ -6666,7 +6380,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     row1.append(eyeBtn, mouthBtn, soundBtn)
 
     // 连接哪一个 DSH：自动 / 桌面版 / 网页版
-    // （主人反馈：她有时连网页版、有时连桌面版，会「串对话」，所以要一个手动选择键并记住）
     //
     // ⚠️ 2026-10-17 独立化之后：外壳自己起本地服务提供页面，并自己发现/维持 DSH 连接
     // （见 shell/src/petserver.js）。页面这边**没有选择权**了，
@@ -6775,7 +6488,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       box.append(row3)
     }
     // ——— 调试：睡眠 ———
-    // 主人要「不用等 3 分钟、也不用开调试口」就能看睡眠状态，所以给一个真实入口的按钮：
     // 走的就是 beginSleep/wakeUp，不另写一套；按钮不是 .dshp-chip，
     // 不会被「睡着时点菜单先走过场」的捕获逻辑拦住。
     const sleepRow = $('div', 'dshp-row')
@@ -7031,7 +6743,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         const propKey = react.prop === 'auto' ? randomGlasses() : react.prop
         setBase(
           react.mood,
-          isDevice ? ['menuBoard'] : WORK_PROPS.concat(propKey ? [propKey] : []),
+          isDevice ? [] : WORK_PROPS.concat(propKey ? [propKey] : []),
         )
         if (isDevice) {
           if (!device.out) {
@@ -7060,7 +6772,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         clearToolProp()
         if (m.error) {
           // 出错才有「黑脸」——而且很快就结束，不会一直挂着
-          // 出错只是黑一下脸，很短——主人说「大锤砸头」那个不要了
           // 工具报错只是「黑一下脸」，很短，而且不叠任何别的东西
           act({
             mood: 'gloomy',
@@ -7100,7 +6811,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         // （比如「调皮」会闭一只眼），于是看起来就像「平常动作被挤眼睛占住了」。
         setBase('neutral', IDLE_PROPS)
 
-        // 主人要的：每轮结束都把「本轮消耗」弹出来（独立面板，9 秒后自己收）。
         // 宿主通常已经推了 hud-turn（那条会立刻弹）；这里只是兜底，晚一点再拉一次余额。
         hudPopTurnEnd()
 
@@ -7110,19 +6820,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (m.tokens) stat.push(m.tokens.toLocaleString() + ' tokens')
 
         if (kind === 'completed') {
-          // 庆祝：开心脸 + 伸个懒腰 + 一个装饰（猫耳/兔耳/花花随机一个）+ 一句台词。
-          // 刻意只叠「一个动作 + 一个装饰」，而且几秒后自己连开关一起收掉。
-          // 庆祝只做三件事：开心脸 + 一个装饰 + 一句台词，再加一个纯 CSS 的「蹦一下」。
+          // 庆祝：开心脸 + 一句台词 + 一个纯 CSS 的「蹦一下」。
           // 刻意**不播 aidale**：那个「伸展」动作内部驱动 15 个表情参数
           // （呆呆眼/哭/开心/晕晕/感叹号），一播就会同时点亮好几个表情，
           // 看起来就是「砸完头之后表情全乱了」。qBounce 不碰任何模型参数。
           qBounce(1.2)
-          // 主人要求：刚输出的文字要**停留一下**，别被结算立刻顶掉。
-          // 所以先只做表情+装饰的庆祝，文字留在气泡里；过两秒多再把结束台词接上。
+          // 文字留在气泡里；过两秒多再把结束台词接上。
           const keepText = ui.bubble.visible && !!agent.lastText
           act({
             mood: 'happy',
-            props: [pickFresh(['stickerCat', 'stickerRabbit', 'flower', 'heartbeat'], 'celebrate')],
+            props: [],
             line: keepText ? null : pickFresh(SAY.done, 'done') + (stat.length ? '\n' + stat.join(' · ') : ''),
             ms: 3000,
           })
@@ -7226,7 +6933,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 待机行为权重表。
    *
-   * 主人明确要求：**待机不放任何「动作」**（不吹泡泡糖、不伸懒腰、不自拍），
    * 待机就是「拿着板夹、平常脸、等命令」——动效只可能在「点击」或「工作事件」
    * 里出现，每个动作配它自己那套台词，且不会乱冒。
    *
@@ -7235,7 +6941,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /*
    * 灵动度预设（设置面板的「灵动度」三个按钮）。
    *
-   * 为什么要有预设：主人原话「我其实讲不太清楚想要哪种灵动」——
    *   所以把两种典型手感做成预设，一键切换，再配滑块细调。
    *   预设本身没有隐藏状态，它只是**一组 CFG 推荐值**，点完仍可逐个改。
    *
@@ -7327,7 +7032,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      */
     {
       name: '伸个懒腰',
-      weight: 6, // 2026-10-17 主人反馈偏多：9→6（小戏里从 15% 降到 10%）
+      weight: 6,
       minGap: 75,
       steps: [
         { at: 0.0, do: 'glance' },
@@ -7337,8 +7042,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ]
     },
     /*
-     * 「找找主人」：东张西望 + 歪头 + 出声找人。
-     * 这条是唯一「明确朝主人说话」的小戏，用来打破长时间没人理她的沉闷。
      */
     {
       name: '找找主人',
@@ -7352,8 +7055,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ]
     },
     /*
-     * 「偷看主人」：先瞄一眼 → 脸红 → 歪头 → 小声嘀咕。
-     * 和「找找主人」区分：那条是东张西望找人，这条是**偷看** —— 先看、再害羞、再假装没事。
      * 只用原子能力（glance/face/clip/line）；face 的 soft 由 runScriptAction 统一处理。
      */
     {
@@ -7369,7 +7070,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
     /*
      * 「找个东西」：左顾右盼 → 疑惑 → 点头 → 嘀咕。
-     * 用「疑惑」这张新表情撑住中间那段；和「找找主人」区分：那条找的是人，这条找的是东西。
      */
     {
       name: '找个东西',
@@ -7439,7 +7139,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       if (a.verb === 'clip') {
         // ⚠️ 起手清脸层：小戏的 face 步骤刚切过一张脸（TTL 2.6s），
         //   而 clip 步骤往往紧跟着来 —— 不清的话脸层会**平滑淡出半秒**，
-        //   于是「脸红 + 伸懒腰」叠在一起（主人实测报的就是这个）。
         clearSoftFace()
         return !!playClip(a.arg, { speed: 0.95 + Math.random() * 0.1 })
       }
@@ -7485,7 +7184,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       idle.scriptManual = false
       return
     }
-    // 硬表演（主人点她 / 感知器反应，2~3 秒）→ **暂停，不中断**。
     //   为什么不杀：一次点击就把整段小戏毁掉太粗暴了；暂停的话，
     //   等那 2~3 秒的 override 过期，小戏会从原来的进度接着演（时间轴按 now 推进，天然支持）。
     //   代价：期间那一步的视觉会被 override 盖住 —— 但小戏后面的步骤照常。
@@ -7563,7 +7261,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 新增 nod / tilt / stretch / tailWag 四个**肢体动作**（这就是「A：放开待机 clip」）。
    *     上游注释写着「待机不放任何动作」，但那是上游为鲸鱼娘定的性格，
    *     本机已确认推翻：待机时低频来一个小动作，是「有生命感」最直接的来源。
-   *     这四个都是低干扰的（不含表情、不抢视线），不会打断主人干活。
    */
   const IDLE_TABLE = [
     ['glance', 8], // 看别处 / 发呆（只动视线，几乎看不到 —— 权重再压一点，让给下面两个）
@@ -7572,13 +7269,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ['script', 14], // 成套小戏（2~4 步连着做，见 IDLE_SCRIPTS）—— 权重给了 12.5%
     ['express', 24], // 自己换个表情，几秒后收回
     ['mutter', 16], // 自言自语（人设台词）
-    ['fiddle', 10], // 拨弄道具（上游权重表里漏了这一项 → 曾经永远抽不到）
     ['nod', 6], // 点头（肢体动作）
     ['tilt', 6], // 歪头（肢体动作）
-    ['stretch', 4], // 伸懒腰（肢体动作）—— 2026-10-17 主人反馈偏多，6→4
+    ['stretch', 4],
     ['tailWag', 8], // 甩尾巴（肢体动作）
     ['hungry', 4], // 喊饿
-    ['nopang', 2], // 强调自己不胖（主人说「别老生气」，权重砍半）
+    ['nopang', 2],
   ]
   const IDLE_TOTAL = IDLE_TABLE.reduce((a, b) => a + b[1], 0)
 
@@ -7589,7 +7285,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     sleepWhy: null,
     sleepAt: 0,
     sleepIdleLevel: null,
-    /** 主人最后一次有动作（光标/点击/按键），performance.now()。睡眠计时用 */
     lastInputAt: (typeof performance !== 'undefined' ? performance.now() : 0),
     /** DSH 最后一次有事件（等于 agent.lastActivity 的性能时钟版） */
     lastDshAt: (typeof performance !== 'undefined' ? performance.now() : 0),
@@ -7653,7 +7348,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     for (const n of SLEEP_FACES) rig.weight.delete(n)
     rig.weight.set(name, 1)
     rig.base = { mood: 'sleepy', face: name, props: [] }
-    rig.user.face = null // 手动表情让位：睡着了就别再挂主人点的那张脸
+    rig.user.face = null
     resolveRig()
     return name
   }
@@ -7689,7 +7384,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 设置页开着时，让调试按钮/提示跟着**真实状态**走。
    *
-   * 为什么不能只在渲染时读一次 idle.sleep：主人用手势叫醒她（悬停 / 甩动 / 拖动 / 点击）
    * 不会经过这个按钮，面板也不会重建 —— 按钮就会一直显示「叫醒她」，点了才发现她其实醒着。
    * 只改 textContent，不重建面板：设置页很长，重建会把滚动位置弹回顶部。
    */
@@ -7740,7 +7434,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *
    * ⚠️ 唤醒是**状态迁移**，不是感知器反应：这里可以写一次性 override；
    *    感知器那条链路（doReaction）仍然绝不碰 override。
-   * opts.keepBase：DSH 消息已经先把底脸切成「听主人说话」，叫醒时别盖回 neutral。
    */
   function wakeUp(reason, opts) {
     if (!idle.sleep) return false
@@ -7860,23 +7553,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return allow ? IDLE_TABLE : IDLE_TABLE.filter(([k]) => !IDLE_CLIP[k])
   }
 
-  /** 现在能用的道具/装饰 key（EXPR 里查得到表达式才算真能用） */
-  function availablePropKeys() {
-    return Object.keys(PROPS).filter((k) => EXPR[PROPS[k].expr])
-  }
-
-  /**
-   * 「这个待机行为现在做得了吗」。
-   *
-   * 为什么要这层过滤（2026-10-17 收尾时发现的真问题）：
-   *   `fiddle`（拨弄道具）在常态占 10、活跃期占 14，但它依赖 PROPS 里的道具表达式，
-   *   而那一堆全是**鲸鱼娘模型专属**的（圆眼镜/猫猫贴纸/桌布/魔爪…），大肥鱼一个都没有。
-   *   于是每次抽到 fiddle 都「什么都没发生」——观感是发呆，还把节奏引擎的 quiet 计数冲掉
-   *   （fiddle 在 LIVELY_KINDS 里，等于「假有戏」）。
-   * 做不了的行为不进池之后，权重会自动按剩下的重新归一，不需要改任何数字。
-   */
+  
   function canDoIdle(kind) {
-    if (kind === 'fiddle') return availablePropKeys().length > 0
     return true
   }
 
@@ -7913,12 +7591,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 待机时自己换个表情，过几秒悄悄收回（除非有真实事件插进来）。 */
   function idleExpress() {
-    // 注意：'dizzy'（圈圈眼）主人说老出不好看，已从所有自动行为里移除
     // 待机时换的表情，**必须是不会改变眼睛大小的**——
-    // 主人要的「平常动作」就是「正常眼型 + 正常表情」，所以像
     // 开心兴奋（闭眼）、调皮（闭一只眼，就是那个"挤眼睛"）这类
     // 一律不进待机池，只留给点击互动那种明确的场合。
-    // 'grumpy'（生气）也踢掉了：主人抱怨「别老生气」，待机时无缘无故
     // 摆一张生气的脸很莫名，换成「流汗」。
     const pool = ['shy', 'confused', 'excited', 'alert', 'tongue', 'sweat', 'love']
     const m = pick(pool)
@@ -7933,20 +7608,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
   }
 
-  /** 待机时拨弄一个道具：临时戴上，随 override 一起过期，不用手动摘。 */
-  function idleFiddle() {
-    const keys = availablePropKeys()
-    // 模型没有一件能用的道具（大肥鱼就是这样）→ 直接返回，别调 act()。
-    // 以前这里会 act({ props: [undefined] })，表现出来是「她忽然换了个姿势/表情又什么都没做」。
-    if (!keys.length) {
-      idle.behWhy = 'fiddle-no-props'
-      return false
-    }
-    const key = pickFresh(keys, 'fiddle')
-    act({ props: [key], ms: 5000 + Math.random() * 4000, soft: true })
-    return true
-  }
-
   /**
    * 抽并执行一件待机小事。返回**实际抽到的行为名**（节奏档要用它做状态转移）——
    * 没抽成（正有表演在放）时返回 null。
@@ -7958,7 +7619,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 交互类（挥手/要抱抱/打招呼）语义上得有人在场，自己冒出来很怪
    *   · 表情类（惊讶/害羞/思考/打哈欠）会抢脸，和 express 行为打架（本项目记过的坑）
    *   · 「左顾右盼」会和视线系统抢方向盘
-   *   · 剩下这四个都是**低干扰**的：不含表情、不抢视线，主人余光扫到只会觉得「她动了一下」
    *
    * 全部走既有的 playClip（加性偏移、可被打断、走 applyRig 的 delta 管线），
    * 所以不会留下残留姿势，也不会和待机层打架。
@@ -7977,22 +7637,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 手动点菜单走的是 act()，它第一件事就是 stopActing() 清脸层 → 动作干净；
    *   · 随机待机以前只调 playClip，脸层原封不动 → 脸（比如脸红）会和动作叠着，
    *     而脸层的权重是**平滑淡出**（约半秒），这半秒里就是「两套半吊子」：
-   *     主人看到的「随机伸懒腰眼睑没消掉 / 脸红+伸懒腰叠加」就是这么来的。
    *   · 这里清掉之后，两条路径的行为**完全一致**（都从干净状态起动作）。
    *
-   * 安全性：runIdleBehavior 的调用方已经确认过「没有硬表演」（agent 在干活 / 主人点击来了
    *   都不会走到这），所以这里清掉的只会是她自己刚挂的软脸层，不会顶掉真实表演。
    */
   /**
    * 待机/小戏**自己发起**一个肢体动作前的清场：把待机挂在脸上的那一层清掉。
    *
-   * 为什么必须清（主人实测：「随机伸懒腰眼睑没消掉」+「脸红+伸懒腰叠加」）：
    *   · 手动点菜单走 act()，它第一件事是 stopActing() 清脸层 → 动作干净；
    *   · 待机路径以前不清 → 脸（脸红/圈圈眼…）和动作**叠着**，
    *     而且脸层的权重是**平滑淡出**（约半秒），这半秒就是「两套半吊子」：
    *     眼睑被脸层的 EXP5 抬着没让开、脸红和闭眼同时可见。
    *
-   * ⚠️ 只清 **soft**（她自娱自乐那层）。硬表演（agent 事件 / 主人点击）根本走不到这里，
    *    而且调用方（runIdleBehavior / scriptTick）都判过「没有硬表演」了。
    * 收成一处：idleClipAction 与小戏的 clip 步骤共用，别再各写一遍。
    */
@@ -8006,14 +7662,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function idleClipAction(kind) {
     const clip = IDLE_CLIP[kind]
     if (!clip) { idle.clipWhy = 'no-clip-map'; return false }
-    // 主人正在说话/她自己正在念台词时，别插肢体动作（会显得抢话）
     if (rig.talking) { idle.clipWhy = 'talking'; return false }
     clearSoftFace() // 起手清掉待机自己挂的脸层（见 clearSoftFace 注释）
     // ⚠️ strength 必须**满**（不能随机降强度）：
     //   实测踩到的真凶 —— 原来写的是 strength: 0.8 + rand*0.2，
     //   而 strength 会**缩放整个动作的偏移量**（sampleTrack 里 v * strength），
     //   于是「闭眼」只到 EXP5 = -0.837、EyeLOpen = -0.837（**没完全闭**），
-    //   眼睛形状还留着一条缝 → 主人看到的「随机伸懒腰眼睑没消掉」。
     //   手动点菜单走的是 playClip(name, {}) → strength 默认 1 → 完全闭上，
     //   所以「手动干净、随机残留」的差异就在这里。
     //
@@ -8055,7 +7709,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       { kind: 'clip', arg: '歪头', w: 15, ms: 2000 }
     ],
     // ③ 鼠标甩过去 → **只动视线和小幅甩头**，绝不播身体动作
-    //    （主人随手甩一下鼠标她就抽风的话，会被立刻关掉）
     swoosh: [
       { kind: 'gaze', w: 70 },
       { kind: 'gaze', w: 30, headZ: 3 }
@@ -8082,7 +7735,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
-   * 甩头 / 探头往哪边：跟着鼠标的**横向速度**走（主人在右边甩，她就往右甩）。
    * 速度太小（只是慢慢挪）时用随机方向 —— 否则每次都是同一个方向，看着像机械。
    */
   function pointerDir(allowRandom) {
@@ -8114,10 +7766,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   /**
    * 反应的优先级：**只有优先级更高的反应才能接管当前正在播的那个**。
    *
-   * 为什么要这张表（主人报的问题）：
    *   她正在「害羞」（盯着看触发），这时待机大脑抽到「伸懒腰」，
    *   或者另一个感知器又报了别的反应 —— 结果害羞被中途打断。
-   *   主人要求：感知器触发的动作**优先级最高**，不许被抢。
    *
    * 所以：同优先级或更低的，在占位窗口内一律不接管（她自己会排冷却）；
    * 只有「盯着看」和「停下打字」这两个更明确的信号可以接管「凑近/甩鼠标」。
@@ -8161,7 +7811,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const pool = REACTIONS[name]
     if (!pool) return false
     // 诊断：把「抽到哪一条、做了什么」留痕。
-    // 主人报过「看到张开手但没脸红」——没有这条记录就只能靠猜是哪个反应播的。
     const note = (what) => { idle.lastReaction = { sensor: name, kind: what.kind, arg: what.arg || null, at: Math.round(performance.now()) } }
     // 强度低时有一半机会「只是看你一眼」——避免她显得一惊一乍
     const st0 = reactStrength()
@@ -8310,7 +7959,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       sleeping: false
     }
 
-    // 「主人有活动」→ 通知节奏引擎进活跃期（带节流，且只在真的凑近/打字时）
     const active = ev.near || (st.typing && now - st.lastTypeAt < 1500)
     if (active && DSHPetIdleSensors.livelyTick(st, now)) {
       if (DSHPetIdleRhythm) DSHPetIdleRhythm.noteActivity(idle.rhythm, now)
@@ -8404,7 +8052,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           await sleep(stp.wait)
           const rec = idle.lastReaction
           // 甩头是「姿态脉冲」，它不属于 reaction 的 kind —— 单独报出来，
-          // 否则主人看到「只动视线」会以为甩头没做（其实做了，0.62 秒一闪而过）。
           const flickNote = flick ? ' + 甩头(' + (flick.dir > 0 ? '右' : '左') + ')' : ''
           log.push({ step: stp.name, did: did, reaction: rec ? (rec.kind + (rec.arg ? ':' + rec.arg : '') + (flick ? '+flick' : '')) : null })
           say('【演示】' + stp.label + ' → ' + (rec ? (rec.kind + (rec.arg ? ' ' + rec.arg : '')) : (did ? '做了反应' : '这次留白（什么都没做）')) + flickNote)
@@ -8423,7 +8070,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /**
    * 立刻收掉正在演的小戏。
-   * 什么时候要调：真实工作事件到来、主人点她、切模式、重置。
    * 为什么不靠 scriptTick 里那个守卫就够：那个守卫要等下一次 40ms 心跳才生效，
    *   而真实事件可能就在这 40ms 内推了一堆东西进来 —— 主动收更干净。
    */
@@ -8447,7 +8093,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     const b = idle.forceNext || pickIdleBehavior()
     idle.forceNext = null
-    // 抽签那条路已经过滤过；但 idleAct('fiddle') 这种「点名要」的还会走到这里，
+    // 抽签那条路已经过滤过；但 idleAct('未知行为') 这种「点名要」的还会走到这里，
     // 所以再守一道：做不了就说清原因，别静默做一次空操作。
     if (!canDoIdle(b)) { idle.behWhy = 'not-available:' + b; return null }
     // 肢体动作：也是「一次性表演」，所以登记一下，免得下一跳马上又插一件（会叠）
@@ -8476,9 +8122,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       case 'mutter':
         act({ props: IDLE_PROPS, line: pickFresh(SAY.idle, 'idle'), ms: 4200, soft: true })
         break
-      case 'fiddle':
-        idleFiddle()
-        break
       case 'hungry':
         act({ mood: 'pout', props: IDLE_PROPS, line: pickFresh(SAY.hungry, 'hungry'), ms: 4600, soft: true })
         break
@@ -8489,8 +8132,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // 这四个的实际执行已经在 switch **之前**做掉了（见上面的 IDLE_CLIP 拦截），
       // 这里的分支看起来「什么都不做」，但它必须存在，理由有两个：
       //   1. 单测第 7 节会断言「权重表 ↔ switch 分支」双向一致 ——
-      //      上游就是因为在权重表里留了 fiddle、却让人以为没有分支，才让「拨弄道具」
-      //      静默失效了很久。这里显式列出，就是为了不重蹈覆辙。
+      //      以前权重表里留了没有分支的项，静默失效了很久。这里显式列出，就是为了不重蹈覆辙。
       //   2. 以后若有人把执行逻辑挪进 switch，分支已经在位，不会漏。
       case 'nod':
       case 'tilt':
@@ -8563,7 +8205,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }
 
       // 待机肢体动作的「音尾」：动作刚播完时姿势还在淡出（300ms），这时候抽下一件
-      //   会让两个动作叠在一起 —— 主人报的「连续两个伸懒腰」就是这么来的。
       //   所以动作结束后再留 700ms，等姿势彻底归零再抽下一件。
       if (idle.clipUntil && now < idle.clipUntil + 700) {
         idle.nextAt = now + 400
@@ -8605,8 +8246,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     // 睡眠计时：先打哈欠，再睡着。
     //
-    // ⚠️ 2026-10-17 改了「什么算主人在」：以前只看 agent.lastActivity（DSH 事件），
-    //    于是主人明明在玩桌宠/动鼠标，3 分钟后她照样睡。现在鼠标/点击/按键都算 ——
     //    两个时钟取最大（都是 performance.now()，别混 Date.now）。
     setInterval(() => {
       if (!CFG.sleepAfterMs || agent.status !== 'idle') return
@@ -8648,7 +8287,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     classifyTone: (text) => ((typeof DSHPetTalkTone !== 'undefined') ? DSHPetTalkTone.classify(text) : 'plain'),
     /**
      * 诊断：模拟「她在说这句话」若干毫秒（只动语气与口型，**不发任何消息**）。
-     * 为什么要它：真实的说话只发生在 agent 吐字时，而那正好是主人/我在干活的时候，
      * CDP 很难在那一刻正好采样 —— 和 idleDemo / sensorDemo 是同一个理由。
      */
     talkProbe: (text, ms) => {
@@ -8716,8 +8354,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 诊断：**演示模式** —— 忽略 agent 是否在干活，让待机大脑照常抽事。
      *
      * 为什么需要它：待机大脑的第一道守卫是 `agent.status !== 'idle'`，
-     *   而「我一做工具调用 / 主人一跟我说话，agent 就永远不是 idle」，
-     *   所以 CDP 和主人都**看不到**真实待机行为（实测 nextIn 恒为 0 = 从没抽过事）。
      *   打开它就能当场看到她待机时会做什么，用来验收手感。
      *
      * 只跳过「agent 忙不忙」这一条守卫；低性能档 / 窗口隐藏 / 页面不可见仍然生效，
@@ -8730,7 +8366,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
 
     /**
-     * 诊断/测试钩子：假装「主人刚刚有动作了」，把待机节奏推进到活泼期。
      * 为什么需要：真实待机行为被 agent.status/PERF/可见性 三重守卫挡着，
      *   agent 干活时（我做工具调用时就是）根本不抽事，所以 CDP 无法端到端验证。
      * S2 的互动感知器接进来后也是调同一个 noteActivity，所以它同时也是那条路径的预演。
@@ -8818,7 +8453,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 每一步都用气泡把她收到的信号与反应**报在屏幕上**。
      *
      * 为什么需要它：
-     *   · 主人说「没使用控制台」+「F12 没反应」—— 因为她铺满全屏，键盘焦点不在外壳上；
      *   · 真实互动被 agent.status 挡着（你跟 AI 说话时 agent 就在干活），边聊边看是看不到的。
      * 它临时打开演示模式（只放行这一条守卫），跑完自动还原。
      */
@@ -8827,7 +8461,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 每一步都用气泡把她收到的信号与反应**报在屏幕上**。
      *
      * 为什么需要它：
-     *   · 主人说「没使用控制台」+「F12 没反应」—— 因为她铺满全屏，键盘焦点不在外壳上；
      *   · 真实互动被 agent.status 挡着（你跟 AI 说话时 agent 就在干活），边聊边看是看不到的。
      * 它临时打开演示模式（只放行这一条守卫），跑完自动还原。
      *
@@ -8854,7 +8487,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 诊断：**当前这一跳真正能抽到的待机行为池**（含权重）。
      *
      * 为什么要暴露它：菜单里那些「点了没反应」的项，根子是「模型没有那个参数」；
-     * 待机行为有一模一样的问题（fiddle 依赖鲸鱼娘的道具）。
+     * 待机行为有一模一样的问题（依赖模型里不存在的参数/道具）。
      * 有了这个接口，测试就能断言「池子里不会出现做不了的行为」，不用去猜概率。
      */
     /** 诊断：详细频率面板的三组值（行为/小戏/间隔） */
@@ -8886,7 +8519,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         names: rows.map(([k]) => k),
         rows: rows.map(([k, w]) => k + ':' + w),
         removed: IDLE_TABLE.map(([k]) => k).filter((k) => !rows.some(([x]) => x === k)),
-        propKeys: availablePropKeys(),
+        propKeys: [],
       }
     },
 
@@ -8946,7 +8579,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     idlePokeActivity: () => {
       if (!DSHPetIdleRhythm || !idle.rhythm) return null
       DSHPetIdleRhythm.noteActivity(idle.rhythm, performance.now())
-      // 只记「主人有动作」——这正是 S2 感知器将来要做的事。
       // ⚠️ 这里**不**消耗簇（不调 takeCluster）：
       //    · 语义上更对：感知器只负责「报告有活动」，抽簇由待机大脑决定；
       //    · 也才好校验档位区间——若在这里就 takeCluster，left>0 会让 intervalMs
@@ -9025,7 +8657,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
     /** 诊断用：某个菜单项配的台词（验证「每一项都有话可说」）。 */
     itemLines(kind, key) {
-      const t = kind === 'face' ? FACE_ACT : kind === 'decor' ? PROP_ACT : kind === 'action' ? ACTIONS : SCENE_ACT
+      const t = kind === 'face' ? FACE_ACT : kind === 'action' ? ACTIONS : null
       return (t && t[key] && t[key].lines) || null
     },
     /** 诊断用：一次动作有哪些可选（测试逐项点一遍）。 */
@@ -9129,12 +8761,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     catalog() {
       return {
         expressions: Object.keys(EXPR),
-        // 菜单的三类：装饰（常驻）/ 场景（常驻）/ 动作（一次性）
-        props: Object.keys(PROPS),
-        decor: Object.keys(PROPS),
-        scenes: Object.keys(SCENES),
+        // 菜单的两类：表情 / 动作（一次性）
+        props: [],
+        decor: [],
+        scenes: [],
         actions: ACTION_KEYS,
-        baseItems: Object.keys(BASE_ITEMS),
+        baseItems: [],
         moods: Object.keys(MOOD_FACE),
         motions: manifest ? Object.keys(manifest.motions || {}) : [],
       }

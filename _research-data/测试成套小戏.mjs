@@ -173,7 +173,7 @@ console.log('\n【9】与 pet.js 的接线（防止只写了引擎没接上）')
   ok('IDLE_TABLE 里有 script 条目', /\['script',\s*\d+\]/.test(src))
   ok('runIdleBehavior 的 switch 有 script 分支', /case 'script'/.test(src))
   ok('agent 切走时会中断小戏', /if \(next !== 'idle'\) abortIdleScript\(\)/.test(src))
-  ok('点击时会中断小戏', /abortIdleScript\(\) \/\/ 主人点她/.test(src))
+  ok('点击时会中断小戏', /function poke\([\s\S]{0,80}abortIdleScript\(\)/.test(src))
   ok('idle.scripts 状态已初始化', /scripts: \(typeof DSHPetIdleScripts/.test(src))
   // 权重表与 switch 的一致性（沿用节奏套件那条断言的精神）
   const tm = /const IDLE_TABLE = \[([\s\S]*?)\n  \]/.exec(src)
