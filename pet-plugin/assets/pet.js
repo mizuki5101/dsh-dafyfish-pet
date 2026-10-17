@@ -5916,6 +5916,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ['face', '表情'],
       ['mouth', '口型'],
       ['action', '动作'],
+      ['script', '小戏'],
       ['setting', '设置'],
     ]
     u.menu.focused = 'face'
@@ -6087,6 +6088,43 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       panes.append(
         grid,
         $('div', 'dshp-hint', '动作是**一次性的**：演一遍就自己消失，不会一直挂着。\n（要一直留着的，去「装饰」和「场景」两页——蛋包饭也在这页，挤完酱就没了。）'),
+      )
+      return
+    }
+    if (id === 'script') {
+      const grid = $('div', 'dshp-grid')
+      const runningName = idle.scripts && idle.scripts.running ? idle.scripts.running.name : null
+      const stepWord = (s) => {
+        if (s.do === 'clip') return '动作「' + s.arg + '」'
+        if (s.do === 'face') return '表情「' + s.arg + '」'
+        if (s.do === 'line') return '台词'
+        if (s.do === 'glance') return '看一眼'
+        if (s.do === 'qbounce') return '弹一下'
+        if (s.do === 'prop') return '道具'
+        return s.do
+      }
+      for (const sc of IDLE_SCRIPTS) {
+        const dur = DSHPetIdleScripts && DSHPetIdleScripts.durOf ? DSHPetIdleScripts.durOf(sc) : 0
+        const steps = (sc.steps || []).map((s) => s.at.toFixed(1) + 's ' + stepWord(s)).join(' → ')
+        const b = $('button', 'dshp-chip', sc.name)
+        if (runningName === sc.name) b.classList.add('dshp-on')
+        b.title = '演一遍「' + sc.name + '」\n时长 ' + dur.toFixed(1) + 's · ' + (sc.steps || []).length + ' 步 · 冷却 ' + sc.minGap + 's\n' + steps
+        b.addEventListener('click', () => {
+          const got = startIdleScriptByName(sc.name)
+          if (got) ui.bubble.show('（演一段）' + got, { name: 'DS 鲸鱼娘', ttl: 1800 })
+          renderPane(id)
+        })
+        grid.appendChild(b)
+      }
+      panes.append(
+        grid,
+        $(
+          'div',
+          'dshp-hint',
+          (runningName ? '正在演「' + runningName + '」…\n' : '') +
+            '点一下立刻演这一段：2~4 步按时间轴依次做，最后自己结束。\n' +
+            '睡着时点它会先走唤醒过场；真正的工作事件来了会立刻收掉。',
+        ),
       )
       return
     }
@@ -7070,13 +7108,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 中断条件：agent 开始干活 / 有待机表演插进来 / 她睡着了 / 页面不可见
     // 中断原因要记下来 —— 否则「小戏不走时间轴」只能靠猜（我刚猜了一轮）
     // 只有这四种**必须**中断（她不该在干活的/睡着的时候还在演小戏）：
-    const why = (agent.status !== 'idle' && !idle.demo) ? 'agent-busy'
+    const why = (agent.status !== 'idle' && !idle.demo && !idle.scriptManual) ? 'agent-busy'
       : idle.sleep !== 0 ? 'sleep'
       : document.hidden ? 'hidden' : null
     if (why) {
       const name = DSHPetIdleScripts.abort(sc, now)
       if (name) motion.debug.scriptAborted = { name: name, why: why, at: Math.round(now) }
       idle.scriptAbortWhy = why
+      idle.scriptManual = false
       return
     }
     // 硬表演（主人点她 / 感知器反应，2~3 秒）→ **暂停，不中断**。
@@ -7090,7 +7129,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     idle.scriptAbortWhy = null
     const acts = DSHPetIdleScripts.frame(sc, now, { holdSec: 0.8, gapSec: 0 })
     for (const a of acts) {
-      if (a.verb === 'end') { motion.debug.scriptEnd = a.script; continue }
+      if (a.verb === 'end') { idle.scriptManual = false; motion.debug.scriptEnd = a.script; continue }
       runScriptAction(a)
       motion.debug.scriptStep = a
     }
@@ -7104,8 +7143,27 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!chosen) return null
     if (!DSHPetIdleScripts.canStart(sc, chosen, now, 15000)) return null
     DSHPetIdleScripts.start(sc, chosen, now) // 冷却由引擎在结束时上锁（见 start/frame）
+    idle.scriptManual = false
     motion.debug.scriptStart = { name: chosen.name, at: Math.round(now) }
     return chosen.name
+  }
+
+  /**
+   * 手动演指定小戏（菜单「小戏」页用）。
+   * 和 startIdleScript 的区别：跳过随机、跳过冷却（点了就要看）；
+   * `idle.scriptManual` 让 agent 正在干活时也能演 —— 但真实事件（setStatus）仍会 abort。
+   */
+  function startIdleScriptByName(name) {
+    const sc = idle.scripts
+    if (!sc || CFG.idleScripts === false) return null
+    const def = (IDLE_SCRIPTS || []).find((x) => x && x.name === name)
+    if (!def) return null
+    const now = performance.now()
+    if (sc.running) abortIdleScript()
+    DSHPetIdleScripts.start(sc, def, now)
+    idle.scriptManual = true
+    motion.debug.scriptStart = { name: def.name, at: Math.round(now), manual: true }
+    return def.name
   }
 
   /*
@@ -7159,6 +7217,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     allowClip: false,
     /** 成套小戏状态（@idle-scripts）。纯数据，时间轴逻辑都在那个纯函数块里 */
     scripts: (typeof DSHPetIdleScripts !== 'undefined' && DSHPetIdleScripts) ? DSHPetIdleScripts.makeState() : null,
+    /** 手动从「小戏」页点的这一段：绕过 agent-busy 守卫（真实事件仍会 abort） */
+    scriptManual: false,
     /** 互动感知状态（@idle-sensors）。纯数据，判定逻辑都在那个纯函数块里 */
     sensors: DSHPetIdleSensors.makeState(),
     /** 待机肢体动作播完的时刻（含淡出）。排期用它留音尾，别在姿势没归零时抽下一件 */
@@ -7879,6 +7939,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   而真实事件可能就在这 40ms 内推了一堆东西进来 —— 主动收更干净。
    */
   function abortIdleScript() {
+    idle.scriptManual = false
     if (!idle.scripts || !idle.scripts.running) return null
     const name = DSHPetIdleScripts.abort(idle.scripts, performance.now())
     if (name) motion.debug.scriptAborted = { name: name, at: Math.round(performance.now()) }
@@ -8264,7 +8325,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      */
     sensorDemo: () => startSensorDemo(),
     /** 诊断：小戏（e）的实时状态 —— 正在演哪段、第几步、各段冷却 */
-    scriptState: () => (DSHPetIdleScripts && idle.scripts) ? Object.assign(DSHPetIdleScripts.snapshot(idle.scripts, performance.now()), { abortWhy: idle.scriptAbortWhy || null, demo: !!idle.demo }) : null,
+    scriptState: () => (DSHPetIdleScripts && idle.scripts) ? Object.assign(DSHPetIdleScripts.snapshot(idle.scripts, performance.now()), { abortWhy: idle.scriptAbortWhy || null, demo: !!idle.demo, manual: !!idle.scriptManual }) : null,
     /** 诊断：小戏数据表（名字 / 权重 / 步数 / 时长 / minGap） */
     scriptList: () => (IDLE_SCRIPTS || []).map((x) => ({
       name: x.name, weight: x.weight, minGap: x.minGap,
@@ -8272,17 +8333,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       durSec: DSHPetIdleScripts ? DSHPetIdleScripts.durOf(x) : null,
       verbs: (x.steps || []).map((y) => y.do + (y.arg ? ':' + y.arg : ''))
     })),
-    /** 诊断：立刻起一段指定小戏（绕过权重与冷却），用来验收 */
-    scriptPlay: (name) => {
-      if (!idle.scripts) return null
-      const def = (IDLE_SCRIPTS || []).find((x) => x.name === name)
-      if (!def) return null
-      // 先收掉别的，再起这一段（验收时要确定演的是它）
-      DSHPetIdleScripts.abort(idle.scripts, performance.now())
-      idle.scripts.nextAt[name] = 0
-      DSHPetIdleScripts.start(idle.scripts, def, performance.now())
-      return name
-    },
+    /** 诊断：立刻起一段指定小戏（绕过权重与冷却），用来验收；菜单「小戏」页也走同一条路 */
+    scriptPlay: (name) => startIdleScriptByName(name),
     /**
      * 诊断：**当前这一跳真正能抽到的待机行为池**（含权重）。
      *
