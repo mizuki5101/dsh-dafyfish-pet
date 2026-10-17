@@ -1,0 +1,24 @@
+{
+  "Version": 3,
+  "FileReferences": {
+    "Moc": "dfyfish.moc3",
+    "Textures": [
+      "dfyfish.8192/texture_00.png"
+    ],
+    "Physics": "dfyfish.physics3.json",
+    "DisplayInfo": "dfyfish.cdi3.json"
+  },
+  "Groups": [
+    {
+      "Target": "Parameter",
+      "Name": "EyeBlink",
+      "Ids": []
+    },
+    {
+      "Target": "Parameter",
+      "Name": "LipSync",
+      "Ids": []
+    }
+  ],
+  "HitAreas": []
+}

@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "model": "dfyfish",
+  "displayName": "大肥鱼",
+  "url": "dfyfish.model3.json",
+  "source": "大肥鱼（B站 @Mao绒绒家园 UID 431301506）— 8K 贴图，含水印开关参数。个人非商业自用。",
+  "motions": {},
+  "_note": "expressions 的参数与取值全部照**模型作者自己的 exp3 文件**（F10关闭水印或你自己重新设置/大肥鱼-B站/EXP/*.exp3.json）—— 那是一手来源，别凭名字猜。⚠️ 同一个参数的正负值是两套不同素材：EXP2 +1=3嘴 / -1=龇牙；EXP5 +1=O O(圈圈眼) / -1=》《(闭眼)；EXP7 +1=流口水 / -1=担心嘴；EXP8 +1=O嘴 / -1=栗子嘴。cdi3 里 PARAM_EXP5 的官方名就是「5 >v< O_O」，印证了正负两态。历史坑：本文件早期把整张表**错位了一位**（脸红指向 EXP5），结果「脸红」按钮实际点亮的是圈圈眼。",
+  "expressions": {
+    "口型切换": { "params": [ { "id": "PARAM_EXP1", "value": 1, "blend": "Add" } ] },
+    "3嘴": { "params": [ { "id": "PARAM_EXP2", "value": 1, "blend": "Add" } ] },
+    "龇牙": { "params": [ { "id": "PARAM_EXP2", "value": -1, "blend": "Add" } ] },
+    "脸黑": { "params": [ { "id": "PARAM_EXP3", "value": 1, "blend": "Add" } ] },
+    "脸红": { "params": [ { "id": "PARAM_EXP4", "value": 1, "blend": "Add" } ] },
+    "圈圈眼": { "params": [ { "id": "PARAM_EXP5", "value": 1, "blend": "Add" } ] },
+    "挤眼": { "params": [ { "id": "PARAM_EXP5", "value": -1, "blend": "Add" } ] },
+    "X X眼": { "params": [ { "id": "PARAM_EXP6", "value": 1, "blend": "Add" } ] },
+    "流口水": { "params": [ { "id": "PARAM_EXP7", "value": 1, "blend": "Add" } ] },
+    "担心嘴": { "params": [ { "id": "PARAM_EXP7", "value": -1, "blend": "Add" } ] },
+    "〇嘴": { "params": [ { "id": "PARAM_EXP8", "value": 1, "blend": "Add" } ] },
+    "栗子嘴": { "params": [ { "id": "PARAM_EXP8", "value": -1, "blend": "Add" } ] },
+    "尾巴消失": { "params": [ { "id": "Paramcol_1", "value": 2, "blend": "Add" } ] },
+    "耳朵消失": { "params": [ { "id": "Paramcol_2", "value": 1, "blend": "Add" } ] },
+    "水印消除": { "params": [ { "id": "Paramcol_3", "value": 1, "blend": "Add" } ] },
+    "生气": { "params": [ { "id": "ParamBrowLAngle", "value": -1, "blend": "Add" }, { "id": "ParamBrowRAngle", "value": -1, "blend": "Add" } ] },
+    "微笑": { "params": [ { "id": "ParamMouthForm", "value": 1, "blend": "Add" } ] }
+  }
+}

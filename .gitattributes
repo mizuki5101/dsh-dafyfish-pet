@@ -1,0 +1,15 @@
+# ⚠️ 这个项目对换行符**极敏感**：pet.js 是 CRLF、manifest.json 是 LF，
+#    交接文档里记着「用 Node 做字符串替换时锚点必须对上，我为此卡过两轮」。
+#    默认 core.autocrlf 会在 checkout 时改写行尾 → 那些踩过的坑会全部重现。
+#    所以这里把文本标记为 -text（不做任何转换），二进制显式标 binary。
+
+* -text
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.moc3 binary
+*.asar binary
+*.7z binary
+*.dll binary
+*.exe binary

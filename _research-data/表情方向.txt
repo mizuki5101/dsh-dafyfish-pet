@@ -1,0 +1,33 @@
+=== 准备用的表情参数的取值范围 ===
+  ParamEyeBallX    [-1,1] def 0         role=free  顶点   648 位移   17.9px 透明变化 0
+  ParamEyeBallY    [-1,1] def 0         role=free  顶点   648 位移   10.9px 透明变化 0
+  ParamEyePuff     [-1,1] def 0         role=out   顶点   176 位移   11.4px 透明变化 0
+  ParamBrowLAngle  [-1,1] def 0         role=in    顶点   279 位移   43.8px 透明变化 0
+  ParamBrowRAngle  [-1,1] def 0         role=in    顶点   279 位移   43.8px 透明变化 0
+  ParamBrowLForm   [-1,1] def 0         role=free  顶点   282 位移   24.2px 透明变化 0
+  ParamBrowRForm   [-1,1] def 0         role=free  顶点   282 位移   24.2px 透明变化 0
+  ParamMouthForm   [-1,1] def 0         role=in    顶点   334 位移   17.8px 透明变化 0
+  ParamMouthX      [-1,1] def 0         role=free  顶点   514 位移   12.9px 透明变化 0
+  ParamMouthOpenY  [0,1] def 0          role=free  顶点   841 位移   55.2px 透明变化 0
+  PARAM_EXP1       [0,1] def 0          role=free  顶点     0 位移    0.0px 透明变化 12
+  PARAM_EXP2       [-1,1] def 0         role=free  顶点     0 位移    0.0px 透明变化 14
+  PARAM_EXP3       [0,1] def 0          role=free  顶点   297 位移  166.0px 透明变化 1
+  PARAM_EXP4       [0,1] def 0          role=free  顶点     0 位移    0.0px 透明变化 1
+  PARAM_EXP5       [-1,1] def 0         role=free  顶点     0 位移    0.0px 透明变化 58
+  PARAM_EXP6       [0,1] def 0          role=free  顶点     0 位移    0.0px 透明变化 29
+  PARAM_EXP7       [-1,1] def 0         role=free  顶点     0 位移    0.0px 透明变化 15
+  PARAM_EXP8       [-1,1] def 0         role=free  顶点     0 位移    0.0px 透明变化 14
+
+=== 眼球方向（必须实测，看反了最明显）===
+  眼球部件: ArtMesh168, ArtMesh267, ArtMesh175, ArtMesh275, ArtMesh170
+  ParamEyeBallX    1  Δx=   9.1px Δy=   0.0px  →右
+  ParamEyeBallX   -1  Δx=  -9.2px Δy=   0.0px  ←左
+  ParamEyeBallY    1  Δx=   0.0px Δy=   6.0px  ↑上
+  ParamEyeBallY   -1  Δx=  -0.0px Δy=  -6.1px  ↓下
+
+=== 嘴形方向：看**嘴角**而不是质心（微笑是嘴角上翘）===
+  ParamMouthForm      1  左嘴角 Δy=   0.6px  右嘴角 Δy=   0.7px  嘴角**上翘 = 笑**
+  ParamMouthForm     -1  左嘴角 Δy=   0.0px  右嘴角 Δy=   0.2px  嘴角**上翘 = 笑**
+  ParamMouthX         1  左嘴角 Δy=  -2.5px  右嘴角 Δy=   3.6px  嘴角一上一下
+  ParamMouthX        -1  左嘴角 Δy=   3.1px  右嘴角 Δy=  -2.2px  嘴角一上一下
+  ParamMouthOpenY     1  左嘴角 Δy=  -6.3px  右嘴角 Δy=  -6.1px  嘴角**下弯 = 撇嘴**

@@ -1,0 +1,26 @@
+canvas: 3326 x 4992 | PixelsPerUnit 3326 | drawable 136 | 顶点 6811 | 顶点单位 = 模型单位(画布宽=1)
+
+=== y 轴朝向校验（用「嘴」和「尾巴」比）===
+  嘴  (ArtMesh156,ArtMesh191,ArtMesh185,ArtMesh256,ArtMesh257) 质心 y=0.4914
+  尾巴(ArtMesh285,ArtMesh282,ArtMesh284,ArtMesh283,ArtMesh281) 质心 y=-0.0645
+  → y 向上增大（上 = y 大）；"抬手"= y 变大
+
+=== 肩关节旋转的实际方向（x 单位=画布宽，乘 3326 得像素）===
+
+  L(模型左肩)  Param_arm_L1
+       0  x=  -594px y=   300px   Δy=+     0px   离中线 +0px
+      30  x=  -400px y=   237px   Δy=   -63px   离中线 -194px
+     -30  x=  -765px y=   411px   Δy=+   111px   离中线 +171px
+    → 手**往上**的是 Param_arm_L1 = -30   手**往外**的是 Param_arm_L1 = -30
+    → 结论：抬手应当用 -30
+
+  R(模型右肩)  Param_arm_R1
+       0  x=   594px y=   300px   Δy=+     0px   离中线 +0px
+      30  x=   765px y=   411px   Δy=+   111px   离中线 -171px
+     -30  x=   400px y=   237px   Δy=   -63px   离中线 +194px
+    → 手**往上**的是 Param_arm_R1 = 30   手**往外**的是 Param_arm_R1 = -30
+    → 结论：抬手应当用 （上/外不一致，见上）
+
+=== 建议（抬手 + 往外张开 = 挥手）===
+  Param_arm_L1   → -30
+  Param_arm_R1   → 30

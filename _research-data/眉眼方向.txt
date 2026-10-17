@@ -1,0 +1,29 @@
+=== 眉毛 / 嘴 / 眼袋 的方向 ===
+
+  ParamBrowLAngle  范围[-1,1] 默认0  影响 279 点 / 43.8px
+       -1  Δx=   -0.0 Δy=   -2.4   ↓下
+        1  Δx=    0.0 Δy=    2.1   ↑上
+    → 眉毛往**下**（生气/皱眉）= ParamBrowLAngle -1 ；往**上**（惊讶）= ParamBrowLAngle 1
+
+  ParamBrowRAngle  范围[-1,1] 默认0  影响 279 点 / 43.8px
+       -1  Δx=    0.0 Δy=   -2.4   ↓下
+        1  Δx=   -0.0 Δy=    2.2   ↑上
+    → 眉毛往**下**（生气/皱眉）= ParamBrowRAngle -1 ；往**上**（惊讶）= ParamBrowRAngle 1
+
+  ParamBrowLForm  范围[-1,1] 默认0  影响 282 点 / 24.2px
+       -1  Δx=   -0.3 Δy=   -6.6   ↓下
+        1  Δx=   -0.0 Δy=    3.6   ↑上
+    → 眉毛往**下**（生气/皱眉）= ParamBrowLForm -1 ；往**上**（惊讶）= ParamBrowLForm 1
+
+  ParamBrowRForm  范围[-1,1] 默认0  影响 282 点 / 24.2px
+       -1  Δx=    0.3 Δy=   -6.7   ↓下
+        1  Δx=    0.0 Δy=    3.7   ↑上
+    → 眉毛往**下**（生气/皱眉）= ParamBrowRForm -1 ；往**上**（惊讶）= ParamBrowRForm 1
+
+  ParamMouthForm  范围[-1,1] 默认0  影响 334 点 / 17.8px
+       -1  Δx=   -0.1 Δy=    2.0   ↑上
+        1  Δx=    0.1 Δy=   -1.7   ↓下
+
+  ParamEyePuff  范围[-1,1] 默认0  影响 176 点 / 11.4px
+       -1  Δx=    0.0 Δy=   -0.0   （<1.5px）
+        1  Δx=   -0.4 Δy=   -0.4   （<1.5px）

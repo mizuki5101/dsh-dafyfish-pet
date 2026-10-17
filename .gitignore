@@ -1,0 +1,17 @@
+# 模型本体：版权归作者，不随仓库分发（见 assets/model/README.md）
+pet-plugin/assets/model/dfyfish.moc3
+pet-plugin/assets/model/dfyfish.physics3.json
+pet-plugin/assets/model/dfyfish.cdi3.json
+pet-plugin/assets/model/dfyfish.8192/
+
+# 打包产物
+shell/dist/
+
+# 依赖 / 缓存 / 日志
+node_modules/
+.npm-cache/
+*.log
+*.tmp
+
+# 本机私有配置（可能含路径/token）
+_research-data/_safe/真实环境.json
