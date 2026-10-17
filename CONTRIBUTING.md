@@ -46,6 +46,9 @@ node _research-data/验证布局.mjs
 
 PR 描述里请写三行：**改了什么 / 为什么改 / 测试结果**。
 
+> 提 PR 之后 GitHub 会自动跑上面 6 个纯 Node 套件（见 `.github/workflows/tests.yml`），
+> 绿勾 = 没把线上那份代码的纯函数弄坏。作者主要看这个勾 + 改动大小。
+
 ## 几条容易踩坏的约定（改之前看一眼）
 
 - 待机层**只写 4 个根参数**（`ParamAngleX/Y/Z` + `ParamBreath`）；`Param_arm_*`、尾巴、`ParamBodyAngleZ*` 是物理的**输出**，直接写会被每帧覆盖

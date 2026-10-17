@@ -1,0 +1,31 @@
+name: tests
+
+# 只跑「纯 Node」的 6 个套件：不需要外壳、不需要模型文件，所以能在 CI 里跑。
+# 真机的 9 个 CDP 套件要桌面窗口，只能在本地跑（见 CONTRIBUTING.md）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  node-suites:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - 测试动作引擎
+          - 测试待机节奏
+          - 测试互动感知
+          - 测试成套小戏
+          - 测试独立桌宠
+          - 测试说话语气
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 语法检查
+        run: node _research-data/_safe/查语法.mjs
+      - name: 跑 ${{ matrix.suite }}
+        run: node "_research-data/${{ matrix.suite }}.mjs"
