@@ -6597,7 +6597,24 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ),
     )
     // 调试区放最底下：平时不看它，做睡眠/唤醒观感时才用
-    box.append($('div', 'dshp-hint', '调试（不用等 3 分钟，也不用开调试口）'), sleepRow, sleepHint)
+    // 听觉调试：重置 burst 冷却（不用等 5 分钟就能再试一次）
+    const audioHint = $('div', 'dshp-hint', audioDebugText())
+    const audioRow = $('div', 'dshp-row')
+    const audioBtn = $('button', 'dshp-btn', '重置听觉感知（调试）')
+    audioBtn.title = '清掉 burst 冷却并立刻武装：下一次持续 ≥1.2 秒的声音就会触发（醒着竖耳朵 / 睡着惊醒）'
+    audioBtn.addEventListener('click', () => {
+      const ok = resetAudioBurst()
+      audioHint.textContent = audioDebugText()
+      ui.bubble.show(ok ? '听觉感知已重置，下次有声音我就竖耳朵～' : '听觉感知不可用', { name: 'DS 鲸鱼娘', ttl: 2200 })
+    })
+    audioRow.appendChild(audioBtn)
+    box.append(
+      $('div', 'dshp-hint', '调试（不用等 3 分钟 / 5 分钟，也不用开调试口）'),
+      sleepRow,
+      sleepHint,
+      audioRow,
+      audioHint,
+    )
     panes.appendChild(box)
     // 换页后面板高度会变，可能顶到屏幕外面去（立刻夹一次 + 下一帧兜底）
     clampPanels()
@@ -7563,6 +7580,32 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return true
   }
 
+  /** 清掉 burst 冷却并立刻武装（设置页「重置听觉感知」+ 调试 API 共用） */
+  function resetAudioBurst() {
+    if (!idle.audioBurst) return false
+    idle.audioBurst.started = true
+    idle.audioBurst.armed = true
+    idle.audioBurst.lastAudibleAt = 0
+    idle.audioBurst.playing = false
+    idle.audioBurst.since = 0
+    idle.audioBurst.lastBurstAt = 0
+    idle.audioBurst.bursts = 0
+    motion.debug.audioReset = { at: Math.round(performance.now()) }
+    return true
+  }
+
+  /** 设置页「听觉调试」那行字（渲染 / 点完按钮都调它，只改 textContent） */
+  function audioDebugText() {
+    if (!idle.audioBurst) return '听觉调试：状态机不可用'
+    if (CFG.suddenAudio === false) return '听觉调试：系统声音感知已关（先打开「系统声音」）'
+    const st = idle.audioBurst
+    if (st.armed) return '听觉调试：已武装 —— 下一次持续 ≥1.2 秒的声音就会触发'
+    const cd0 = Number(CFG.audioCooldownMs)
+    const cd = isFinite(cd0) && cd0 >= 0 ? cd0 : 300000
+    const left = Math.max(0, Math.ceil((cd - (performance.now() - (st.lastBurstAt || 0))) / 1000))
+    return '听觉调试：冷却中（约 ' + left + ' 秒）'
+  }
+
   /** 把「系统声音感知」开关告诉外壳：关掉后它不再跑 PowerShell 轮询 */
   function syncAudioMeter() {
     try {
@@ -8480,17 +8523,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       lastBurst: motion.debug.audioBurst || null,
       lastReaction: idle.lastReaction || null
     }),
-    /** 诊断/测试：强行武装，跳过 5 分钟安静等待 */
+    /** 诊断/测试：清掉 burst 冷却并立刻武装（等同设置页「重置听觉感知」） */
     audioArm: () => {
-      if (!idle.audioBurst) return null
-      idle.audioBurst.started = true
-      idle.audioBurst.armed = true
-      idle.audioBurst.lastAudibleAt = 0
-      idle.audioBurst.playing = false
-      idle.audioBurst.since = 0
-      // 调试：连冷却一起跳过（真实路径靠 5 分钟安静自然满足）
-      idle.audioBurst.lastBurstAt = 0
-      idle.audioBurst.bursts = 0
+      if (!resetAudioBurst()) return null
       return DSHPetAudioBurst.snapshot(idle.audioBurst, performance.now())
     },
     /** 诊断/测试：注入一段峰值（ms 内持续），不需要真的放声音 */
