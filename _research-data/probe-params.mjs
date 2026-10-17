@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * probe-params.mjs - dump every Cubism parameter range of dfyfish.moc3.
- * Writes: D:\AI_work_space\_research\params-dump.json   (read-only otherwise)
+ * Writes: ./params-dump.json   (read-only otherwise)
  *
  * NOTE on the Core API (differs from the Framework!):
  *   CubismCore Model has ONLY: update(), release(), parameters, parts, drawables, canvasinfo.
@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadModel, readParams, shapeOf, CORE_PATH, MOC_PATH } from './cubism-loader.mjs';
 
-const OUT = 'D:\\AI_work_space\\_research\\params-dump.json';
+const OUT = path.join(import.meta.dirname, 'params-dump.json');
 const ARM = ['Param_arm_L1','Param_arm_L2','Param_arm_L3','Param_arm_L4',
              'Param_arm_R1','Param_arm_R2','Param_arm_R3','Param_arm_R4'];
 

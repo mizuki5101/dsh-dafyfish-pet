@@ -23,8 +23,9 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 
-export const CORE_PATH = 'D:\\AI_work_space\\live2D桌宠\\pet-plugin\\assets\\vendor\\live2dcubismcore.min.js';
-export const MOC_PATH = 'D:\\AI_work_space\\live2D桌宠\\pet-plugin\\assets\\model\\dfyfish.moc3';
+// 相对定位：从本文件往上找仓库根，别写死某台机器的路径
+export const CORE_PATH = path.join(import.meta.dirname, '..', 'pet-plugin', 'assets', 'vendor', 'live2dcubismcore.min.js');
+export const MOC_PATH = path.join(import.meta.dirname, '..', 'pet-plugin', 'assets', 'model', 'dfyfish.moc3');
 
 function installNodeShims(g, target) {
   const added = [];

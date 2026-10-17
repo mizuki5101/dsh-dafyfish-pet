@@ -1,1511 +1,1507 @@
 {
-  "generatedAt": "2026-10-16T11:30:48.061Z",
-  "loader": {
-    "method": "runInThisContext(shims=__dirname+__filename+require)",
-    "coreVersionRaw": 83951616,
-    "runtimeWaitMs": 66
-  },
-  "source": {
-    "core": "D:\\AI_work_space\\live2D桌宠\\pet-plugin\\assets\\vendor\\live2dcubismcore.min.js",
-    "moc": "D:\\AI_work_space\\live2D桌宠\\pet-plugin\\assets\\model\\dfyfish.moc3",
-    "mocBytes": 1239040
-  },
-  "count": 174,
-  "canvasinfo": {
-    "CanvasWidth": 3326,
-    "CanvasHeight": 4992,
-    "CanvasOriginX": 1663,
-    "CanvasOriginY": 2496,
-    "PixelsPerUnit": 3326
-  },
-  "drawableCount": 136,
-  "parametersShape": {
-    "ctor": "",
-    "isArray": false,
-    "typeofLength": "undefined",
-    "ownProps": [
-      "count",
-      "ids",
-      "minimumValues",
-      "types",
-      "maximumValues",
-      "defaultValues",
-      "values",
-      "repeats",
-      "keyCounts",
-      "keyValues"
-    ],
-    "protoProps": [
-      "constructor"
-    ]
-  },
-  "parameters": [
-    {
-      "index": 0,
-      "id": "PARAM_EXP1",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 1,
-      "id": "PARAM_EXP2",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 2,
-      "id": "PARAM_EXP3",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 3,
-      "id": "PARAM_EXP4",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 4,
-      "id": "PARAM_EXP5",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 5,
-      "id": "PARAM_EXP6",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 6,
-      "id": "PARAM_EXP7",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 7,
-      "id": "PARAM_EXP8",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 8,
-      "id": "Paramcol_1",
-      "min": 0,
-      "max": 2,
-      "default": 0
-    },
-    {
-      "index": 9,
-      "id": "Paramcol_2",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 10,
-      "id": "Paramcol_3",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 11,
-      "id": "ParamEyeSmile",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 12,
-      "id": "ParamEyeAnger",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 13,
-      "id": "ParamEyePuff",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 14,
-      "id": "ParamEyeLOpen",
-      "min": 0,
-      "max": 1,
-      "default": 1
-    },
-    {
-      "index": 15,
-      "id": "ParamEyeROpen",
-      "min": 0,
-      "max": 1,
-      "default": 1
-    },
-    {
-      "index": 16,
-      "id": "ParamMouthX",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 17,
-      "id": "ParamMouthForm",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 18,
-      "id": "ParamMouthOpenY",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 19,
-      "id": "ParamEyeBallX",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 20,
-      "id": "ParamEyeBallY",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 21,
-      "id": "ParamBrowLY",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 22,
-      "id": "ParamBrowRY",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 23,
-      "id": "ParamBrowLForm",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 24,
-      "id": "ParamBrowRForm",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 25,
-      "id": "ParamBrowLAngle",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 26,
-      "id": "ParamBrowRAngle",
-      "min": -1,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 27,
-      "id": "ParamAngleX",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 28,
-      "id": "ParamAngleY",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 29,
-      "id": "ParamAngleZ",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 30,
-      "id": "ParamBodyAngleX",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 31,
-      "id": "ParamBodyAngleY",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 32,
-      "id": "ParamBodyAngleZ",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 33,
-      "id": "ParamBodyAngleZ1",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 34,
-      "id": "ParamBodyAngleZ2",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 35,
-      "id": "ParamBodyAngleZ11",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 36,
-      "id": "ParamBodyAngleZ22",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 37,
-      "id": "ParamBreath",
-      "min": 0,
-      "max": 1,
-      "default": 0
-    },
-    {
-      "index": 38,
-      "id": "ParamHF_01",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 39,
-      "id": "ParamHF_02",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 40,
-      "id": "ParamHF_03",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 41,
-      "id": "ParamHF_04",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 42,
-      "id": "ParamHF_05",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 43,
-      "id": "ParamHF_06",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 44,
-      "id": "ParamHF_07",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 45,
-      "id": "ParamHF_08",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 46,
-      "id": "ParamHF_09",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 47,
-      "id": "ParamHF_10",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 48,
-      "id": "ParamHF_11",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 49,
-      "id": "ParamHF_12",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 50,
-      "id": "ParamHF_13",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 51,
-      "id": "ParamHF_14",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 52,
-      "id": "ParamHF_15",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 53,
-      "id": "ParamHF_16",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 54,
-      "id": "ParamHF_17",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 55,
-      "id": "ParamHF_18",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 56,
-      "id": "ParamHF_19",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 57,
-      "id": "ParamHF_20",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 58,
-      "id": "ParamHF_21",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 59,
-      "id": "ParamHF_22",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 60,
-      "id": "ParamHF_23",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 61,
-      "id": "ParamHF_24",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 62,
-      "id": "ParamHF_25",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 63,
-      "id": "ParamHF_26",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 64,
-      "id": "ParamHF_27",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 65,
-      "id": "ParamHF_28",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 66,
-      "id": "ParamHF_29",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 67,
-      "id": "ParamHF_30",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 68,
-      "id": "ParamHF_31",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 69,
-      "id": "ParamHF_32",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 70,
-      "id": "ParamHF_33",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 71,
-      "id": "ParamHF_34",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 72,
-      "id": "ParamHF_35",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 73,
-      "id": "ParamHF_36",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 74,
-      "id": "ParamHF_37",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 75,
-      "id": "ParamHF_38",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 76,
-      "id": "ParamHF_39",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 77,
-      "id": "ParamTWL01",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 78,
-      "id": "ParamTWL02",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 79,
-      "id": "ParamTWL03",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 80,
-      "id": "ParamTWL04",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 81,
-      "id": "ParamTWL05",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 82,
-      "id": "ParamTWL06",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 83,
-      "id": "ParamTWL07",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 84,
-      "id": "ParamTWL08",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 85,
-      "id": "ParamTWL09",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 86,
-      "id": "ParamTWL10",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 87,
-      "id": "ParamTWL11",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 88,
-      "id": "ParamTWL12",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 89,
-      "id": "ParamTWL13",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 90,
-      "id": "ParamTWL14",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 91,
-      "id": "ParamTWL15",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 92,
-      "id": "ParamTWL16",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 93,
-      "id": "ParamTWL17",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 94,
-      "id": "ParamTWL18",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 95,
-      "id": "ParamTWL19",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 96,
-      "id": "ParamTWL20",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 97,
-      "id": "ParamTWL21",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 98,
-      "id": "ParamTWL22",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 99,
-      "id": "ParamTWL23",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 100,
-      "id": "ParamTWL24",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 101,
-      "id": "ParamTWL25",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 102,
-      "id": "ParamTWL26",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 103,
-      "id": "ParamTWL27",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 104,
-      "id": "ParamTWL28",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 105,
-      "id": "ParamTWL29",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 106,
-      "id": "ParamTWL30",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 107,
-      "id": "ParamYFWL_1",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 108,
-      "id": "ParamYFWL_2",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 109,
-      "id": "ParamYFWL_3",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 110,
-      "id": "ParamYFWL_4",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 111,
-      "id": "ParamYFWL_5",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 112,
-      "id": "ParamYFWL_6",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 113,
-      "id": "ParamYFWL_7",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 114,
-      "id": "ParamYFWL_8",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 115,
-      "id": "ParamYFWL_9",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 116,
-      "id": "ParamYFWL_10",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 117,
-      "id": "ParamYFWL_11",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 118,
-      "id": "ParamYFWL_12",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 119,
-      "id": "ParamYFWL_13",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 120,
-      "id": "ParamYFWL_14",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 121,
-      "id": "ParamYFWL_15",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 122,
-      "id": "ParamYFWL_16",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 123,
-      "id": "ParamYFWL_17",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 124,
-      "id": "ParamYFWL_18",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 125,
-      "id": "ParamYFWL_19",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 126,
-      "id": "ParamYFWL_20",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 127,
-      "id": "ParamYFWL_21",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 128,
-      "id": "ParamYFWL_22",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 129,
-      "id": "ParamYFWL_23",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 130,
-      "id": "ParamYFWL_24",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 131,
-      "id": "ParamGSFWL01",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 132,
-      "id": "ParamGSFWL02",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 133,
-      "id": "ParamGSFWL03",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 134,
-      "id": "ParamGSFWL04",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 135,
-      "id": "ParamGSFWL05",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 136,
-      "id": "ParamGSFWL06",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 137,
-      "id": "ParamGSFWL07",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 138,
-      "id": "ParamGSFWL08",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 139,
-      "id": "ParamGSFWL09",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 140,
-      "id": "ParamGSFWL10",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 141,
-      "id": "ParamGSFWL11",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 142,
-      "id": "ParamGSFWL12",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 143,
-      "id": "ParamGSFWL13",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 144,
-      "id": "ParamGSFWL14",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 145,
-      "id": "ParamGSFWL15",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 146,
-      "id": "ParamGSFWL16",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 147,
-      "id": "ParamGSFWL17",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 148,
-      "id": "ParamGSFWL18",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 149,
-      "id": "ParamGSFWL19",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 150,
-      "id": "ParamGSFWL20",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 151,
-      "id": "ParamGSFWL21",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 152,
-      "id": "ParamGSFWL22",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 153,
-      "id": "ParamGSFWL23",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 154,
-      "id": "ParamGSFWL24",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 155,
-      "id": "ParamParamGSFWL25",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 156,
-      "id": "ParamGSFWL26",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 157,
-      "id": "ParamGSFWL27",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 158,
-      "id": "ParamGSFWL28",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 159,
-      "id": "ParamGSFWL29",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 160,
-      "id": "ParamGSFWL30",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 161,
-      "id": "Param_arm_L1",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 162,
-      "id": "Param_arm_L2",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 163,
-      "id": "Param_arm_L3",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 164,
-      "id": "Param_arm_L4",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 165,
-      "id": "Param_arm_R1",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 166,
-      "id": "Param_arm_R2",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 167,
-      "id": "Param_arm_R3",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 168,
-      "id": "Param_arm_R4",
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    {
-      "index": 169,
-      "id": "Param_Angle_Rotation_2_ArtMesh367",
-      "min": -45,
-      "max": 45,
-      "default": 0
-    },
-    {
-      "index": 170,
-      "id": "Param_Angle_Rotation_3_ArtMesh367",
-      "min": -45,
-      "max": 45,
-      "default": 0
-    },
-    {
-      "index": 171,
-      "id": "Param_Angle_Rotation_4_ArtMesh367",
-      "min": -45,
-      "max": 45,
-      "default": 0
-    },
-    {
-      "index": 172,
-      "id": "Param_Angle_Rotation_5_ArtMesh367",
-      "min": -45,
-      "max": 45,
-      "default": 0
-    },
-    {
-      "index": 173,
-      "id": "Param_Angle_Rotation_6_ArtMesh367",
-      "min": -45,
-      "max": 45,
-      "default": 0
-    }
+ "generatedAt": "2026-10-16T11:30:48.061Z",
+ "loader": "[object Object]",
+ "source": {
+  "core": "pet-plugin/assets/vendor/live2dcubismcore.min.js",
+  "moc": "pet-plugin/assets/model/dfyfish.moc3",
+  "mocBytes": 1239040
+ },
+ "count": 174,
+ "canvasinfo": {
+  "CanvasWidth": 3326,
+  "CanvasHeight": 4992,
+  "CanvasOriginX": 1663,
+  "CanvasOriginY": 2496,
+  "PixelsPerUnit": 3326
+ },
+ "drawableCount": 136,
+ "parametersShape": {
+  "ctor": "",
+  "isArray": false,
+  "typeofLength": "undefined",
+  "ownProps": [
+   "count",
+   "ids",
+   "minimumValues",
+   "types",
+   "maximumValues",
+   "defaultValues",
+   "values",
+   "repeats",
+   "keyCounts",
+   "keyValues"
   ],
-  "armCheck": {
-    "Param_arm_L1": {
-      "id": "Param_arm_L1",
-      "found": true,
-      "index": 161,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_L2": {
-      "id": "Param_arm_L2",
-      "found": true,
-      "index": 162,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_L3": {
-      "id": "Param_arm_L3",
-      "found": true,
-      "index": 163,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_L4": {
-      "id": "Param_arm_L4",
-      "found": true,
-      "index": 164,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_R1": {
-      "id": "Param_arm_R1",
-      "found": true,
-      "index": 165,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_R2": {
-      "id": "Param_arm_R2",
-      "found": true,
-      "index": 166,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_R3": {
-      "id": "Param_arm_R3",
-      "found": true,
-      "index": 167,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    },
-    "Param_arm_R4": {
-      "id": "Param_arm_R4",
-      "found": true,
-      "index": 168,
-      "min": -30,
-      "max": 30,
-      "default": 0
-    }
+  "protoProps": [
+   "constructor"
+  ]
+ },
+ "parameters": [
+  {
+   "index": 0,
+   "id": "PARAM_EXP1",
+   "min": 0,
+   "max": 1,
+   "default": 0
   },
-  "summary": {
-    "total": 174,
-    "minEqualsMax": 0,
-    "minNeMax": 174,
-    "minEqualsMaxIds": [],
-    "nonRangeIds": [
-      "PARAM_EXP1",
-      "PARAM_EXP2",
-      "PARAM_EXP3",
-      "PARAM_EXP4",
-      "PARAM_EXP5",
-      "PARAM_EXP6",
-      "PARAM_EXP7",
-      "PARAM_EXP8",
-      "Paramcol_1",
-      "Paramcol_2",
-      "Paramcol_3",
-      "ParamEyeSmile",
-      "ParamEyeAnger",
-      "ParamEyePuff",
-      "ParamEyeLOpen",
-      "ParamEyeROpen",
-      "ParamMouthX",
-      "ParamMouthForm",
-      "ParamMouthOpenY",
-      "ParamEyeBallX",
-      "ParamEyeBallY",
-      "ParamBrowLY",
-      "ParamBrowRY",
-      "ParamBrowLForm",
-      "ParamBrowRForm",
-      "ParamBrowLAngle",
-      "ParamBrowRAngle",
-      "ParamAngleX",
-      "ParamAngleY",
-      "ParamAngleZ",
-      "ParamBodyAngleX",
-      "ParamBodyAngleY",
-      "ParamBodyAngleZ",
-      "ParamBodyAngleZ1",
-      "ParamBodyAngleZ2",
-      "ParamBodyAngleZ11",
-      "ParamBodyAngleZ22",
-      "ParamBreath",
-      "ParamHF_01",
-      "ParamHF_02",
-      "ParamHF_03",
-      "ParamHF_04",
-      "ParamHF_05",
-      "ParamHF_06",
-      "ParamHF_07",
-      "ParamHF_08",
-      "ParamHF_09",
-      "ParamHF_10",
-      "ParamHF_11",
-      "ParamHF_12",
-      "ParamHF_13",
-      "ParamHF_14",
-      "ParamHF_15",
-      "ParamHF_16",
-      "ParamHF_17",
-      "ParamHF_18",
-      "ParamHF_19",
-      "ParamHF_20",
-      "ParamHF_21",
-      "ParamHF_22",
-      "ParamHF_23",
-      "ParamHF_24",
-      "ParamHF_25",
-      "ParamHF_26",
-      "ParamHF_27",
-      "ParamHF_28",
-      "ParamHF_29",
-      "ParamHF_30",
-      "ParamHF_31",
-      "ParamHF_32",
-      "ParamHF_33",
-      "ParamHF_34",
-      "ParamHF_35",
-      "ParamHF_36",
-      "ParamHF_37",
-      "ParamHF_38",
-      "ParamHF_39",
-      "ParamTWL01",
-      "ParamTWL02",
-      "ParamTWL03",
-      "ParamTWL04",
-      "ParamTWL05",
-      "ParamTWL06",
-      "ParamTWL07",
-      "ParamTWL08",
-      "ParamTWL09",
-      "ParamTWL10",
-      "ParamTWL11",
-      "ParamTWL12",
-      "ParamTWL13",
-      "ParamTWL14",
-      "ParamTWL15",
-      "ParamTWL16",
-      "ParamTWL17",
-      "ParamTWL18",
-      "ParamTWL19",
-      "ParamTWL20",
-      "ParamTWL21",
-      "ParamTWL22",
-      "ParamTWL23",
-      "ParamTWL24",
-      "ParamTWL25",
-      "ParamTWL26",
-      "ParamTWL27",
-      "ParamTWL28",
-      "ParamTWL29",
-      "ParamTWL30",
-      "ParamYFWL_1",
-      "ParamYFWL_2",
-      "ParamYFWL_3",
-      "ParamYFWL_4",
-      "ParamYFWL_5",
-      "ParamYFWL_6",
-      "ParamYFWL_7",
-      "ParamYFWL_8",
-      "ParamYFWL_9",
-      "ParamYFWL_10",
-      "ParamYFWL_11",
-      "ParamYFWL_12",
-      "ParamYFWL_13",
-      "ParamYFWL_14",
-      "ParamYFWL_15",
-      "ParamYFWL_16",
-      "ParamYFWL_17",
-      "ParamYFWL_18",
-      "ParamYFWL_19",
-      "ParamYFWL_20",
-      "ParamYFWL_21",
-      "ParamYFWL_22",
-      "ParamYFWL_23",
-      "ParamYFWL_24",
-      "ParamGSFWL01",
-      "ParamGSFWL02",
-      "ParamGSFWL03",
-      "ParamGSFWL04",
-      "ParamGSFWL05",
-      "ParamGSFWL06",
-      "ParamGSFWL07",
-      "ParamGSFWL08",
-      "ParamGSFWL09",
-      "ParamGSFWL10",
-      "ParamGSFWL11",
-      "ParamGSFWL12",
-      "ParamGSFWL13",
-      "ParamGSFWL14",
-      "ParamGSFWL15",
-      "ParamGSFWL16",
-      "ParamGSFWL17",
-      "ParamGSFWL18",
-      "ParamGSFWL19",
-      "ParamGSFWL20",
-      "ParamGSFWL21",
-      "ParamGSFWL22",
-      "ParamGSFWL23",
-      "ParamGSFWL24",
-      "ParamParamGSFWL25",
-      "ParamGSFWL26",
-      "ParamGSFWL27",
-      "ParamGSFWL28",
-      "ParamGSFWL29",
-      "ParamGSFWL30",
-      "Param_arm_L1",
-      "Param_arm_L2",
-      "Param_arm_L3",
-      "Param_arm_L4",
-      "Param_arm_R1",
-      "Param_arm_R2",
-      "Param_arm_R3",
-      "Param_arm_R4",
-      "Param_Angle_Rotation_2_ArtMesh367",
-      "Param_Angle_Rotation_3_ArtMesh367",
-      "Param_Angle_Rotation_4_ArtMesh367",
-      "Param_Angle_Rotation_5_ArtMesh367",
-      "Param_Angle_Rotation_6_ArtMesh367"
-    ],
-    "duplicateIds": []
+  {
+   "index": 1,
+   "id": "PARAM_EXP2",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 2,
+   "id": "PARAM_EXP3",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 3,
+   "id": "PARAM_EXP4",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 4,
+   "id": "PARAM_EXP5",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 5,
+   "id": "PARAM_EXP6",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 6,
+   "id": "PARAM_EXP7",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 7,
+   "id": "PARAM_EXP8",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 8,
+   "id": "Paramcol_1",
+   "min": 0,
+   "max": 2,
+   "default": 0
+  },
+  {
+   "index": 9,
+   "id": "Paramcol_2",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 10,
+   "id": "Paramcol_3",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 11,
+   "id": "ParamEyeSmile",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 12,
+   "id": "ParamEyeAnger",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 13,
+   "id": "ParamEyePuff",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 14,
+   "id": "ParamEyeLOpen",
+   "min": 0,
+   "max": 1,
+   "default": 1
+  },
+  {
+   "index": 15,
+   "id": "ParamEyeROpen",
+   "min": 0,
+   "max": 1,
+   "default": 1
+  },
+  {
+   "index": 16,
+   "id": "ParamMouthX",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 17,
+   "id": "ParamMouthForm",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 18,
+   "id": "ParamMouthOpenY",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 19,
+   "id": "ParamEyeBallX",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 20,
+   "id": "ParamEyeBallY",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 21,
+   "id": "ParamBrowLY",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 22,
+   "id": "ParamBrowRY",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 23,
+   "id": "ParamBrowLForm",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 24,
+   "id": "ParamBrowRForm",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 25,
+   "id": "ParamBrowLAngle",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 26,
+   "id": "ParamBrowRAngle",
+   "min": -1,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 27,
+   "id": "ParamAngleX",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 28,
+   "id": "ParamAngleY",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 29,
+   "id": "ParamAngleZ",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 30,
+   "id": "ParamBodyAngleX",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 31,
+   "id": "ParamBodyAngleY",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 32,
+   "id": "ParamBodyAngleZ",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 33,
+   "id": "ParamBodyAngleZ1",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 34,
+   "id": "ParamBodyAngleZ2",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 35,
+   "id": "ParamBodyAngleZ11",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 36,
+   "id": "ParamBodyAngleZ22",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 37,
+   "id": "ParamBreath",
+   "min": 0,
+   "max": 1,
+   "default": 0
+  },
+  {
+   "index": 38,
+   "id": "ParamHF_01",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 39,
+   "id": "ParamHF_02",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 40,
+   "id": "ParamHF_03",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 41,
+   "id": "ParamHF_04",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 42,
+   "id": "ParamHF_05",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 43,
+   "id": "ParamHF_06",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 44,
+   "id": "ParamHF_07",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 45,
+   "id": "ParamHF_08",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 46,
+   "id": "ParamHF_09",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 47,
+   "id": "ParamHF_10",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 48,
+   "id": "ParamHF_11",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 49,
+   "id": "ParamHF_12",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 50,
+   "id": "ParamHF_13",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 51,
+   "id": "ParamHF_14",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 52,
+   "id": "ParamHF_15",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 53,
+   "id": "ParamHF_16",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 54,
+   "id": "ParamHF_17",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 55,
+   "id": "ParamHF_18",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 56,
+   "id": "ParamHF_19",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 57,
+   "id": "ParamHF_20",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 58,
+   "id": "ParamHF_21",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 59,
+   "id": "ParamHF_22",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 60,
+   "id": "ParamHF_23",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 61,
+   "id": "ParamHF_24",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 62,
+   "id": "ParamHF_25",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 63,
+   "id": "ParamHF_26",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 64,
+   "id": "ParamHF_27",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 65,
+   "id": "ParamHF_28",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 66,
+   "id": "ParamHF_29",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 67,
+   "id": "ParamHF_30",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 68,
+   "id": "ParamHF_31",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 69,
+   "id": "ParamHF_32",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 70,
+   "id": "ParamHF_33",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 71,
+   "id": "ParamHF_34",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 72,
+   "id": "ParamHF_35",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 73,
+   "id": "ParamHF_36",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 74,
+   "id": "ParamHF_37",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 75,
+   "id": "ParamHF_38",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 76,
+   "id": "ParamHF_39",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 77,
+   "id": "ParamTWL01",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 78,
+   "id": "ParamTWL02",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 79,
+   "id": "ParamTWL03",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 80,
+   "id": "ParamTWL04",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 81,
+   "id": "ParamTWL05",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 82,
+   "id": "ParamTWL06",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 83,
+   "id": "ParamTWL07",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 84,
+   "id": "ParamTWL08",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 85,
+   "id": "ParamTWL09",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 86,
+   "id": "ParamTWL10",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 87,
+   "id": "ParamTWL11",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 88,
+   "id": "ParamTWL12",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 89,
+   "id": "ParamTWL13",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 90,
+   "id": "ParamTWL14",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 91,
+   "id": "ParamTWL15",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 92,
+   "id": "ParamTWL16",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 93,
+   "id": "ParamTWL17",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 94,
+   "id": "ParamTWL18",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 95,
+   "id": "ParamTWL19",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 96,
+   "id": "ParamTWL20",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 97,
+   "id": "ParamTWL21",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 98,
+   "id": "ParamTWL22",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 99,
+   "id": "ParamTWL23",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 100,
+   "id": "ParamTWL24",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 101,
+   "id": "ParamTWL25",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 102,
+   "id": "ParamTWL26",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 103,
+   "id": "ParamTWL27",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 104,
+   "id": "ParamTWL28",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 105,
+   "id": "ParamTWL29",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 106,
+   "id": "ParamTWL30",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 107,
+   "id": "ParamYFWL_1",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 108,
+   "id": "ParamYFWL_2",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 109,
+   "id": "ParamYFWL_3",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 110,
+   "id": "ParamYFWL_4",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 111,
+   "id": "ParamYFWL_5",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 112,
+   "id": "ParamYFWL_6",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 113,
+   "id": "ParamYFWL_7",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 114,
+   "id": "ParamYFWL_8",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 115,
+   "id": "ParamYFWL_9",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 116,
+   "id": "ParamYFWL_10",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 117,
+   "id": "ParamYFWL_11",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 118,
+   "id": "ParamYFWL_12",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 119,
+   "id": "ParamYFWL_13",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 120,
+   "id": "ParamYFWL_14",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 121,
+   "id": "ParamYFWL_15",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 122,
+   "id": "ParamYFWL_16",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 123,
+   "id": "ParamYFWL_17",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 124,
+   "id": "ParamYFWL_18",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 125,
+   "id": "ParamYFWL_19",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 126,
+   "id": "ParamYFWL_20",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 127,
+   "id": "ParamYFWL_21",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 128,
+   "id": "ParamYFWL_22",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 129,
+   "id": "ParamYFWL_23",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 130,
+   "id": "ParamYFWL_24",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 131,
+   "id": "ParamGSFWL01",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 132,
+   "id": "ParamGSFWL02",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 133,
+   "id": "ParamGSFWL03",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 134,
+   "id": "ParamGSFWL04",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 135,
+   "id": "ParamGSFWL05",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 136,
+   "id": "ParamGSFWL06",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 137,
+   "id": "ParamGSFWL07",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 138,
+   "id": "ParamGSFWL08",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 139,
+   "id": "ParamGSFWL09",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 140,
+   "id": "ParamGSFWL10",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 141,
+   "id": "ParamGSFWL11",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 142,
+   "id": "ParamGSFWL12",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 143,
+   "id": "ParamGSFWL13",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 144,
+   "id": "ParamGSFWL14",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 145,
+   "id": "ParamGSFWL15",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 146,
+   "id": "ParamGSFWL16",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 147,
+   "id": "ParamGSFWL17",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 148,
+   "id": "ParamGSFWL18",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 149,
+   "id": "ParamGSFWL19",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 150,
+   "id": "ParamGSFWL20",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 151,
+   "id": "ParamGSFWL21",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 152,
+   "id": "ParamGSFWL22",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 153,
+   "id": "ParamGSFWL23",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 154,
+   "id": "ParamGSFWL24",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 155,
+   "id": "ParamParamGSFWL25",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 156,
+   "id": "ParamGSFWL26",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 157,
+   "id": "ParamGSFWL27",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 158,
+   "id": "ParamGSFWL28",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 159,
+   "id": "ParamGSFWL29",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 160,
+   "id": "ParamGSFWL30",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 161,
+   "id": "Param_arm_L1",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 162,
+   "id": "Param_arm_L2",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 163,
+   "id": "Param_arm_L3",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 164,
+   "id": "Param_arm_L4",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 165,
+   "id": "Param_arm_R1",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 166,
+   "id": "Param_arm_R2",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 167,
+   "id": "Param_arm_R3",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 168,
+   "id": "Param_arm_R4",
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  {
+   "index": 169,
+   "id": "Param_Angle_Rotation_2_ArtMesh367",
+   "min": -45,
+   "max": 45,
+   "default": 0
+  },
+  {
+   "index": 170,
+   "id": "Param_Angle_Rotation_3_ArtMesh367",
+   "min": -45,
+   "max": 45,
+   "default": 0
+  },
+  {
+   "index": 171,
+   "id": "Param_Angle_Rotation_4_ArtMesh367",
+   "min": -45,
+   "max": 45,
+   "default": 0
+  },
+  {
+   "index": 172,
+   "id": "Param_Angle_Rotation_5_ArtMesh367",
+   "min": -45,
+   "max": 45,
+   "default": 0
+  },
+  {
+   "index": 173,
+   "id": "Param_Angle_Rotation_6_ArtMesh367",
+   "min": -45,
+   "max": 45,
+   "default": 0
   }
+ ],
+ "armCheck": {
+  "Param_arm_L1": {
+   "id": "Param_arm_L1",
+   "found": true,
+   "index": 161,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_L2": {
+   "id": "Param_arm_L2",
+   "found": true,
+   "index": 162,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_L3": {
+   "id": "Param_arm_L3",
+   "found": true,
+   "index": 163,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_L4": {
+   "id": "Param_arm_L4",
+   "found": true,
+   "index": 164,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_R1": {
+   "id": "Param_arm_R1",
+   "found": true,
+   "index": 165,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_R2": {
+   "id": "Param_arm_R2",
+   "found": true,
+   "index": 166,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_R3": {
+   "id": "Param_arm_R3",
+   "found": true,
+   "index": 167,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  },
+  "Param_arm_R4": {
+   "id": "Param_arm_R4",
+   "found": true,
+   "index": 168,
+   "min": -30,
+   "max": 30,
+   "default": 0
+  }
+ },
+ "summary": {
+  "total": 174,
+  "minEqualsMax": 0,
+  "minNeMax": 174,
+  "minEqualsMaxIds": [],
+  "nonRangeIds": [
+   "PARAM_EXP1",
+   "PARAM_EXP2",
+   "PARAM_EXP3",
+   "PARAM_EXP4",
+   "PARAM_EXP5",
+   "PARAM_EXP6",
+   "PARAM_EXP7",
+   "PARAM_EXP8",
+   "Paramcol_1",
+   "Paramcol_2",
+   "Paramcol_3",
+   "ParamEyeSmile",
+   "ParamEyeAnger",
+   "ParamEyePuff",
+   "ParamEyeLOpen",
+   "ParamEyeROpen",
+   "ParamMouthX",
+   "ParamMouthForm",
+   "ParamMouthOpenY",
+   "ParamEyeBallX",
+   "ParamEyeBallY",
+   "ParamBrowLY",
+   "ParamBrowRY",
+   "ParamBrowLForm",
+   "ParamBrowRForm",
+   "ParamBrowLAngle",
+   "ParamBrowRAngle",
+   "ParamAngleX",
+   "ParamAngleY",
+   "ParamAngleZ",
+   "ParamBodyAngleX",
+   "ParamBodyAngleY",
+   "ParamBodyAngleZ",
+   "ParamBodyAngleZ1",
+   "ParamBodyAngleZ2",
+   "ParamBodyAngleZ11",
+   "ParamBodyAngleZ22",
+   "ParamBreath",
+   "ParamHF_01",
+   "ParamHF_02",
+   "ParamHF_03",
+   "ParamHF_04",
+   "ParamHF_05",
+   "ParamHF_06",
+   "ParamHF_07",
+   "ParamHF_08",
+   "ParamHF_09",
+   "ParamHF_10",
+   "ParamHF_11",
+   "ParamHF_12",
+   "ParamHF_13",
+   "ParamHF_14",
+   "ParamHF_15",
+   "ParamHF_16",
+   "ParamHF_17",
+   "ParamHF_18",
+   "ParamHF_19",
+   "ParamHF_20",
+   "ParamHF_21",
+   "ParamHF_22",
+   "ParamHF_23",
+   "ParamHF_24",
+   "ParamHF_25",
+   "ParamHF_26",
+   "ParamHF_27",
+   "ParamHF_28",
+   "ParamHF_29",
+   "ParamHF_30",
+   "ParamHF_31",
+   "ParamHF_32",
+   "ParamHF_33",
+   "ParamHF_34",
+   "ParamHF_35",
+   "ParamHF_36",
+   "ParamHF_37",
+   "ParamHF_38",
+   "ParamHF_39",
+   "ParamTWL01",
+   "ParamTWL02",
+   "ParamTWL03",
+   "ParamTWL04",
+   "ParamTWL05",
+   "ParamTWL06",
+   "ParamTWL07",
+   "ParamTWL08",
+   "ParamTWL09",
+   "ParamTWL10",
+   "ParamTWL11",
+   "ParamTWL12",
+   "ParamTWL13",
+   "ParamTWL14",
+   "ParamTWL15",
+   "ParamTWL16",
+   "ParamTWL17",
+   "ParamTWL18",
+   "ParamTWL19",
+   "ParamTWL20",
+   "ParamTWL21",
+   "ParamTWL22",
+   "ParamTWL23",
+   "ParamTWL24",
+   "ParamTWL25",
+   "ParamTWL26",
+   "ParamTWL27",
+   "ParamTWL28",
+   "ParamTWL29",
+   "ParamTWL30",
+   "ParamYFWL_1",
+   "ParamYFWL_2",
+   "ParamYFWL_3",
+   "ParamYFWL_4",
+   "ParamYFWL_5",
+   "ParamYFWL_6",
+   "ParamYFWL_7",
+   "ParamYFWL_8",
+   "ParamYFWL_9",
+   "ParamYFWL_10",
+   "ParamYFWL_11",
+   "ParamYFWL_12",
+   "ParamYFWL_13",
+   "ParamYFWL_14",
+   "ParamYFWL_15",
+   "ParamYFWL_16",
+   "ParamYFWL_17",
+   "ParamYFWL_18",
+   "ParamYFWL_19",
+   "ParamYFWL_20",
+   "ParamYFWL_21",
+   "ParamYFWL_22",
+   "ParamYFWL_23",
+   "ParamYFWL_24",
+   "ParamGSFWL01",
+   "ParamGSFWL02",
+   "ParamGSFWL03",
+   "ParamGSFWL04",
+   "ParamGSFWL05",
+   "ParamGSFWL06",
+   "ParamGSFWL07",
+   "ParamGSFWL08",
+   "ParamGSFWL09",
+   "ParamGSFWL10",
+   "ParamGSFWL11",
+   "ParamGSFWL12",
+   "ParamGSFWL13",
+   "ParamGSFWL14",
+   "ParamGSFWL15",
+   "ParamGSFWL16",
+   "ParamGSFWL17",
+   "ParamGSFWL18",
+   "ParamGSFWL19",
+   "ParamGSFWL20",
+   "ParamGSFWL21",
+   "ParamGSFWL22",
+   "ParamGSFWL23",
+   "ParamGSFWL24",
+   "ParamParamGSFWL25",
+   "ParamGSFWL26",
+   "ParamGSFWL27",
+   "ParamGSFWL28",
+   "ParamGSFWL29",
+   "ParamGSFWL30",
+   "Param_arm_L1",
+   "Param_arm_L2",
+   "Param_arm_L3",
+   "Param_arm_L4",
+   "Param_arm_R1",
+   "Param_arm_R2",
+   "Param_arm_R3",
+   "Param_arm_R4",
+   "Param_Angle_Rotation_2_ArtMesh367",
+   "Param_Angle_Rotation_3_ArtMesh367",
+   "Param_Angle_Rotation_4_ArtMesh367",
+   "Param_Angle_Rotation_5_ArtMesh367",
+   "Param_Angle_Rotation_6_ArtMesh367"
+  ],
+  "duplicateIds": []
+ }
 }

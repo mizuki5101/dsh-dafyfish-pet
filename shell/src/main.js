@@ -39,7 +39,8 @@ let syncBusy = false
  *  放在候选表里是为了「改 pet.js → 重启外壳就生效」这条习惯不变（交接文档第二节的改动生效规则）。
  *  独立发行时它不存在，会自动退到 exe 同级的 pet-assets/。 */
 // 可以用 DSH_PET_DEV_ASSETS 覆盖；别人的机器上没有这个目录也不会出问题（按顺序找，找不到就跳过） */
-const DEV_ASSETS = process.env.DSH_PET_DEV_ASSETS || 'D:/AI_work_space/live2D桌宠/pet-plugin/assets'
+// 公开版本里默认留空：开发时用环境变量 DSH_PET_DEV_ASSETS，或在 settings.json 写 assetRoots
+const DEV_ASSETS = process.env.DSH_PET_DEV_ASSETS || ''
 
 /** 通行证文件里记录的宿主端口（插件写的，因机器而异 —— 不能写死） */
 function deskPort() {

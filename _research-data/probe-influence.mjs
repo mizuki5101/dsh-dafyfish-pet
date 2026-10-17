@@ -15,13 +15,13 @@
  *   (cubism4.min.js CubismPhysics), which writes parameter values before model.update().
  *   Motion measured here is therefore intrinsic to the .moc3 (deformer/glue bindings).
  *
- * Writes: D:\AI_work_space\_research\param-influence.json
+ * Writes: ./param-influence.json
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadModel, readParams } from './cubism-loader.mjs';
 
-const OUT = 'D:\\AI_work_space\\_research\\param-influence.json';
+const OUT = path.join(import.meta.dirname, 'param-influence.json');
 const EPS = 1e-5;
 const PHYSICS_PREFIXES = ['ParamHF_', 'ParamTWL', 'ParamYFWL', 'ParamGSFWL'];
 
