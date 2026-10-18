@@ -22,6 +22,7 @@ const { exec } = require('node:child_process')
 const { createPetServer } = require('./petserver')
 const { createAudioMeter } = require('./audio')
 const { createHitGuard } = require('./hit/guard')
+// 多模态心跳（P0：采集 + 截图指纹；默认关闭）按需 require —— 见 app.whenReady 里的注释。
 
 // 宿主地址在启动时「发现」出来，不再写死 —— 与 macOS 版保持一致：
 // 官方桌面版（Electron，端口由宿主决定，实测 19387）和手动起的 `dsh web`（3080）都要能连上。
@@ -36,6 +37,49 @@ let petBase = CANDIDATE_BASES[0]
 let petServer = null
 /** 系统声音峰值（WASAPI）；页面发 audio:on 才启动，关掉设置就 stop */
 let audioMeter = null
+/** 心跳（多模态感知器） */
+let heart = null
+/** 本地推理引擎进程（面板里的「一键启动/停止」） */
+let modelServer = null
+/** 设置面板「心跳」页的数据源；在 app.whenReady 里装配（它依赖 heart / modelServer） */
+let heartSettingsPayload = null
+/** 「回应模式」的聊天记忆（持久化到 userData/heart/chat.json） */
+let chatMemory = null
+
+/**
+ * 面板提交的补丁：**只接受白名单字段**。
+ * 为什么不在页面侧保证：页面是回环服务发的，但它仍然是「外部输入」；
+ * 写 settings.json 的东西必须在主进程再过滤一次（和 /dsh-pet/say 的 dryRun 一个道理）。
+ */
+function sanitizeHeartPatch(p) {
+  const src = p && typeof p === 'object' ? p : {}
+  const out = {}
+  if (typeof src.enabled === 'boolean') out.enabled = src.enabled
+  for (const k of ['intervalSec', 'lookMinGapSec', 'sayMinGapSec', 'maxLooksPerHour', 'maxSaysPerHour']) {
+    if (src[k] !== undefined && Number.isFinite(Number(src[k]))) out[k] = Math.round(Number(src[k]))
+  }
+  if (typeof src.lookOpener === 'boolean') out.lookOpener = src.lookOpener
+  if (typeof src.prompt === 'string') out.prompt = src.prompt.slice(0, 4000)
+  if (src.mode === 'dsh' || src.mode === 'pet') out.mode = src.mode
+  if (typeof src.audioTrigger === 'boolean') out.audioTrigger = src.audioTrigger
+  if (src.model && typeof src.model === 'object') {
+    const m = {}
+    if (typeof src.model.provider === 'string') m.provider = src.model.provider
+    if (src.model.port !== undefined && Number.isFinite(Number(src.model.port))) m.port = Math.round(Number(src.model.port))
+    if (typeof src.model.baseUrl === 'string') m.baseUrl = src.model.baseUrl.trim().slice(0, 300)
+    if (typeof src.model.model === 'string') m.model = src.model.model.trim().slice(0, 200)
+    if (typeof src.model.apiKey === 'string') m.apiKey = src.model.apiKey.slice(0, 500)
+    if (Object.keys(m).length) out.model = m
+  }
+  if (src.modelServer && typeof src.modelServer === 'object') {
+    const s = {}
+    for (const k of ['exe', 'model', 'mmproj', 'extraArgs']) {
+      if (typeof src.modelServer[k] === 'string') s[k] = src.modelServer[k].slice(0, 500)
+    }
+    if (Object.keys(s).length) out.modelServer = s
+  }
+  return out
+}
 /** 重新发现 DSH 的节奏：离线时每 8 秒试一次，每 6 次才扫一次端口（netstat 要起子进程，别太频） */
 let syncAttempt = 0
 let syncBusy = false
@@ -220,6 +264,68 @@ function petSay(text) {
 }
 
 /**
+ * 心跳截图前要涂掉的矩形（屏幕 DIP 坐标）。
+ *
+ * 为什么必须涂：desktopCapturer 会把她自己、气泡、dock 一起拍进去（2026-10-18 实测）。
+ * 模型看见「一条鱼盯着屏幕」会做出离谱判断，气泡上的字也会混进画面。
+ *
+ * 组成：她身体的 alpha 紧包围盒（DSHPet.hitBounds，视口坐标）+ 所有可见 UI 元素，
+ * 全部加上窗口内容原点。查询失败就返回空数组 —— 调用方会原样发图，
+ * 所以 P1 接模型前要按 privacy 配置决定「没有遮罩时是否允许发图」。
+ */
+/** 心跳用：她现在忙不忙 / 睡没睡（决定能不能插话）。查不到就当空闲。 */
+async function petAgentState() {
+  if (!win || win.isDestroyed()) return { status: 'idle', sleeping: false }
+  try {
+    // ⚠️ 睡眠状态不在 DSHPet.state.agent 里（那个字段永远是 false），
+    //    真正的睡眠在 DSHPet.sleepState().asleep —— 之前读错字段，导致心跳在她睡着时照样说话。
+    return await win.webContents.executeJavaScript(
+      "(()=>{try{const s=DSHPet.state.agent;const z=(DSHPet.sleepState&&DSHPet.sleepState())||null;return {status:s.status||'idle',sleeping:!!(z&&z.asleep)}}catch(e){return {status:'idle',sleeping:false}}})()",
+    )
+  } catch (e) {
+    return { status: 'idle', sleeping: false }
+  }
+}
+
+async function petMaskRects() {
+  if (!win || win.isDestroyed()) return []
+  let rects = []
+  try {
+    rects = await win.webContents.executeJavaScript(`(function(){
+      const out = []
+      try {
+        if (window.DSHPet && DSHPet.hitBounds) {
+          const b = DSHPet.hitBounds()
+          if (b && b.w > 1 && b.h > 1) out.push(b)
+        }
+      } catch (e) {}
+      const sels = ['.dshp-bubble', '.dshp-dock', '.dshp-menu', '.dshp-panel', '.dshp-hud']
+      for (const sel of sels) {
+        let els = []
+        try { els = document.querySelectorAll(sel) } catch (e) { continue }
+        for (const el of els) {
+          const r = el.getBoundingClientRect()
+          if (!(r.width > 1 && r.height > 1)) continue
+          const cs = getComputedStyle(el)
+          if (cs.visibility === 'hidden' || Number(cs.opacity) === 0) continue
+          out.push({ x: r.left, y: r.top, w: r.width, h: r.height })
+        }
+      }
+      return out
+    })()`)
+  } catch (e) {
+    rects = []
+  }
+  let cb = null
+  try {
+    cb = win.getContentBounds()
+  } catch (e) {}
+  const ox = cb ? cb.x : 0
+  const oy = cb ? cb.y : 0
+  return (Array.isArray(rects) ? rects : []).map((r) => ({ x: ox + r.x, y: oy + r.y, w: r.w, h: r.h }))
+}
+
+/**
  * 连回 DSH（连不上就静默降级）。
  * 为什么是「轮询 + 事件流」而不是只连一次：主人要的是「DSH 什么时候开起来，她自己就接上」，
  * 所以离线时必须持续重试；已连上时就什么都不做（事件流断了 petserver 会把 online 置回 false）。
@@ -387,7 +493,13 @@ function sendHitVisibility(value) {
   try { hitWin.webContents.send('hit:visibility', v) } catch (e) {}
 }
 
+/** 输入法候选窗会被置顶窗盖住：输入期间临时降下置顶，失焦再恢复。 */
+let imeHolding = false
+let imeHoldTimer = null
+
 function raiseTopmost(toggle) {
+  // 输入中不要抬回来，否则 IME 候选窗又被盖住
+  if (imeHolding && !toggle) return
   try {
     if (win && !win.isDestroyed()) {
       // 已经 topmost 的窗口再设 true 不一定能抢回任务栏上面；
@@ -406,8 +518,11 @@ function raiseTopmost(toggle) {
 
 function syncHitWindow() {
   if (!dualEnabled()) return
+  // ⚠️ 命中窗也是 screen-saver 级 topmost：输入时它虽然多为隐藏，但 90ms 轮询
+  // 一旦把鼠标判成「不在 UI 上」就会重新 showInactive + topmost，把 IME 候选窗盖住。
+  // 所以「输入中」直接强制隐藏，失焦后再恢复。
   const visible = !!(
-    win && !win.isDestroyed() && win.isVisible() && !collapsed && !uiMode && hitRect
+    !imeHolding && win && !win.isDestroyed() && win.isVisible() && !collapsed && !uiMode && hitRect
   )
   if (!visible) {
     sendHitVisibility(false)
@@ -911,6 +1026,38 @@ function createMain() {
         if (collapsed) expand()
         break
       // 详细面板是模态：页面直接通知，别等 90ms 轮询（鼠标可能不在窗口里）
+      // 输入法：候选窗是独立顶层窗口，会被 screen-saver 级别的透明窗盖住。
+      // 打字时先把置顶降下来（窗口本身仍是活动窗，所以不会跑到别的窗口后面），
+      // 失焦/关面板再抬回去；2 秒 watchdog 在 imeHolding 期间跳过。
+      case 'ime:on':
+        imeHolding = true
+        bootLog('输入法：降下置顶（让候选窗可见）')
+        try {
+          if (win && !win.isDestroyed()) win.setAlwaysOnTop(false)
+        } catch (e) {}
+        // 命中窗也一起处理：降级 + 隐藏（搜狗这类输入法的候选窗会被它挡住）
+        if (dualEnabled()) {
+          try {
+            hitWin.setAlwaysOnTop(false)
+            sendHitVisibility(false)
+            if (hitWin.isVisible()) hitWin.hide()
+          } catch (e) {}
+        }
+        clearTimeout(imeHoldTimer)
+        imeHoldTimer = setTimeout(() => {
+          // 兜底：页面崩了没发 ime:off，也别让她永远沉底
+          imeHolding = false
+          raiseTopmost(false)
+          syncHitWindow()
+        }, 120000)
+        break
+      case 'ime:off':
+        imeHolding = false
+        clearTimeout(imeHoldTimer)
+        raiseTopmost(false)
+        syncHitWindow()
+        bootLog('输入法：恢复置顶')
+        break
       case 'modal:on':
         modalMode = true
         if (dualWindow) enterUiMode()
@@ -1509,6 +1656,187 @@ app.whenReady().then(() => {
     app.setAppUserModelId('com.andersen216.dsh.whalegirlpet')
     createMain()
     bootLog('主窗口已创建')
+    // 心跳放在窗口之后：它要知道「她是不是被收起来了」。
+    // 任何异常都不能影响主窗口 —— 这个功能是附加的，坏了也只是没有心跳。
+    // 故意在 try 里 require：万一 heart/ 没打进 asar（打包漏了、平台不支持），
+    // 也只是「没有心跳」，不能把主窗口一起搞死。
+    try {
+      const { createHeart } = require('./heart')
+      const { patchHeart } = require('./heart/settings')
+      const { createModelServer } = require('./heart/server')
+      const promptModule = require('./heart/prompt')
+      const vision = require('./heart/vision')
+      const { CHAT_SYSTEM, createChatMemory } = require('./heart/chat')
+      modelServer = createModelServer({ log: bootLog })
+      chatMemory = createChatMemory({ file: path.join(app.getPath('userData'), 'heart', 'chat.json'), maxTurns: 12 })
+      heartSettingsPayload = () => {
+        const cfg = heart ? heart.config() : null
+        const pub = cfg
+          ? {
+              enabled: cfg.enabled,
+              intervalSec: cfg.intervalSec,
+              lookMinGapSec: cfg.lookMinGapSec,
+              sayMinGapSec: cfg.sayMinGapSec,
+              maxLooksPerHour: cfg.maxLooksPerHour,
+              maxSaysPerHour: cfg.maxSaysPerHour,
+              lookOpener: cfg.lookOpener,
+              mode: cfg.mode,
+              audioTrigger: cfg.audioTrigger,
+              prompt: cfg.prompt,
+              model: {
+                provider: cfg.model.provider,
+                port: cfg.model.port,
+                baseUrl: cfg.model.baseUrl,
+                model: cfg.model.model,
+                apiKeySet: !!cfg.model.apiKey,
+              },
+              modelServer: cfg.modelServer,
+            }
+          : null
+        return {
+          ok: true,
+          config: pub,
+          status: heart ? heart.status() : null,
+          model: modelServer ? modelServer.status() : null,
+          defaultPrompt: promptModule.SYSTEM,
+        }
+      }
+      heart = createHeart({
+        log: bootLog,
+        readSettings,
+        getWindow: () => win,
+        getMaskRects: petMaskRects,
+        getAgentState: petAgentState,
+        // 看屏幕前的开场白：直接推一条气泡（2.6s 后自然消失，随后的正式台词会覆盖它）
+        onOpener: (line) => {
+          if (!petServer) return
+          try {
+            petServer.push({ t: 'control', say: line, bubbleMs: 2600 })
+            bootLog('心跳：探头「' + line + '」')
+          } catch (e) {}
+        },
+        // 动作出口：推一条 control 到页面（和 /dsh-pet/control 同一条通道、同一套字段）。
+        // 不经过 DSH —— 所以 DSH 关着她也能有心跳。
+        onAction: (control, action, meta) => {
+          if (!petServer) {
+            bootLog('心跳：本地服务还没起，动作丢弃')
+            return
+          }
+          try {
+            petServer.push(control)
+            // 她主动说的话也进聊天记忆：回应模式的模型才能「接着刚才那句」
+            if (control.say && chatMemory) chatMemory.add('assistant', control.say)
+            bootLog(
+              '心跳 → 页面：' + JSON.stringify({ say: control.say || '', mood: control.mood || '', motion: control.motion || '',
+                face: control.expression || '', model: meta && meta.model, ms: meta && meta.ms }),
+            )
+          } catch (e) {
+            bootLog('心跳：推动作失败 ' + ((e && e.message) || e))
+          }
+        },
+      })
+      heart.start()
+      ipcMain.handle('heart:status', () => {
+        if (!heart) return { enabled: false, lastReason: 'no-heart' }
+        // diag：P0 用来核对「窗口坐标 / 屏幕坐标 / 截图坐标」三套单位。
+        // 截图遮罩要按这三个数换算，留在这里排查 DPI/多屏问题最省事。
+        let diag = null
+        try {
+          const d = screen.getPrimaryDisplay()
+          diag = {
+            content: win && !win.isDestroyed() ? win.getContentBounds() : null,
+            bounds: win && !win.isDestroyed() ? win.getBounds() : null,
+            display: d.size,
+            displayBounds: d.bounds,
+            scaleFactor: d.scaleFactor,
+          }
+        } catch (e) {}
+        return Object.assign(heart.status(), { diag })
+      })
+      ipcMain.handle('heart:capture', (_e, opts) => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        return heart.captureNow(Object.assign({ manual: true }, opts || {}))
+      })
+      // 调试口：跑一遍完整链路（拍 → 模型 → 仲裁 → 页面）。
+      // 默认配置是关闭的，所以 CDP 测试用 {enable:true} 临时打开，不改 settings.json。
+      ipcMain.handle('heart:tick', (_e, opts) => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        return heart.tickNow(opts || {})
+      })
+      ipcMain.handle('heart:providers', () => (heart ? heart.providers() : []))
+      // 「回应模式」：对话按钮直接问聊天模型（不走 DSH），带最近 12 轮记忆
+      ipcMain.handle('heart:chat', async (_e, req) => {
+        if (!heart || !chatMemory) return { ok: false, reason: 'no-heart' }
+        const text = String((req && req.text) || '').trim().slice(0, 1000)
+        if (!text) return { ok: false, reason: 'empty' }
+        const cfg = heart.config()
+        const messages = [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
+          { role: 'user', content: text },
+        ])
+        // 聊天期间让心跳让路：llama-server 只有 -np 1 一个槽位，抢起来会「想好久」
+        heart.hold()
+        let r = null
+        try {
+          r = await vision.infer(cfg, messages, {
+            // 聊天只要 1~2 句：300 token 时 9B 会啰嗦到 10 秒以上，看起来像「卡住」
+            maxTokens: 120,
+            timeoutMs: cfg.model.timeoutMs,
+            temperature: 0.7,
+            enableThinking: cfg.model.enableThinking,
+          })
+        } finally {
+          heart.release()
+        }
+        if (!r || !r.ok) return { ok: false, reason: (r && r.error) || 'no-response', candidates: (r && r.candidates) || 0 }
+        chatMemory.add('user', text)
+        chatMemory.add('assistant', r.text)
+        bootLog('对话(回应模式)：' + text.slice(0, 40) + ' → ' + String(r.text).slice(0, 60))
+        return { ok: true, text: r.text, ms: r.ms, candidate: r.candidate && r.candidate.model }
+      })
+      ipcMain.handle('heart:chat-clear', () => {
+        if (chatMemory) chatMemory.clear()
+        return { ok: true }
+      })
+      // —— 设置面板「心跳」页用 ——
+      // 读：配置 + 运行状态 + 模型进程 + 默认提示词（面板要能「恢复默认」）
+      ipcMain.handle('heart:settings', () => heartSettingsPayload())
+      // 写：只接受白名单字段，合并进 settings.json 的 heart 段，然后按新配置重排定时器
+      ipcMain.handle('heart:save', (_e, patch) => {
+        try {
+          patchHeart(settingsPath(), sanitizeHeartPatch(patch))
+          if (heart) {
+            heart.reload()
+            heart.start()
+          }
+          bootLog('心跳：设置已保存 ' + JSON.stringify(sanitizeHeartPatch(patch)))
+          return heartSettingsPayload()
+        } catch (e) {
+          return { ok: false, reason: String((e && e.message) || e), config: null }
+        }
+      })
+      // 模型进程：start/stop/status
+      ipcMain.handle('heart:model', async (_e, req) => {
+        if (!modelServer || !heart) return { ok: false, reason: 'no-heart' }
+        const action = (req && req.action) || 'status'
+        if (action === 'start') return modelServer.start(heart.config())
+        if (action === 'stop') return modelServer.stop()
+        return { ok: true, model: modelServer.status() }
+      })
+      // 调试口：不经过模型/仲裁，直接推一条 control 到页面。
+      // 用途：CDP 验「心跳 → 页面」这条通道（以及气泡/动作渲染）而不依赖模型和 DSH。
+      ipcMain.handle('heart:act', (_e, payload) => {
+        if (!petServer) return { ok: false, reason: 'no-server' }
+        const control = Object.assign({ t: 'control' }, payload || {})
+        try {
+          petServer.push(control)
+          return { ok: true, sent: control }
+        } catch (e) {
+          return { ok: false, reason: String((e && e.message) || e) }
+        }
+      })
+    } catch (e) {
+      bootLog('心跳初始化失败（不影响桌宠）: ' + ((e && e.stack) || e))
+    }
     screen.on('display-metrics-changed', () => applyFullscreenPrimaryBounds(true))
     screen.on('display-added', () => applyFullscreenPrimaryBounds(true))
     screen.on('display-removed', () => applyFullscreenPrimaryBounds(true))
@@ -1540,6 +1868,8 @@ app.on('before-quit', () => {
   clearInterval(topmostTimer)
   clearInterval(dragTimer)
   destroyHitWindow()
+  if (heart) heart.stop()
+  if (modelServer) modelServer.stop()
   if (audioMeter) audioMeter.stop()
   if (petServer) {
     bootLog('退出：关掉本地服务')

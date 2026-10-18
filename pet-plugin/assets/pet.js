@@ -185,31 +185,35 @@
    * 注意：这些是「自动表情」的词汇表——桌宠平时自己挑，用户的手动选择只是临时覆盖。
    */
   const MOOD_FACE = {
+    // 只保留当前大肥鱼模型真实存在的表情；旧鲸鱼娘的名字（星星眼 / 爱心眼 /
+    // 开心兴奋 / 调皮 / 悲伤 / 哭 / 晕晕 / 阴暗 / 流汗 / 问号 / 感叹号 /
+    // 闭眼口水 / 吐舌 / 吐魂）没有对应参数，已清空。
+    // 情绪 key 仍然保留：agent 状态机 / 外部 setMood 还在用这些名字；
+    // 值为 null = 该情绪不压脸，和以前「查不到表情」的行为一致。
     neutral: null,
-    listening: '星星眼',
+    listening: null,
     thinking: null,
-    reading: '星星眼', // 凑近看资料（配合眼镜道具）
-    happy: '开心兴奋',
-    excited: '星星眼',
-    love: '爱心眼',
+    reading: null,
+    happy: null,
+    excited: null,
+    love: null,
     shy: '脸红', // 被摸头 / 被夸
-    pout: '调皮', // 傲娇：嘴上嫌弃其实开心
-    smug: '调皮',
-    sad: '悲伤',
-    cry: '哭',
+    pout: null,
+    smug: null,
+    sad: null,
+    cry: null,
     grumpy: '生气', // 「我才不胖」
-    dizzy: '晕晕',
-    // 注：呆呆眼 / 圈圈眼（晕晕）已从所有自动行为里移除
-    gloomy: '阴暗',
-    sweat: '流汗',
-    confused: '问号',
-    alert: '感叹号',
-    sleepy: '闭眼口水',
-    tongue: '吐舌',
-    dead: '吐魂',
-    // 兼容旧名字
+    dizzy: null,
+    gloomy: null,
+    sweat: null,
+    confused: null,
+    alert: null,
+    sleepy: null,
+    tongue: null,
+    dead: null,
+    // 兼容旧情绪名；能命中的只有 生气
     angry: '生气',
-    playful: '调皮',
+    playful: null,
   }
 
   /**
@@ -244,14 +248,8 @@
   }
   const ACTION_KEYS = Object.keys(ACTIONS)
 
-  const ALL_TOGGLES = {}
-
-  /**
-   * 两种底层状态下她手上拿什么。
-   * 「完成奖励」这类特殊场景的瞬时反应，不进待机循环。
-   */
-  const IDLE_PROPS = []
-  const WORK_PROPS = []
+  // 道具/装饰系统已清空：当前模型没有可切换道具，props 只作为外部协议保留。
+  // 底层状态不再挂任何常驻道具；动作自带的表达式仍走 act({props:[expr]})。
 
   /**
    * 菜单里每一项「点了会怎样」。
@@ -646,6 +644,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   overflow-y:auto!important;overflow-x:hidden!important;
   overscroll-behavior:contain;padding-right:12px;
   scrollbar-gutter:stable}
+/* 面板高度保持 300px（所有页签一致）：心跳页内容更长，靠里面的 .dshp-panes 滚动。
+   试过给心跳页单独加高到 560px —— 面板是 bottom:100% 挂在 root 上，
+   一变高就整体顶到屏幕外，placePanel 的位移还因为 CSS transition 读到中间值而算不准。
+   结论：**别改面板高度**，加内容就让它滚动（设置页原本就是这么长的）。 */
 .dshp-panes{max-height:calc(100vh - 180px);overflow-y:auto;overflow-x:hidden;
   overscroll-behavior:contain;scrollbar-width:thin}
 .dshp-panes::-webkit-scrollbar{width:8px}
@@ -690,6 +692,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   border-radius:calc(9px * var(--dshp-ps));
   padding:calc(7px * var(--dshp-ps)) calc(9px * var(--dshp-ps));outline:none}
 .dshp-panel textarea:focus{border-color:var(--dshp-accent)}
+
 .dshp-row{display:flex;gap:6px;align-items:center;margin-top:7px;flex-wrap:wrap}
 .dshp-grow{flex:1}
 .dshp-tabs{display:flex;gap:3px;margin-bottom:7px;border-bottom:1px solid var(--dshp-line);padding-bottom:6px}
@@ -941,11 +944,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const f = MOOD_FACE[name] !== undefined ? MOOD_FACE[name] : name
     return f && f in EXPR ? f : null
   }
-  /** 道具 key 或表达式名 → 表达式名 */
+  /** 道具 key 或表达式名 → 表达式名（现在只剩表达式名，保留这个入口给外部协议） */
   function propExpr(key) {
     if (!key) return null
-    const e = ALL_TOGGLES[key] ? ALL_TOGGLES[key].expr : key
-    return e && EXPR[e] ? e : null
+    return key in EXPR ? key : null
   }
 
   /** 把三层解析成「这一刻真正该显示什么」。改动状态后调用，或者每帧调用（很便宜）。 */
@@ -1022,77 +1024,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
-   * 某一件「摆设/装饰」现在是开着的吗？
-   * 手机是个例外——它不是一个表情参数，而是 `device.out`（模型自带的
-   * 开盖动作把小设备掏出来），所以单独判。
+   * 设置/取消一个道具。
+   *
+   * 道具表清空后这里只接受「表达式名」；保留这个函数是因为：
+   *   · `control` 通道的 `props/clearProps` 字段是外部协议；
+   *   · `window.DSHPet.setProp(key,on)` 也还暴露着。
+   * 没有有效表达式时静默返回 false，不破坏调用方。
    */
-  function itemOn(key, def) {
-    const d = def || ALL_TOGGLES[key]
-    if (!d) return false
-    if (d.device) return device.out
-    return !!d.expr && rig.userProps.has(d.expr)
-  }
-
-  /** 把工作用的小设备掏出来（模型自带的 openLid 动作）。 */
-  function takeDeviceOut() {
-    if (device.out) return
-    device.out = true
-    playMotion('openLid')
-  }
-
   function setProp(key, on) {
-    const def = ALL_TOGGLES[key]
-    // 手机：走模型自带的开盖动作，不走表情参数
-    if (def && def.device) {
-      if (on) takeDeviceOut()
-      else putDeviceAway()
-      // 手机收起来时，它的换色也该跟着走
-      if (!on) {
-        for (const [k, v] of Object.entries(ALL_TOGGLES)) {
-          if (v.needs === key && v.expr) rig.userProps.delete(v.expr)
-        }
-      }
-      resolveRig()
-      saveLayout({ props: Array.from(rig.userProps) })
-      return
-    }
     const expr = propExpr(key)
-    if (!expr) return
-    if (on) {
-      if (def && def.group) {
-        for (const [k, v] of Object.entries(ALL_TOGGLES)) {
-          if (v.group === def.group && k !== key && v.expr) rig.userProps.delete(v.expr)
-        }
-      }
-      // 前置依赖。两种：
-      //   · 参数型（白魔爪 → 粉魔爪）：直接把前置的表情加上
-      //   · 设备型（手机换色 → 掏出手机）：把手机掏出来
-      // 这都是原作者的设计（*+5「魔爪变白」必须在粉魔爪模式下用）。
-      if (def && def.needs) {
-        const needDef = ALL_TOGGLES[def.needs]
-        if (needDef && needDef.device) takeDeviceOut()
-        else {
-          const needExpr = propExpr(def.needs)
-          if (needExpr) rig.userProps.add(needExpr)
-        }
-      }
-      // 反过来：开「粉魔爪」要把换色摘掉，不然还是白的
-      if (def && def.clears) {
-        for (const k of def.clears) {
-          const e2 = propExpr(k)
-          if (e2) rig.userProps.delete(e2)
-        }
-      }
-      rig.userProps.add(expr)
-    } else {
-      rig.userProps.delete(expr)
-      // 摘掉「魔爪」时，它的换色也该跟着走，不然会留下一层颜色
-      for (const [k, v] of Object.entries(ALL_TOGGLES)) {
-        if (v.needs === key && v.expr) rig.userProps.delete(v.expr)
-      }
-    }
+    if (!expr) return false
+    if (on) rig.userProps.add(expr)
+    else rig.userProps.delete(expr)
     resolveRig()
     saveLayout({ props: Array.from(rig.userProps) })
+    return true
   }
 
   function clearProps() {
@@ -2206,7 +2152,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       hoverMs: 1200, // 停留多久才算「凑近了在看」
       stareMs: 4500, // 停留多久算「盯太久」（会害羞）
       swooshSpeed: 1400, // 算「甩过去」的速度阈值 px/s
-      typingIdleMs: 3000 // 停打字多久算「停下来看你了」
+      typingIdleMs: 3000, // 停打字多久算「停下来看你了」
+      nightStart: 23, // 夜深了：开始小时（本地时间，由 sensorTick 注入）
+      nightEnd: 6 // 夜深了：结束小时（不含）
     }
     /** 默认冷却（毫秒）—— 防止「动一下就疯狂反应」 */
     var COOLDOWN = { hover: 20000, stare: 45000, swoosh: 6000, typing: 20000, typingStop: 45000 }
@@ -2216,6 +2164,24 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     function cfgn(cfg, k, d) {
       var v = Number(cfg && cfg['sensor' + k.charAt(0).toUpperCase() + k.slice(1)])
       return isFinite(v) && v >= 0 ? v : d
+    }
+
+    /**
+     * 现在算不算「夜深了」。
+     *
+     * ⚠️ 纯函数，不读系统时间：hour 由 sensorTick 注入（测试也能注入）。
+     * 支持跨午夜（23 → 6）和 start > end 的区间；start === end 视为关闭。
+     */
+    function isLateNight(hour, cfg) {
+      var h = Number(hour)
+      if (!isFinite(h)) return false
+      var start = cfgn(cfg, 'nightStart', DEFAULTS.nightStart)
+      var end = cfgn(cfg, 'nightEnd', DEFAULTS.nightEnd)
+      start = ((Math.floor(start) % 24) + 24) % 24
+      end = ((Math.floor(end) % 24) + 24) % 24
+      if (start === end) return false
+      h = ((Math.floor(h) % 24) + 24) % 24
+      return start < end ? h >= start && h < end : h >= start || h < end
     }
 
     function makeState() {
@@ -2230,6 +2196,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         typingSince: 0,
         lastTypeAt: 0,
         lastLivelyAt: -Infinity,
+        lateNight: false, // 当前上下文：夜深了（不是单次事件）
         hot: {}, // 各事件的冷却到期时刻
         counts: { hover: 0, stare: 0, swoosh: 0, typing: 0, typingStop: 0 }
       }
@@ -2247,10 +2214,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      *     overUi = 光标在她自己的按钮/面板上（那不算「看她」）
      */
     function frame(st, input, cfg, now) {
-      var f = { hover: false, stare: false, swoosh: false, typing: false, typingStop: false, near: false, lively: false }
+      var f = { hover: false, stare: false, swoosh: false, typing: false, typingStop: false, near: false, lively: false, lateNight: false }
       if (!st) return f
       var dt = st.t ? clampNum((now - st.t) / 1000, 0.001, 0.5) : 0.04
       st.t = now
+      // 夜深了是「上下文」，不是一次性事件；hour 必须由调用方注入，纯函数不读系统时钟。
+      var night = isLateNight(input && input.hour, cfg)
+      st.lateNight = night
+      f.lateNight = night
       var pad = cfgn(cfg, 'hoverPad', DEFAULTS.hoverPad)
       var hoverMs = cfgn(cfg, 'hoverMs', DEFAULTS.hoverMs)
       var stareMs = cfgn(cfg, 'stareMs', DEFAULTS.stareMs)
@@ -2326,6 +2297,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       COOLDOWN: COOLDOWN,
       LIVELY_GAP_MS: LIVELY_GAP_MS,
       makeState: makeState,
+      isLateNight: isLateNight,
       frame: frame,
       key: key,
       livelyTick: livelyTick,
@@ -3641,7 +3613,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     applyPosition(layout)
     restoreProps()
     // 待机底层状态：平常脸 + 拿板子待着
-    setBase('neutral', IDLE_PROPS)
+    setBase('neutral', [])
 
     document.addEventListener('visibilitychange', () => {
       if (!app) return
@@ -3846,11 +3818,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function placePanel(panel) {
     if (!panel) return
     const vw = window.innerWidth
+    const vh = window.innerHeight
     const pad = 10
-    panel.style.setProperty('--dshp-shift', '0px')
     if (!panel.classList.contains('dshp-on')) return
-    const w = panel.getBoundingClientRect().width || 0
+    // ⚠️ 不能先把它清零再量：面板的 transform 带 .16s 过渡，
+    //    写完之后立刻 getBoundingClientRect() 读到的是**过渡中间值**，
+    //    于是算出来的位移是错的（实测：面板顶部在 -160，却被算成 +4，整块跑到屏幕外）。
+    //    正确做法：先读当前位移，从 rect 里减掉，得到「没有位移时的真实位置」。
+    const cs = getComputedStyle(panel)
+    const curShift = parseFloat(cs.getPropertyValue('--dshp-shift')) || 0
+    const curShiftY = parseFloat(cs.getPropertyValue('--dshp-shift-y')) || 0
+    const base = panel.getBoundingClientRect()
+    const w = base.width || 0
     if (!w) return
+    const baseLeft = base.left - curShift
+    const baseTop = base.top - curShiftY
+    const baseBottom = baseTop + base.height
+
     const r = ui.root.getBoundingClientRect()
     const anchor = headScreenX()
     // 面板基准是「以桌宠中心居中」（left:50% + translateX(-50%)），所以位移 = 锚点 - 根节点中心
@@ -3860,13 +3844,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (left < pad) shift += pad - left
     else if (left + w > vw - pad) shift -= left + w - (vw - pad)
     panel.style.setProperty('--dshp-shift', Math.round(shift) + 'px')
-    // 纵向兜底：上下都要夹。原来只处理了"顶部超出"，所以把她拖到屏幕下半部分时，
+
+    // 纵向兜底：上下都要夹。
     // 提示：气泡挂在 root 的 bottom:100% 上，她的容器一旦探出屏幕，气泡就跟着跑出去，
     //      必须用这个位移把它拉回来才看得全。
-    const pb = panel.getBoundingClientRect()
     let dy = 0
-    if (pb.top < pad) dy = pad - pb.top
-    else if (pb.bottom > window.innerHeight - pad) dy = window.innerHeight - pad - pb.bottom
+    if (base.height > vh - pad * 2) dy = pad - baseTop // 比屏幕还高：优先保顶部可见，剩下靠内部滚动
+    else if (baseTop < pad) dy = pad - baseTop
+    else if (baseBottom > vh - pad) dy = vh - pad - baseBottom
     panel.style.setProperty('--dshp-shift-y', Math.round(dy) + 'px')
   }
 
@@ -4763,7 +4748,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     work.active = true
     work.i = 0
     work.nextAt = 0
-    // 用模型自带的开盖动作把设备掏出来；道具由 WORK_PROPS 决定
+    // 用模型自带的开盖动作把设备掏出来；道具/设备由工作轮播自己控制
     playMotion('openLid')
     gazeDetach(1200)
   }
@@ -4790,7 +4775,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const stepDef = WORK_CYCLE[work.i % WORK_CYCLE.length]
     work.i++
     // 轮播只改底层状态，不产生会赖着不走的一次性反应
-    setBase(stepDef.mood, WORK_PROPS)
+    setBase(stepDef.mood, [])
     // 正在思考/看资料：把话说到气泡正文里，别只更新脚注（那样看着像在摸鱼）
     if (!rig.talking && ui.bubble.visible) {
       ui.bubble.show(pickFresh(SAY[stepDef.say], 'work-' + stepDef.say), {
@@ -5568,7 +5553,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       pokeState.angerAt = now
       // 别每次都同一张脸：生气/警觉/嘟嘴里挑一个，台词也从扩过的池子里抽
       const face = pick(['grumpy', 'grumpy', 'alert', 'pout'])
-      act({ mood: face, props: IDLE_PROPS, line: pickFresh(SAY.many, 'many'), ms: 2600 })
+      act({ mood: face, props: [], line: pickFresh(SAY.many, 'many'), ms: 2600 })
       return
     }
 
@@ -5579,7 +5564,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       pokeState.softAt = now
       act({
         mood: pick(['pout', 'shy', 'tongue', 'alert']),
-        props: IDLE_PROPS,
+        props: [],
         line: pickFresh(SAY.ticklish, 'ticklish'),
         ms: 2400,
       })
@@ -5624,14 +5609,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function menuStatusLine() {
     const parts = []
     parts.push(rig.user.face ? `${rig.user.face}（手动）` : faceLabel(rig.face))
+    // 道具表清空后，userProps/base.props 里只剩表达式名；直接显示，不再查 label。
     const userProps = Array.from(rig.userProps)
-      .map((e) => Object.values(ALL_TOGGLES).find((d) => d.expr === e))
-      .filter(Boolean)
-      .map((d) => d.label)
     const baseProps = rig.base.props
-      .map((e) => Object.values(ALL_TOGGLES).find((d) => d.expr === e))
-      .filter(Boolean)
-      .map((d) => d.label)
     if (userProps.length) parts.push('自己戴的：' + userProps.join('、'))
     if (baseProps.length) parts.push('常态：' + baseProps.join(' + '))
     if (device.out) parts.push('手机已掏出')
@@ -5662,7 +5642,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }, ms + 400)
     }
     // 这里只负责「她说点什么 + 换个配得上的表情」。
-    return act({ mood, line, props: IDLE_PROPS, heart: !!info.heart, ms })
+    return act({ mood, line, props: [], heart: !!info.heart, ms })
   }
 
   /**
@@ -5682,7 +5662,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return act({
       mood: noFace ? 'neutral' : a.mood || 'happy',
       face: noFace && !expr ? null : undefined,
-      props: expr ? IDLE_PROPS.concat([expr]) : IDLE_PROPS,
+      props: expr ? [expr] : [],
       line: pickFresh(a.lines, 'action-' + key),
       heart: !!a.heart,
       motion,
@@ -5974,11 +5954,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     rig.override = null
     rig.burst = null
     rig.weight.clear()
-    // 兜底：所有道具一层不留（万一以后有人加了新的道具层，这里也不会漏）
-    for (const key of Object.keys(ALL_TOGGLES)) {
-      const expr = propExpr(key)
-      if (expr) rig.userProps.delete(expr)
-    }
+    // 兜底：道具层已经清空；userProps 在上面已 clear，这里只重置解析结果。
     rig.props = new Set()
     device.out = false
     agent.toolProp = null
@@ -5993,7 +5969,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     gaze.tx = 0
     gaze.ty = 0
     rig.talking = false
-    setBase('neutral', IDLE_PROPS)
+    setBase('neutral', [])
     stopMotion() // 回到模型默认姿势 = 正常坐姿
     closePanels()
     ui.bubble.hide()
@@ -6020,15 +5996,53 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   function closePanels() {
+    // 关面板时把输入框的焦点也收掉，否则外壳会一直停在「输入中（降置顶）」状态
+    try {
+      if (ui.composer.el.classList.contains('dshp-on')) ui.composer.ta.blur()
+    } catch (e) {}
     ui.composer.el.classList.remove('dshp-on')
     ui.menu.el.classList.remove('dshp-on')
     ui.root.classList.remove('dshp-open')
+  }
+
+  // —— 对话模式（工作 / 回应）——
+  // 工作模式：POST /say → 外壳代理 → DSH 会话（和界面里打字同一条路）。
+  // 回应模式：dshpetBridge.heart.chat → 聊天模型（本地 9B 或自定义 OpenAI 兼容 API），带最近 12 轮记忆。
+  let chatMode = 'dsh'
+
+  function heartBridge() {
+    return window.dshpetBridge && window.dshpetBridge.heart ? window.dshpetBridge.heart : null
+  }
+
+  function applyChatMode(mode) {
+    chatMode = mode === 'pet' ? 'pet' : 'dsh'
+    try {
+      if (ui && ui.composer && ui.composer.ta) {
+        ui.composer.ta.placeholder =
+          chatMode === 'pet'
+            ? '想和大肥鱼说什么…（Enter 发送 / Shift+Enter 换行）'
+            : '跟 DSH 说点什么…（Enter 发送 / Shift+Enter 换行）'
+      }
+    } catch (e) {}
+    return chatMode
+  }
+
+  /** 面板里改了模式之后，输入框提示也要跟着变（外壳里才有 bridge） */
+  function refreshChatMode() {
+    const HB = heartBridge()
+    if (!HB || typeof HB.settings !== 'function') return
+    try {
+      HB.settings().then((s) => applyChatMode(s && s.config && s.config.mode)).catch(() => {})
+    } catch (e) {}
   }
 
   function bindComposer(u) {
     const { ta, send, cancel } = u.composer
     const stop = (e) => e.stopPropagation()
     for (const ev of ['keydown', 'keyup', 'keypress']) ta.addEventListener(ev, stop)
+    // 输入法候选窗会被置顶的透明窗盖住：聚焦时让外壳把置顶降下来，失焦再抬回去
+    ta.addEventListener('focus', () => { if (shell.on) shell.post('ime:on') })
+    ta.addEventListener('blur', () => { if (shell.on) shell.post('ime:off') })
     ta.addEventListener('keydown', (e) => {
       // 互动感知（S2）：她在旁边能感觉到你在打字（不拦事件，只记时间）
       try {
@@ -6064,6 +6078,40 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         ta.focus()
         return
       }
+      // 回应模式：不经过 DSH，直接问聊天模型
+      if (chatMode === 'pet') {
+        const HB = heartBridge()
+        if (!HB || typeof HB.chat !== 'function') {
+          u.bubble.show('回应模式只在桌面外壳里可用（浏览器版没有本地模型）。', { name: 'DS 鲸鱼娘', sticky: true })
+          return
+        }
+        send.disabled = true
+        try {
+          u.bubble.show('…（她在想）', { name: 'DS 鲸鱼娘', busy: true, sticky: true })
+          // 等待时每秒更新脚注，让主人知道不是死机
+          const t0 = Date.now()
+          const tickTimer = setInterval(() => {
+            try { u.bubble.note('已等 ' + Math.round((Date.now() - t0) / 1000) + 's') } catch (e) {}
+          }, 1000)
+          // 页面侧兜底超时：主进程最长 20s，卡住时别让「在想」永远挂着
+          const r = await Promise.race([
+            HB.chat({ text }),
+            new Promise((resolve) => setTimeout(() => resolve({ ok: false, reason: 'timeout' }), 30000)),
+          ]).finally(() => clearInterval(tickTimer))
+          if (!r || !r.ok) throw new Error((r && r.reason === 'timeout') ? '她好像卡住了，再试一次？' : ((r && r.reason) || '没有回应'))
+          ta.value = ''
+          closePanels()
+          // work:true 必须带：气泡有个「工作占用中，互动台词让位」的守卫，
+          // 不带的话，DSH 正在干活时这句回复会被**静默丢掉**（看起来就是「她一直不回」）。
+          u.bubble.show(String(r.text || ''), { name: 'DS 鲸鱼娘', ttl: 9000, work: true })
+          act({ mood: 'happy', props: [], ms: 2600 })
+        } catch (err) {
+          u.bubble.show('她没接上：' + ((err && err.message) || err), { name: 'DS 鲸鱼娘', sticky: true })
+        } finally {
+          send.disabled = false
+        }
+        return
+      }
       send.disabled = true
       try {
         const r = await fetch(BASE + '/say', {
@@ -6079,13 +6127,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         }
         ta.value = ''
         closePanels()
-        act({ mood: 'listening', props: IDLE_PROPS, line: text, ms: 2600 })
+        act({ mood: 'listening', props: [], line: text, ms: 2600 })
       } catch (err) {
         u.bubble.show('发不出去：' + err.message, { name: 'DS 鲸鱼娘', sticky: true })
       } finally {
         send.disabled = false
       }
     }
+
+    // 输入框提示按模式初始化（外壳里读一次配置；浏览器版保持 DSH 文案）
+    refreshChatMode()
   }
 
   function openMenu(which) {
@@ -6118,6 +6169,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ['mouth', '口型'],
       ['action', '动作'],
       ['script', '小戏'],
+      ['heart', '心跳'],
       ['setting', '设置'],
     ]
     u.menu.focused = 'face'
@@ -6129,6 +6181,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         u.menu.focused = id
         for (const el of u.menu.tabs.children) el.classList.toggle('dshp-active', el.dataset.tab === id)
         renderPane(id)
+        // 面板高度变了（心跳页更高）→ 立刻重新夹一次，别让它顶出屏幕
+        requestAnimationFrame(() => {
+          try { clampPanels() } catch (e) {}
+        })
       })
       u.menu.tabs.appendChild(b)
     }
@@ -6602,11 +6658,299 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (shell.on) shell.post('modal:on')
   }
 
+  /**
+   * 「心跳」页：总开关 / 本地模型一键启停 / 频率 / 提示词 / 端口。
+   *
+   * 为什么这页比别的页复杂：它是**唯一**要跨进程改 settings.json 的页，
+   * 而且「启动模型」是一个最长 60 秒的异步操作。所以：
+   *   · 先画骨架，再异步填数据（面板不能卡住）；
+   *   · 每次改完都重新拉一次配置，而不是本地猜 —— 避免界面和磁盘不一致；
+   *   · 浏览器版没有 dshpetBridge，显示一句人话就退出。
+   */
+  function renderHeartPane(box) {
+    const HB = window.dshpetBridge && window.dshpetBridge.heart ? window.dshpetBridge.heart : null
+    if (!HB || typeof HB.settings !== 'function') {
+      box.append($('div', 'dshp-hint', '心跳只在桌面外壳里可用（浏览器版没有主进程，采不了屏幕）。'))
+      return
+    }
+    const tip = $('div', 'dshp-hint', '读取中…')
+    box.append(tip)
+
+    const refresh = () => renderPane('heart')
+    const save = async (patch) => {
+      tip.textContent = '保存中…'
+      let r = null
+      try {
+        r = await HB.save(patch)
+      } catch (e) {
+        r = { ok: false, reason: String((e && e.message) || e) }
+      }
+      if (!r || !r.ok) {
+        tip.textContent = '保存失败：' + ((r && r.reason) || '未知')
+        return
+      }
+      refresh()
+      // 模式改了要立刻改输入框提示（不用刷新页面）
+      try { refreshChatMode() } catch (e) {}
+    }
+
+    HB.settings().then((s) => {
+      if (ui.menu.focused !== 'heart') return
+      box.textContent = ''
+      const cfg = (s && s.config) || {}
+      const st = (s && s.status) || {}
+      const ms = (s && s.model) || {}
+
+      // —— 总开关 ——
+      const sw = $('button', 'dshp-chip' + (cfg.enabled ? ' dshp-on' : ''), cfg.enabled ? '已启用' : '已关闭')
+      sw.addEventListener('click', () => save({ enabled: !cfg.enabled }))
+      const row0 = $('div', 'dshp-row')
+      row0.append($('span', null, '总开关'), sw)
+      box.append(
+        row0,
+        $('div', 'dshp-hint', cfg.enabled
+          ? '开：每 ' + cfg.intervalSec + 's 判定一次，最短 ' + cfg.lookMinGapSec + 's 看一次'
+          : '关：不采集、不加载模型。开了她才会偶尔看屏幕。'),
+      )
+
+      // —— 对话模式：工作（DSH）/ 回应（聊天模型）——
+      const modeRow = $('div', 'dshp-row')
+      modeRow.append($('span', null, '对话按钮'))
+      const mkMode = (key, label, title) => {
+        const b = $('button', 'dshp-chip' + ((cfg.mode === 'pet' ? 'pet' : 'dsh') === key ? ' dshp-on' : ''), label)
+        b.title = title
+        b.addEventListener('click', () => save({ mode: key }))
+        return b
+      }
+      modeRow.append(
+        mkMode('dsh', '工作模式', '对话框发到 DSH 会话（和界面里打字同一条路）'),
+        mkMode('pet', '回应模式', '对话框直接发给聊天模型（本地 9B / 自定义 API），带最近 12 轮记忆'),
+      )
+      box.append(modeRow, $('div', 'dshp-hint', cfg.mode === 'pet'
+        ? '回应模式：输入框提示会变成「想和大肥鱼说什么…」，消息不再进 DSH。'
+        : '工作模式：输入框提示「跟 DSH 说点什么…」，消息进 DSH 会话。'))
+
+      // —— 话痨程度：三个预设，一次改四个参数 ——
+      // 为什么要有：只看「判定频率」会误会 —— 真正限制她开口的是「最短说话间隔」和每小时上限。
+      // 2026-10-18 起：看屏间隔 = 说话间隔（同一个滑块，15~600s）。
+      // 用户要求「每轮都说话」——两个间隔分开设的话，看得很勤、说得很少，看起来就像她不理人。
+      const preset = (sec) => {
+        const cap = Math.min(600, Math.max(1, Math.ceil(3600 / sec)))
+        return { intervalSec: sec, lookMinGapSec: sec, sayMinGapSec: sec, maxLooksPerHour: cap, maxSaysPerHour: cap }
+      }
+      const PRESETS = {
+        quiet: { label: '安静', patch: preset(120) },
+        normal: { label: '正常', patch: preset(60) },
+        chatty: { label: '话痨', patch: preset(15) },
+      }
+      const presetRow = $('div', 'dshp-row')
+      presetRow.append($('span', null, '话痨程度'))
+      for (const key of Object.keys(PRESETS)) {
+        const ps = PRESETS[key]
+        const b = $('button', 'dshp-btn', ps.label)
+        b.title = '判定 ' + ps.patch.intervalSec + 's / 看屏 ' + ps.patch.lookMinGapSec + 's / 说话间隔 ' + ps.patch.sayMinGapSec + 's / 每小时≤' + ps.patch.maxSaysPerHour + ' 句'
+        b.addEventListener('click', () => save(ps.patch))
+        presetRow.appendChild(b)
+      }
+      box.append(presetRow)
+
+      // —— 两个滑块：判定/看屏间隔、最短说话间隔 ——
+      const mkSlider = (label, value, min, max, step, fmt, onChange) => {
+        const l = $('label', 'dshp-label')
+        l.append($('span', null, label))
+        const r = document.createElement('input')
+        r.type = 'range'
+        r.min = String(min)
+        r.max = String(max)
+        r.step = String(step)
+        r.value = String(value)
+        const out = $('span', null, fmt(Number(r.value)))
+        out.style.minWidth = '46px'
+        out.style.textAlign = 'right'
+        r.addEventListener('input', () => {
+          out.textContent = fmt(Number(r.value))
+        })
+        r.addEventListener('change', () => onChange(Number(r.value)))
+        l.append(r, out)
+        return l
+      }
+      box.append(
+        mkSlider('看屏/说话间隔', cfg.intervalSec || 60, 15, 600, 15, (v) => v + 's', (v) => {
+          const cap = Math.min(600, Math.max(1, Math.ceil(3600 / Math.max(15, v))))
+          save({ intervalSec: v, lookMinGapSec: v, sayMinGapSec: v, maxLooksPerHour: cap, maxSaysPerHour: cap })
+        }),
+        $('div', 'dshp-hint', '每 ' + (cfg.intervalSec || 60) + 's 看一次屏、说一句；每小时上限 ' + (cfg.maxSaysPerHour || 60) + ' 句。DSH 忙/她睡着时自动让路。'),
+      )
+
+      // —— 看屏幕前先冒一句 ——
+      const openerRow = $('div', 'dshp-row')
+      const openerBtn = $('button', 'dshp-chip' + (cfg.lookOpener ? ' dshp-on' : ''), cfg.lookOpener ? '先冒一句：开' : '先冒一句：关')
+      openerBtn.title = '开：看之前先说「让我看看主人在干嘛～」，这句也会发给模型，让她接得上'
+      openerBtn.addEventListener('click', () => save({ lookOpener: !cfg.lookOpener }))
+      openerRow.append($('span', null, '看屏提示'), openerBtn)
+      box.append(openerRow, $('div', 'dshp-hint', '开着的话，她盯屏幕前会先冒一句随机的话，并把这句话一起发给模型。'))
+
+      // —— 听觉联动 ——
+      const audioRow = $('div', 'dshp-row')
+      const audioBtn = $('button', 'dshp-chip' + (cfg.audioTrigger ? ' dshp-on' : ''), cfg.audioTrigger ? '听觉触发：开' : '听觉触发：关')
+      audioBtn.title = '系统声音突然响起时，立刻看一眼屏幕（等价「立即看一眼」）'
+      audioBtn.addEventListener('click', () => save({ audioTrigger: !cfg.audioTrigger }))
+      audioRow.append($('span', null, '听到声音'), audioBtn)
+      box.append(audioRow, $('div', 'dshp-hint', '开着的话，突然的声响会让她马上看一眼屏幕（15 秒内只触发一次）。'))
+
+      // —— 回应模式的记忆 ——
+      if (cfg.mode === 'pet') {
+        const chatRow = $('div', 'dshp-row')
+        const clearBtn = $('button', 'dshp-btn', '清空对话记忆')
+        const chatInfo = $('span', 'dshp-hint', '')
+        clearBtn.addEventListener('click', async () => {
+          try {
+            await HB.clearChat()
+            chatInfo.textContent = '已清空'
+          } catch (e) {
+            chatInfo.textContent = '清空失败'
+          }
+        })
+        chatRow.append(clearBtn, chatInfo)
+        box.append(chatRow, $('div', 'dshp-hint', '回应模式会记住最近 12 轮对话（含她自己主动说的话）。'))
+      }
+
+      // —— 本地模型 ——
+      box.append($('div', 'dshp-hint', '本地模型（llama.cpp ≥ b11582，路径可手填）'))
+      const stLine = $('div', 'dshp-hint', ms.running
+        ? '运行中 · :' + ms.port + ' · pid ' + ms.pid
+        : '未运行' + (ms.lastError ? ' · ' + ms.lastError : ''))
+      box.append(stLine)
+
+      const btnStart = $('button', 'dshp-btn', '启动模型')
+      const btnStop = $('button', 'dshp-btn', '停止')
+      const btnTick = $('button', 'dshp-btn', '立即看一眼')
+      const resLine = $('div', 'dshp-hint', '')
+      btnStart.addEventListener('click', async () => {
+        btnStart.disabled = true
+        stLine.textContent = '启动中…（最多 60 秒）'
+        let r = null
+        try {
+          r = await HB.model('start')
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        btnStart.disabled = false
+        if (r && r.ok) refresh()
+        else stLine.textContent = '启动失败：' + ((r && r.reason) || '未知（检查面板里的路径/端口）')
+      })
+      btnStop.addEventListener('click', async () => {
+        try {
+          await HB.model('stop')
+        } catch (e) {}
+        refresh()
+      })
+      btnTick.addEventListener('click', async () => {
+        resLine.textContent = '看一眼…（约 2 秒）'
+        let r = null
+        try {
+          r = await HB.tick()
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        if (r && r.ok) resLine.textContent = '她说：' + ((r.action && r.action.say) || '（只做了动作）')
+        else resLine.textContent = '这次不说：' + ((r && r.reason) || '未知')
+      })
+      const rowM = $('div', 'dshp-row')
+      rowM.append(btnStart, btnStop, btnTick)
+      box.append(rowM, resLine)
+
+      // —— 端口 / 路径 ——
+      const mkInput = (label, value, onChange, opts) => {
+        const o = opts || {}
+        const l = $('label', 'dshp-label')
+        l.append($('span', null, label))
+        const inp = document.createElement('input')
+        inp.type = o.type || 'text'
+        if (o.type === 'number') {
+          inp.min = String(o.min == null ? 1 : o.min)
+          inp.max = String(o.max == null ? 65535 : o.max)
+        }
+        inp.value = value == null ? '' : String(value)
+        inp.placeholder = o.placeholder || ''
+        inp.title = o.placeholder || ''
+        inp.style.flex = '1'
+        inp.style.minWidth = '80px'
+        inp.style.padding = '2px 6px'
+        inp.style.borderRadius = '6px'
+        inp.style.border = '1px solid var(--dshp-line)'
+        inp.style.background = 'transparent'
+        inp.style.color = 'inherit'
+        inp.style.font = 'inherit'
+        inp.addEventListener('change', () => onChange(inp.value))
+        l.append(inp)
+        return l
+      }
+      const mm = cfg.model || {}
+      const sv = cfg.modelServer || {}
+      box.append(
+        mkInput('API 端口', mm.port, (v) => {
+          const n = Number(v)
+          if (Number.isFinite(n) && n > 0 && n < 65536) save({ model: { port: Math.round(n) } })
+        }, { type: 'number', placeholder: '19411' }),
+        mkInput('引擎 exe', sv.exe, (v) => save({ modelServer: { exe: v } }), {
+          placeholder: 'D:\\llama\\bin\\llama-server.exe',
+        }),
+        mkInput('模型 gguf', sv.model, (v) => save({ modelServer: { model: v } }), {
+          placeholder: 'D:\\llama\\weights\\MiniCPM-V-4_7-1B-Q8_0.gguf',
+        }),
+        mkInput('视觉投影', sv.mmproj, (v) => save({ modelServer: { mmproj: v } }), {
+          placeholder: 'D:\\llama\\weights\\mmproj-model-f16.gguf',
+        }),
+        $('div', 'dshp-hint', '填完路径点「启动模型」；它会在 ' + (mm.port || 19411) + ' 端口起 llama-server。也可以自己起，外面的服务会被自动发现。'),
+        $('div', 'dshp-hint', '自定义 API（OpenAI 兼容）：填了地址就优先用它，不需要本地模型。'),
+        mkInput('API 地址', mm.baseUrl, (v) => save({ model: { baseUrl: v } }), { placeholder: 'https://api.example.com/v1' }),
+        mkInput('模型名', mm.model, (v) => save({ model: { model: v } }), { placeholder: 'qwen3.5-9b / gpt-4o-mini' }),
+        mkInput('API Key', '', (v) => save({ model: { apiKey: v } }), { type: 'password', placeholder: mm.apiKeySet ? '已设置（清空并保存=删除）' : 'sk-...' }),
+        $('div', 'dshp-hint', '想聊得更自然：换更大的视觉模型（实测 Qwen3.5-9B 会直接接屏幕上的梗，显存约 6.6GB）；1B 更省显存，但话更像「播报」。'),
+      )
+
+      // —— 提示词 ——
+      box.append($('div', 'dshp-hint', '给模型的提示词（留空 = 默认人设；动作词表由程序提供）'))
+      const ta = document.createElement('textarea')
+      ta.value = (cfg.prompt || '').trim() ? cfg.prompt : (s && s.defaultPrompt) || ''
+      ta.style.height = '120px'
+      ta.spellcheck = false
+      const rowP = $('div', 'dshp-row')
+      const btnSaveP = $('button', 'dshp-btn dshp-primary', '保存提示词')
+      const btnResetP = $('button', 'dshp-btn', '恢复默认')
+      btnSaveP.addEventListener('click', () => save({ prompt: ta.value }))
+      btnResetP.addEventListener('click', () => {
+        ta.value = (s && s.defaultPrompt) || ''
+        save({ prompt: '' })
+      })
+      rowP.append(btnSaveP, btnResetP)
+      box.append(ta, rowP)
+
+      // —— 最近一次状态 ——
+      const last = st.lastReason || 'never'
+      const lastText = st.lastText ? '「' + String(st.lastText).slice(0, 40) + '」' : ''
+      box.append($('div', 'dshp-hint', '最近：' + last + (lastText ? ' · ' + lastText : '') + (st.lastInferMs ? ' · 推理 ' + st.lastInferMs + 'ms' : '')))
+    }).catch((e) => {
+      requestAnimationFrame(() => {
+        try { clampPanels() } catch (e) {}
+      })
+    }).catch((e) => {
+      tip.textContent = '读取失败：' + ((e && e.message) || e)
+    })
+  }
+
   function renderPane(id) {
     const panes = ui.menu.panes
+    // 心跳页更高（见 CSS .dshp-menu.dshp-heart），其它页回到 300px 小卡片
+    if (ui && ui.menu && ui.menu.el) ui.menu.el.classList.toggle('dshp-heart', id === 'heart')
     panes.textContent = ''
     // 顶上永远有一行「她现在是什么状态」，免得一堆按钮里看不出哪个是开着的
     panes.appendChild($('div', 'dshp-hint dshp-now', menuStatusLine()))
+    if (id === 'heart') {
+      renderHeartPane(panes)
+      return
+    }
     if (id === 'face' || id === 'mouth') {
       const grid = $('div', 'dshp-grid')
       // 「表情」和「口型」两个页签**共用这套渲染**：
@@ -6630,7 +6974,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       neutral.addEventListener('click', () => {
         clearUserFace()
         clearReaction()
-        act({ mood: 'neutral', props: IDLE_PROPS, ms: 800 })
+        act({ mood: 'neutral', props: [], ms: 800 })
         renderPane(id)
       })
       grid.appendChild(neutral)
@@ -6656,7 +7000,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           } else {
             // 没有情绪条目的新表情：直接把 face 交给 override 层。
             // 不写 rig.user 手动层 —— 菜单表情是"演三四秒"，不是常驻。
-            act({ face: expr, mood: 'neutral', props: IDLE_PROPS, line: pickFresh(lines, 'face-' + expr), ms: 3600 })
+            act({ face: expr, mood: 'neutral', props: [], line: pickFresh(lines, 'face-' + expr), ms: 3600 })
           }
           renderPane(id)
         })
@@ -7246,7 +7590,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         idle.lastDshAt = performance.now() // 状态没变时 setStatus 会提前返回，这里补一下
         rig.talking = false
         stopActing()
-        setBase('listening', IDLE_PROPS)
+        setBase('listening', [])
         clearToolProp()
         // 睡着时插一段「懵」的过场（keepBase：别把刚切好的 listening 底脸盖回 neutral）
         wakeUp('dsh', { keepBase: true })
@@ -7262,7 +7606,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         rig.talking = false
         startWork()
         stopActing()
-        setBase('thinking', WORK_PROPS)
+        setBase('thinking', [])
         ui.bubble.show(pick(SAY.start), { name: 'DS 鲸鱼娘', busy: true, sticky: true })
         break
 
@@ -7286,7 +7630,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           setStatus('speaking')
           rig.talking = true
           agent.streamText = ''
-          setBase('happy', WORK_PROPS)
+          setBase('happy', [])
           ui.bubble.show('', { name: 'DS 鲸鱼娘', stream: true, sticky: true })
         }
         // 累积文本（只留尾巴 400 字，够判最后一句，也不让内存无限涨）
@@ -7333,7 +7677,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         const propKey = react.prop === 'auto' ? randomGlasses() : react.prop
         setBase(
           react.mood,
-          isDevice ? [] : WORK_PROPS.concat(propKey ? [propKey] : []),
+          isDevice ? [] : (propKey ? [propKey] : []),
         )
         if (isDevice) {
           if (!device.out) {
@@ -7374,7 +7718,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           setStatus('thinking')
           stopActing()
           putDeviceAway()
-          setBase('thinking', WORK_PROPS)
+          setBase('thinking', [])
         }
         break
 
@@ -7399,7 +7743,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         // ★ 关键：一轮结束必须把**底层状态**也复位成「平常」。
         // 之前只做了 setStatus('idle')，底层还停在最后那个工具的脸
         // （比如「调皮」会闭一只眼），于是看起来就像「平常动作被挤眼睛占住了」。
-        setBase('neutral', IDLE_PROPS)
+        setBase('neutral', [])
 
         // 宿主通常已经推了 hud-turn（那条会立刻弹）；这里只是兜底，晚一点再拉一次余额。
         hudPopTurnEnd()
@@ -7451,7 +7795,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
       case 'approval':
         if (m.state === 'asked') {
-          act({ mood: 'confused', line: '需要你点一下确认', props: WORK_PROPS, ms: 8000 })
+          act({ mood: 'confused', line: '需要你点一下确认', props: [], ms: 8000 })
         } else {
           act({ mood: 'happy', ms: 2600 })
         }
@@ -7715,6 +8059,22 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         { at: 4.2, do: 'line', arg: '（打了个哈欠）啊——唔…' },
         { at: 6.0, do: 'face', arg: '栗子嘴' }
       ]
+    },
+    /*
+     * 「夜深了」：只在 lateNight 上下文的随机池里出现（when:'night'）。
+     * 手动菜单仍可点；随机选择由 startIdleScript 过滤。
+     * 叹气 → 挤眼 → 劝睡，6 秒左右，不吵醒快要睡着的节奏。
+     */
+    {
+      name: '夜深了',
+      weight: 6,
+      minGap: 120,
+      when: 'night',
+      steps: [
+        { at: 0.0, do: 'clip', arg: '叹气' },
+        { at: 2.8, do: 'face', arg: '挤眼' },
+        { at: 4.6, do: 'line', arg: '（揉眼睛）主人也早点睡…' }
+      ]
     }
   ]
 
@@ -7745,7 +8105,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         ui.bubble.show(text, { name: 'DS 鲸鱼娘', ttl: 4200 })
         return true
       }
-      if (a.verb === 'prop') return !!(ALL_TOGGLES[a.arg] && (setProp(a.arg, true), true))
+      if (a.verb === 'prop') return !!(propExpr(a.arg) && setProp(a.arg, true))
       if (a.verb === 'glance') { gaze.nextDrift = 0; return true }
       if (a.verb === 'qbounce') { qBounce(1); return true }
     } catch (e) {}
@@ -7806,7 +8166,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function startIdleScript(now) {
     const sc = idle.scripts
     if (!sc || CFG.idleScripts === false) return null
-    const chosen = DSHPetIdleScripts.choose(sc, scaledIdleScripts(), now, Math.random)
+    // when:'night' 的段只进夜深了时的随机池；手动菜单/感知器桥走 startIdleScriptByName，不受此限。
+    const nightPool = scaledIdleScripts().filter((s) => s.when !== 'night' || (idle.sensors && idle.sensors.lateNight))
+    const chosen = DSHPetIdleScripts.choose(sc, nightPool, now, Math.random)
     if (!chosen) return null
     if (!DSHPetIdleScripts.canStart(sc, chosen, now, 15000)) return null
     DSHPetIdleScripts.start(sc, chosen, now) // 冷却由引擎在结束时上锁（见 start/frame）
@@ -8034,7 +8396,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (idle.sleepSt) DSHPetSleep.end(idle.sleepSt)
     idle.reactUntil = 0
     clearSleepFace()
-    if (!opts.keepBase) setBase('neutral', IDLE_PROPS)
+    if (!opts.keepBase) setBase('neutral', [])
     // 待机幅度还原：syncIdleLevel 是唯一入口，别手写数字
     idle.sleepIdleLevel = null
     try { syncIdleLevel() } catch (e) {}
@@ -8096,7 +8458,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!out.burst) return false
     if (CFG.suddenAudio === false) return false
     motion.debug.audioBurst = { at: Math.round(now), peak: +Number(peak).toFixed(3) }
+    // 听觉联动：声音突然响起 → 立刻看一眼（开没开、要不要看由主进程判断）
+    requestAudioLook()
     return true
+  }
+
+  /** 声音触发的一次「立即看一眼」；15 秒内只发一次，避免连续声响把她刷爆 */
+  let lastAudioLookAt = 0
+  function requestAudioLook() {
+    const HB = heartBridge()
+    if (!HB || typeof HB.tick !== 'function') return
+    const t = Date.now()
+    if (t - lastAudioLookAt < 15000) return
+    lastAudioLookAt = t
+    try {
+      const p = HB.tick({ trigger: 'audio' })
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    } catch (e) {}
   }
 
   /** 清掉 burst 冷却并立刻武装（设置页「重置听觉感知」+ 调试 API 共用） */
@@ -8188,7 +8566,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const pool = ['shy', 'confused', 'excited', 'alert', 'tongue', 'sweat', 'love']
     const m = pick(pool)
     const ms = 2200 + Math.random() * 2600
-    act({ mood: m, props: IDLE_PROPS, ms, soft: true })
+    act({ mood: m, props: [], ms, soft: true })
     idle.expressUntil = performance.now() + ms
     // 表情不孤立地挂在脸上：约一半机会配一个**极轻的姿态脉冲**（甩头/探头），
     // 读起来像「她想起什么」，而不是「贴图换了一张」。
@@ -8334,17 +8712,27 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return Math.random() < 0.5 ? -1 : 1
   }
 
-  /** 按权重抽一个反应 */
-  function pickReaction(pool) {
+  /**
+   * 按权重抽一个反应。
+   * night = true 时只从「安静反应」里抽（视线/换脸/气泡/留白/探头），
+   * 实在没有安静项才退回原池；深夜不播身体大动作。
+   */
+  const QUIET_REACTIONS = { gaze: 1, face: 1, bubble: 1, nothing: 1, lean: 1 }
+  function pickReaction(pool, opts) {
     if (!pool || !pool.length) return null
+    let src = pool
+    if (opts && opts.night) {
+      const quiet = pool.filter((r) => QUIET_REACTIONS[r.kind])
+      if (quiet.length) src = quiet
+    }
     let tot = 0
-    for (const r of pool) tot += r.w
+    for (const r of src) tot += r.w
     let x = Math.random() * tot
-    for (const r of pool) {
+    for (const r of src) {
       x -= r.w
       if (x <= 0) return r
     }
-    return pool[pool.length - 1]
+    return src[src.length - 1]
   }
 
   /** 交互强度（0~2，默认 1）：既控制「反应概率」，也控制冷却长短 */
@@ -8397,7 +8785,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 执行一个反应。返回是否真的做了点什么。
    * 约束：不碰 rig.override、不调 act()、不碰 ParamEyeLOpen（见块首注释）。
    */
-  function doReaction(name) {
+  function doReaction(name, opts) {
     const pool = REACTIONS[name]
     if (!pool) return false
     // 诊断：把「抽到哪一条、做了什么」留痕。
@@ -8405,7 +8793,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 强度低时有一半机会「只是看你一眼」——避免她显得一惊一乍
     const st0 = reactStrength()
     if (st0 < 1 && Math.random() > 0.35 + 0.65 * st0) { idle.lastReactWhy = 'strength-skip'; return false }
-    const r = pickReaction(pool)
+    const r = pickReaction(pool, opts)
     if (!r || r.kind === 'nothing') {
       note(r || { kind: 'nothing' })
       // 留白也是一种反应：只是把视线收回来看着她
@@ -8474,6 +8862,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function sensorTick(now) {
     if (!DSHPetIdleSensors) return
     const st = idle.sensors
+    // 本地时间只在这里读一次，注入纯函数；纯函数里绝不能 new Date()。
+    const hour = new Date().getHours()
+    const lateNight = DSHPetIdleSensors.isLateNight(hour, CFG)
+    st.lateNight = lateNight
     const p = gaze.pointer
     // 速度：用 40ms 的位移估算（px/s）。gazeTick 固定 40ms 一跳，够用且便宜。
     let vx = 0, vy = 0
@@ -8538,12 +8930,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 刚醒的过场窗口：优先让她把「懵」演完（见 wakeUp）
     if (now < (idle.wakeHoldUntil || 0)) return
 
-    const ev = DSHPetIdleSensors.frame(st, { x: p.x, y: p.y, near: near, inside: inside, overUi: overUi, vx: vx, vy: vy }, CFG, now)
+    const ev = DSHPetIdleSensors.frame(st, { x: p.x, y: p.y, near: near, inside: inside, overUi: overUi, vx: vx, vy: vy, hour: hour }, CFG, now)
     // 诊断输出（挂在既有的 motion.debug 上，别新开对象）
     if (!motion.debug.sensors) motion.debug.sensors = {}
     motion.debug.sensors = {
       near: ev.near, hover: ev.hover, stare: ev.stare, swoosh: ev.swoosh,
-      typing: ev.typing, typingStop: ev.typingStop,
+      typing: ev.typing, typingStop: ev.typingStop, lateNight: lateNight,
       speed: Math.round(st.speed),
       counts: Object.assign({}, st.counts),
       sleeping: false
@@ -8581,7 +8973,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const cool = (DSHPetIdleSensors.COOLDOWN[which] || 20000) / Math.max(0.35, reactStrength())
     if (now < (st.hot['r-' + which] || 0)) return
     st.hot['r-' + which] = now + cool
-    const did = doReaction(which)
+    // 夜深了：反应概率 ×0.6（audioBurst 是真实声音，不压），且优先选安静反应。
+    if (st.lateNight && which !== 'audioBurst' && Math.random() > 0.6) {
+      idle.sensorGate = 'night-calm'
+      return
+    }
+    const did = doReaction(which, { night: st.lateNight })
     // 诊断：把「做了哪个反应 / 为什么没做」记下来。
     // 没有它就只能靠猜 —— 而这一步连着概率、冷却、守卫三层，猜不动。
     idle.lastReact = { which: which, did: did, at: Math.round(now), holdMs: 0 }
@@ -8710,13 +9107,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         idleExpress()
         break
       case 'mutter':
-        act({ props: IDLE_PROPS, line: pickFresh(SAY.idle, 'idle'), ms: 4200, soft: true })
+        act({ props: [], line: pickFresh(SAY.idle, 'idle'), ms: 4200, soft: true })
         break
       case 'hungry':
-        act({ mood: 'pout', props: IDLE_PROPS, line: pickFresh(SAY.hungry, 'hungry'), ms: 4600, soft: true })
+        act({ mood: 'pout', props: [], line: pickFresh(SAY.hungry, 'hungry'), ms: 4600, soft: true })
         break
       case 'nopang':
-        act({ mood: 'grumpy', props: IDLE_PROPS, line: pickFresh(SAY.fat, 'fat'), ms: 4200, soft: true })
+        act({ mood: 'grumpy', props: [], line: pickFresh(SAY.fat, 'fat'), ms: 4200, soft: true })
         break
       // —— 肢体动作（A：放开待机 clip）——
       // 这四个的实际执行已经在 switch **之前**做掉了（见上面的 IDLE_CLIP 拦截），
@@ -8766,7 +9163,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       if (agent.status !== 'idle') return
       if (idle.sleep) return // 睡着时底脸必须留着睡脸，别被兜底复位抹掉（2026-10-17）
       if (rig.override) return
-      if (rig.base.mood !== 'neutral') setBase('neutral', IDLE_PROPS)
+      if (rig.base.mood !== 'neutral') setBase('neutral', [])
       if (gaze.biasTarget !== 0) gaze.biasTarget = 0
     }, 2000)
 
@@ -8845,7 +9242,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         beginSleep('quiet')
       } else if (idle.sleep === 0 && quiet > CFG.sleepAfterMs * 0.55 && Math.random() < 0.4) {
         // 打哈欠（入睡前的提醒；不是睡着本身）
-        act({ mood: 'sleepy', props: IDLE_PROPS, line: '（打了个哈欠）', ms: 2600 })
+        act({ mood: 'sleepy', props: [], line: '（打了个哈欠）', ms: 2600 })
       }
     }, 15000)
   }
@@ -8968,6 +9365,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         enabled: CFG.idleReact !== false,
         sleeping: idle.sleep !== 0,
         strength: reactStrength(),
+        lateNight: !!st.lateNight,
+        nightStart: Number(CFG.sensorNightStart) >= 0 ? Number(CFG.sensorNightStart) : DSHPetIdleSensors.DEFAULTS.nightStart,
+        nightEnd: Number(CFG.sensorNightEnd) >= 0 ? Number(CFG.sensorNightEnd) : DSHPetIdleSensors.DEFAULTS.nightEnd,
         inNear: st.inNear,
         sinceNearMs: st.sinceNear ? Math.round(now - st.sinceNear) : 0,
         speed: Math.round(st.speed),

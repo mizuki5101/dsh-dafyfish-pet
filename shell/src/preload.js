@@ -20,6 +20,23 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
   reload: () => ipcRenderer.send('reload'),
   ballMove: (dx, dy) => ipcRenderer.send('ball-move', dx, dy),
   ballDrop: (moved) => ipcRenderer.send('ball-drop', moved),
+  // 心跳（P0：只有眼睛）。模型配置/采图都在主进程，页面只拿到「结果」，
+  // 这样 baseUrl/apiKey 不会出现在页面上下文里，页面也没法把图发去别处。
+  heart: {
+    status: () => ipcRenderer.invoke('heart:status'),
+    capture: (opts) => ipcRenderer.invoke('heart:capture', opts || {}),
+    // 调试/验收用：跑一遍完整链路（拍 → 模型 → 仲裁 → 页面），或只列可用端点
+    tick: (opts) => ipcRenderer.invoke('heart:tick', opts || {}),
+    providers: () => ipcRenderer.invoke('heart:providers'),
+    act: (payload) => ipcRenderer.invoke('heart:act', payload || {}),
+    // 设置面板「心跳」页：读配置 / 存配置 / 一键启停本地模型
+    settings: () => ipcRenderer.invoke('heart:settings'),
+    save: (patch) => ipcRenderer.invoke('heart:save', patch || {}),
+    model: (action) => ipcRenderer.invoke('heart:model', { action: action || 'status' }),
+    // 回应模式：对话按钮直接问聊天模型（带最近 12 轮记忆）
+    chat: (payload) => ipcRenderer.invoke('heart:chat', payload || {}),
+    clearChat: () => ipcRenderer.invoke('heart:chat-clear'),
+  },
 })
 
 // 拖动：页面里按下她 → 告诉主进程搬窗口（主进程只在鼠标确实压在她身上时才搬，

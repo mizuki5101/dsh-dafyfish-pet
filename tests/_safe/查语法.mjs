@@ -29,7 +29,23 @@ const DEFAULTS = [
   'shell/src/hit/guard.js',
   'shell/src/hit/hit-renderer.js',
   'shell/src/hit/preload-hit.js',
+  'shell/src/heart/index.js',
+  'shell/src/heart/capture.js',
+  'shell/src/heart/gate.js',
+  'shell/src/heart/hash.js',
+  'shell/src/heart/config.js',
+  'shell/src/heart/mask.js',
+  'shell/src/heart/vision.js',
+  'shell/src/heart/prompt.js',
+  'shell/src/heart/catalog.js',
+  'shell/src/heart/decide.js',
+  'shell/src/heart/settings.js',
+  'shell/src/heart/server.js',
+  'shell/src/heart/opener.js',
+  'shell/src/heart/chat.js',
   'tests/测试独立桌宠.mjs',
+  'tests/测试心跳纯函数.mjs',
+  'tests/测试心跳决策.mjs',
 ]
 
 const files = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULTS
