@@ -121,64 +121,49 @@ shell/                独立桌面外壳
   src/main.js         主进程：起本地服务、连 DSH、托盘、拖动、点击穿透
   src/petserver.js    本地 HTTP 服务（页面/脚本/运行时/模型 + 反向代理 + 信任栅栏）
   build.mjs           打包 asar → 装到外壳目录
-_research-data/       测试与排障工具（见下）
-项目指引.md           代码地图：文件职责 / 启动链路 / 每帧管线 / 修改地图
-docs                  交接文档 / 桌面外壳 / 待机行为改造方案 / 动作系统
+tests/                纯 Node 测试（6 套，CI 跑这些）
 ```
 
 ## 开发
 
-**先读 [`项目指引.md`](项目指引.md)**（每个模块由哪段代码负责、启动/每帧链路、改哪里验哪里）；
-坑与下一阶段计划看 [`交接文档.md`](交接文档.md)。
-
 - 改 `pet-plugin/assets/pet.js` / `manifest.json` → **重启外壳**即可（前端每次启动都重新拉）
 - 改 `pet-plugin/lib/index.js` → **必须重启 DSH**（后端只在启动时加载）
 - 改 `shell/src/*` → `node shell/build.mjs --install` 再重启外壳
-- 语法检查：`node _research-data/_safe/查语法.mjs`（本机 `node --check` 在中文路径下会崩）
+- 语法检查：`node tests/_safe/查语法.mjs`（本机 `node --check` 在中文路径下会崩）
 
 ## 测试
 
 ```bash
-# 纯 Node（不需要外壳）：6 个套件
-node _research-data/测试动作引擎.mjs
-node _research-data/测试待机节奏.mjs
-node _research-data/测试互动感知.mjs
-node _research-data/测试成套小戏.mjs
-node _research-data/测试独立桌宠.mjs
-node _research-data/测试说话语气.mjs
+# 纯 Node（不需要外壳、不需要模型文件）：6 个套件
+node tests/测试动作引擎.mjs
+node tests/测试待机节奏.mjs
+node tests/测试互动感知.mjs
+node tests/测试成套小戏.mjs
+node tests/测试独立桌宠.mjs
+node tests/测试说话语气.mjs
 
-# 需要外壳带 --remote-debugging-port=9222：9 个套件
-node _research-data/回归检查.mjs
-node _research-data/验证移除邮件.mjs
-node _research-data/验证表情.mjs
-node _research-data/验收.mjs
-node _research-data/验证独立外壳.mjs
-node _research-data/验证断开降级.mjs
-node _research-data/验证新待机行为.mjs
-node _research-data/验证说话语气.mjs
-node _research-data/验证布局.mjs
-
-# 睡眠 / 唤醒的真机检查（会生成 _research-data/睡眠-*.png，属排障脚本）
-node _research-data/_safe/验证睡眠.mjs 9222
+# 语法检查（本机 node --check 在中文路径下会崩）
+node tests/_safe/查语法.mjs
 ```
 
-合计 **736 项**（另有 `_safe/验证睡眠.mjs` 的 28 项真机检查，不计入合计）。
-其中纯 Node 的 6 个套件是从 `pet.js` 里把带标记的纯函数块**原样抠出来**跑的，
+合计 **502 项**。这 6 个套件是从 `pet.js` 里把带标记的纯函数块**原样抠出来**跑的，
 所以测的就是线上那份代码，不存在「测试副本和线上不一致」。
+
+> 真机（CDP）套件需要桌面外壳 + 调试口，属于开发时的排障工具，不在这个仓库里。
 
 ## 已知限制
 
-- 文档（`交接文档.md` / `桌面外壳.md` 等）里出现的 `D:\<你的仓库>`、`%USERPROFILE%` 是**作者本机路径**的占位，
-  以及部分 `_research-data/*.mjs` 里写死了作者机器的绝对路径 —— 那些是一次性排障脚本，按你的环境改一下即可
+- 壳里有些路径是按作者本机写的（`D:\whalepet` 安装位、工作区路径），换机器时改 `shell/build.mjs` 里的 `SHELL_DIR`
+  或设环境变量 `DSH_PET_SHELL_DIR`
 
 - 模型是「书桌场景」整张画布（3326×4992），贴图 8192²（显存约 256 MB）；低端机/核显会吃力
 - 没有 `HitAreas`，所以不能分部位点击（摸头 / 戳腰那种）
 - `LipSync` 参数组是空的，口型只能用 `ParamMouthOpenY` 近似
-- 工作区路径里含中文会让某些 Node API 崩（`node --check`、`spawn`），本仓库因此提供 `_safe/查语法.mjs`
+- 工作区路径里含中文会让某些 Node API 崩（`node --check`、`spawn`），本仓库因此提供 `tests/_safe/查语法.mjs`
 
 ## 许可
 
-- **代码**（`pet-plugin/lib`、`assets/pet.js`、`shell/`、`_research-data/`）：**MIT**
+- **代码**（`pet-plugin/lib`、`assets/pet.js`、`shell/`、`tests/`）：**MIT**
 - **模型**：**不随本仓库分发**。大肥鱼模型归 B 站 @Mao绒绒家园 所有（非商业、禁止盗用与出售）
 - **运行时**：Live2D Cubism Core（Live2D Inc.）、PIXI.js（MIT）、pixi-live2d-display（MIT）
 

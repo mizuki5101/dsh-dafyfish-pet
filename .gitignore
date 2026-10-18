@@ -14,7 +14,4 @@ node_modules/
 *.tmp
 
 # 本机私有配置（可能含路径/token）
-_research-data/_safe/真实环境.json
-
-# 睡眠真机验证出的截图（_research-data/_safe/验证睡眠.mjs 生成，随时可重跑）
-_research-data/睡眠-*.png
+*.private.json

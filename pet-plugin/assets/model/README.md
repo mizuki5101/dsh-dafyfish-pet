@@ -30,8 +30,7 @@
 |---|---|
 | `dfyfish.model3.json` | 我们写的 model3（原包是 VTube Studio 的，没有这个文件） |
 | `manifest.json` | 我们写的表情表（17 条，参数照作者自己的 exp3 文件） |
-| `rig-params.json` | 参数范围表（由 `_research-data/生成参数表.mjs` 量出来） |
-| `expressions/`、`motions/` | **鲸鱼娘**模型的素材（CC BY-NC-SA 4.0，另一套许可，与本模型无关） |
+| `rig-params.json` | 参数范围表（本项目量出来的，已随仓库提供） |
 
 ## 校验
 

@@ -4,7 +4,7 @@
 
 ## 1. 代码 / Code —— MIT
 
-范围：`pet-plugin/lib/`、`pet-plugin/tools/`、`pet-plugin/assets/pet.js`、`shell/`、`_research-data/`、文档
+范围：`pet-plugin/lib/`、`pet-plugin/tools/`、`pet-plugin/assets/pet.js`、`shell/`、`tests/`、文档
 
 - 上游：**Andersen216** — <https://github.com/Andersen216/dsh-whale-girl-live2d>（MIT）
 - 本分支的修改：见 `LICENSE` 第二行（请自行填上你的名字/ID）

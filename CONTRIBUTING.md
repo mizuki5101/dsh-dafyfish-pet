@@ -20,29 +20,20 @@
 
 ## 提 PR：先跑测试
 
-这个项目有 **648 项自动化测试**，所以「改动有没有把别的地方弄坏」是可以客观检查的 ——
+这个项目有 **502 项纯 Node 测试**，所以「改动有没有把别的地方弄坏」是可以客观检查的 ——
 这也是作者唯一愿意 review 的凭据。
 
 ```bash
-# 1) 纯 Node（不需要外壳，2 分钟）—— 至少这 6 个要全绿
-node _research-data/测试动作引擎.mjs
-node _research-data/测试待机节奏.mjs
-node _research-data/测试互动感知.mjs
-node _research-data/测试成套小戏.mjs
-node _research-data/测试独立桌宠.mjs
-node _research-data/测试说话语气.mjs
-
-# 2) 改到前端/外壳时，再跑真机的 9 个（需要外壳带 --remote-debugging-port=9222）
-node _research-data/回归检查.mjs
-node _research-data/验证移除邮件.mjs
-node _research-data/验证表情.mjs
-node _research-data/验收.mjs
-node _research-data/验证独立外壳.mjs
-node _research-data/验证断开降级.mjs
-node _research-data/验证新待机行为.mjs
-node _research-data/验证说话语气.mjs
-node _research-data/验证布局.mjs
+# 纯 Node（不需要外壳、不需要模型文件，2 分钟）—— 这 6 个要全绿
+node tests/测试动作引擎.mjs
+node tests/测试待机节奏.mjs
+node tests/测试互动感知.mjs
+node tests/测试成套小戏.mjs
+node tests/测试独立桌宠.mjs
+node tests/测试说话语气.mjs
 ```
+
+> 真机（CDP）套件要桌面外壳 + 调试口，属于开发仓库的排障工具，不在这个仓库里。
 
 PR 描述里请写三行：**改了什么 / 为什么改 / 测试结果**。
 
