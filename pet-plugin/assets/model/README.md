@@ -31,6 +31,7 @@
 | `dfyfish.model3.json` | 我们写的 model3（原包是 VTube Studio 的，没有这个文件） |
 | `manifest.json` | 我们写的表情表（17 条，参数照作者自己的 exp3 文件） |
 | `rig-params.json` | 参数范围表（本项目量出来的，已随仓库提供） |
+| `icon.png` | 托盘/页面用的小图标 |
 
 ## 校验
 
@@ -44,8 +45,7 @@ node pet-plugin/tools/check-model.mjs
 
 - 本仓库**代码**：MIT（Copyright © 2026 Andersen216）
 - **大肥鱼模型**：作者所有，非商业、无偿分享、禁止盗用与出售；**不随本仓库分发**
-- **鲸鱼娘模型**（`c_0120.*` / `expressions/` / `motions/`）：CC BY-NC-SA 4.0，
-  署名 **上善无形 / ZipZipPipe / 氵六青**（见 `../../PROVENANCE.md`）
+- 旧鲸鱼娘模型资产已于 0.6.5 从开发仓库删除（本仓库从未包含它）
 - 运行时：Live2D Cubism Core（Live2D Inc.）、PIXI.js（MIT）、pixi-live2d-display（MIT）
 
 再次提醒：**本项目的整体定位是非商业的**（不收费、不带货、不接广告），

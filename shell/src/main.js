@@ -96,6 +96,10 @@ let lowPower = false
 let overPanel = false
 let failCount = 0
 let lastHit = 'none'
+/** 输入框临时要来的键盘焦点（见 applyFocusPolicy） */
+let keyboardWanted = false
+/** 窗口形状（见 window-shape）：只打一次日志，别刷屏 */
+let shapeLogged = false
 
 // ——————————————————————————————————————————————————————————————
 // 通行证：插件启动时会写 ~/.dsh/dsh-live2d-pet-desktop.json
@@ -268,6 +272,42 @@ function setIgnore(on) {
   win.setIgnoreMouseEvents(on, { forward: true })
 }
 
+/**
+ * 点她**不抢前台焦点**（2026-10-18 修）。
+ *
+ * 病根：透明窗口默认是可激活的，点她 = 把外壳窗口提到前台。于是
+ *   ① DSH 窗口失去前台 → Chromium 把它的渲染降频，进度看起来「停住了」，
+ *      要再点一下别处才接着动；
+ *   ② 全屏/无边框游戏（实测《胡闹厨房 2》）一失去前台就直接缩回桌面。
+ * 做法：窗口平时带 **WS_EX_NOACTIVATE**（Electron 的 setFocusable(false)）——
+ * 鼠标照常吃，但点击不激活窗口、不改变前台。只有光标点进**文字输入框**时，
+ * 才由页面通过 want-keyboard 临时把窗口变成可激活 + focus()，否则聊天框打不进字。
+ * 兜底：托盘「点她不抢前台焦点」可以一键回到老行为（写 settings.json: clickStealFocus=true）。
+ */
+function stealsFocus() {
+  return readSettings().clickStealFocus === true
+}
+
+function applyFocusPolicy() {
+  if (!win || win.isDestroyed()) return
+  const steal = stealsFocus()
+  keyboardWanted = false
+  try { win.setFocusable(steal) } catch (e) {}
+  bootLog('焦点策略：' + (steal ? '点她会激活窗口（旧行为）' : '点她不抢前台（WS_EX_NOACTIVATE）'))
+}
+
+/** 文字输入框拿到 / 失去 DOM 焦点时，临时切换「这个窗口能不能被激活」 */
+function setKeyboardFocus(on) {
+  if (!win || win.isDestroyed()) return
+  if (stealsFocus()) return // 旧行为：整窗一直可激活，不用临时切
+  const want = !!on
+  if (want === keyboardWanted) return
+  keyboardWanted = want
+  try { win.setFocusable(want) } catch (e) {}
+  if (want) { try { win.focus() } catch (e) {} }
+  bootLog('键盘焦点：' + (want ? '临时可激活（点了输入框）' : '还给桌面（不抢前台）'))
+}
+
 async function poll() {
   if (!win || win.isDestroyed() || !win.isVisible()) return
   const p = screen.getCursorScreenPoint()
@@ -314,6 +354,9 @@ function createMain() {
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setIgnoreMouseEvents(true, { forward: true })
   win.setMenuBarVisibility(false)
+  // 点她不抢前台（见 applyFocusPolicy）：默认 WS_EX_NOACTIVATE，输入框才临时可激活
+  applyFocusPolicy()
+  win.on('blur', () => { if (keyboardWanted) setKeyboardFocus(false) })
 
   const wa = screen.getPrimaryDisplay().workArea
   if (FULLSCREEN_PRIMARY) {
@@ -331,6 +374,8 @@ function createMain() {
   })
   win.webContents.on('did-finish-load', () => {
     failCount = 0
+    // 页面重新加载后先恢复矩形，等它上报新形状（否则会沿用上一版的裁剪区域）
+    try { win.setShape([]) } catch (e) {}
     win.webContents.executeJavaScript('window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(' + lowPower + ')').catch(() => {})
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 1200)
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 3000)
@@ -355,6 +400,30 @@ function createMain() {
     }
   })
   win.on('closed', () => { win = null })
+
+  // 页面：文字输入框拿到焦点时临时要键盘（否则点她不抢前台 + 打字打不进去）
+  ipcMain.on('want-keyboard', (_e, on) => setKeyboardFocus(!!on))
+
+  /**
+   * 页面：窗口形状（0.6.2）。
+   *
+   * 铺满主屏的透明窗口会被 Windows 当成「把下面的窗口盖住了」——DSH 的 Chromium
+   * 判定自己遮挡就停止出帧，表现成「进度/滚动冻住，点一下才追上来」。
+   * 页面上报「她 + 可见面板」的矩形，这里用 setShape 把窗口真正收窄：
+   * 区域外既不画也不收鼠标，DSH 就不会被盖住。
+   * 关掉的办法：settings.json 里写 {"noWindowShape": true}。
+   */
+  ipcMain.on('window-shape', (_e, rects) => {
+    if (!win || win.isDestroyed()) return
+    if (readSettings().noWindowShape === true) return
+    try {
+      if (!Array.isArray(rects)) rects = []
+      win.setShape(rects)
+      if (!shapeLogged) { shapeLogged = true; bootLog('窗口形状：已启用（' + rects.length + ' 块）') }
+    } catch (e) {
+      bootLog('setShape 失败：' + (e && e.message))
+    }
+  })
 
   // 拖动：页面里按下她 → 交给主进程搬窗口（拖动期间用 16ms 快速轮询，跟手）
   ipcMain.on('drag-start', async (_e, at) => {
@@ -682,6 +751,8 @@ function createBall() {
     skipTaskbar: true,
     show: false,
     alwaysOnTop: true,
+    // 小球同理：点它只是「展开」，不该把前台抢过去（玩游戏时点一下就被切出去）
+    focusable: false,
     // ⚠️ 小球也必须挂 preload：它是靠 window.dshpetBridge 把点击/拖动报回来的，
     // 不挂就等于「小球点不动、拖不了」（写完先自查发现的）
     webPreferences: { contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
@@ -788,6 +859,12 @@ function createTray() {
             if (win) win.webContents.executeJavaScript('window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(' + lowPower + ')').catch(() => {})
           },
         },
+        {
+          label: '点她不抢前台焦点（不打断 DSH / 游戏）',
+          type: 'checkbox',
+          checked: !stealsFocus(),
+          click: (mi) => toggleFocusSteal(!mi.checked),
+        },
         { label: '打开 DSH 界面', click: () => openDsh() },
         { label: linkOff ? '连接 DSH：已关闭（点我打开）' : '连接 DSH：自动（点我关掉）',
           click: () => toggleLink() },
@@ -855,6 +932,24 @@ function toggleLink() {
   }
 }
 
+/**
+ * 托盘开关：「点她抢前台焦点」——默认关（= 不抢）。
+ * 为什么留这个开关：不抢焦点靠的是 Windows 窗口样式（WS_EX_NOACTIVATE），
+ * 万一某个输入法/某个软件因此不认我们的输入，一键就能回到老行为，不用重装外壳。
+ */
+function toggleFocusSteal(steal) {
+  const cfg = readSettings()
+  cfg.clickStealFocus = !!steal
+  try {
+    fs.mkdirSync(path.dirname(settingsPath()), { recursive: true })
+    fs.writeFileSync(settingsPath(), JSON.stringify(cfg, null, 2))
+  } catch (e) {
+    bootLog('写 settings.json 失败：' + (e && e.message))
+  }
+  applyFocusPolicy()
+  petSay(steal ? '好，点我会切到最前面' : '好，点我不抢前台啦')
+}
+
 function resetPos() {
   if (!win) return
   const wa = screen.getPrimaryDisplay().workArea
@@ -908,7 +1003,9 @@ if (!gotLock) {
     try {
       if (win && !win.isDestroyed()) {
         if (collapsed) expand()
-        win.show()
+        // show() 会抢前台；点不抢焦点的窗口用 showInactive，只把窗口提上来
+        if (stealsFocus()) win.show()
+        else win.showInactive()
         win.setAlwaysOnTop(true, 'screen-saver')
       }
     } catch (e) {}

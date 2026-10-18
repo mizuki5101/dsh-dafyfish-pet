@@ -136,8 +136,6 @@ function copyAssets() {
   const copy = (from, to) => {
     fs.mkdirSync(to, { recursive: true })
     for (const name of fs.readdirSync(from)) {
-      // 鲸鱼娘那套原模型不拷（我们只做大肥鱼，省 2MB 和一堆混淆）
-      if (name.startsWith('c_0120')) continue
       const a = path.join(from, name)
       const b = path.join(to, name)
       const s = fs.statSync(a)

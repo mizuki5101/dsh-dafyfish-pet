@@ -367,6 +367,44 @@ console.log('\n【7】权重表 ↔ switch 分支 一致性')
   ok('有自定义态', S.indexOf(q + 'custom' + q) >= 0)
 }
 
+// ——— 10. 详细面板的「实际权重」表（0.6.0） ———
+console.log('\n【10】实际权重表 weightMatrix（详细面板最右的「实际」列）')
+{
+  const base = [['glance', 8], ['express', 24], ['mutter', 16], ['nod', 6]]
+  const M = R.weightMatrix(base, null)
+  ok('常态档取主表', M.glance.normal === 8 && M.express.normal === 24, M.glance)
+  ok('活泼档用专属表（glance 6 / express 26）', M.glance.lively === 6 && M.express.lively === 26, M.glance)
+  ok('发呆档用专属表（glance 24 / express 22）', M.glance.drowsy === 24 && M.express.drowsy === 22, M.glance)
+  ok('专属表里没有 nod → 发呆档为 null（面板显示 —）', M.nod.drowsy === null && M.nod.normal === 6, M.nod)
+  ok('每行都带 name 与三档字段', M.glance.name === 'glance' && ('normal' in M.glance) && ('lively' in M.glance) && ('drowsy' in M.glance))
+
+  const h = R.weightMatrix(base, { glance: 0.5, nod: 0 })
+  ok('倍数按档各自相乘（glance 0.5 → 4 / 3 / 12）', h.glance.normal === 4 && h.glance.lively === 3 && h.glance.drowsy === 12, h.glance)
+  ok('倍数 0 保留为 0（面板要说「已关掉」，不是「不存在」）', h.nod.normal === 0 && M.nod.normal === 6, { h: h.nod, m: M.nod })
+  ok('负数倍数按 0 处理', R.weightMatrix(base, { glance: -1 }).glance.normal === 0)
+  ok('未知键不影响别人（面板拼错不该清零）', R.weightMatrix(base, { nope: 0.2 }).glance.normal === 8)
+
+  const w = R.weightsOf({ mood: 'lively' }, base, null, { express: 1.5 })
+  const e = w.find((x) => x[0] === 'express')
+  ok('weightMatrix 与抽签表 weightsOf 数值一致', !!e && e[1] === 39 && R.weightMatrix(base, { express: 1.5 }).express.lively === 39, e)
+
+  const tbl = Array.from((/const IDLE_TABLE = \[([\s\S]*?)\n  \]/.exec(src) || ['', ''])[1].matchAll(/\['([A-Za-z]+)'/g)).map((x) => x[1])
+  const tuneKeys = Array.from((/const TUNE_BEHAVIORS = \[([\s\S]*?)\n  \]/.exec(src) || ['', ''])[1].matchAll(/\['([A-Za-z]+)'/g)).map((x) => x[1])
+  ok('能抠出 IDLE_TABLE 与 TUNE_BEHAVIORS', tbl.length >= 12 && tuneKeys.length >= 12, { tbl: tbl.length, tuneKeys: tuneKeys.length })
+  ok('面板里的每一项都在 IDLE_TABLE 里', tuneKeys.every((k) => tbl.includes(k)), tuneKeys.filter((k) => !tbl.includes(k)))
+  ok('IDLE_TABLE 的每一项都能在面板里调', tbl.every((k) => tuneKeys.includes(k)), tbl.filter((k) => !tuneKeys.includes(k)))
+  const full = R.weightMatrix(tbl.map((k) => [k, 1]), null)
+  ok('矩阵覆盖全部行为（常态都有数）', tbl.every((k) => full[k] && full[k].normal === 1), tbl.filter((k) => !(full[k] && full[k].normal === 1)))
+  ok('小戏只在常态档进池（活泼/发呆没有 script）', !!full.script && full.script.lively === null && full.script.drowsy === null, full.script)
+
+  const i0 = src.indexOf('function openTuningPanel()')
+  const i1 = src.indexOf('function renderPane(', i0)
+  const body = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : ''
+  ok('详细面板真的接了 weightMatrix（不是只加了函数）', body.indexOf('weightMatrix') >= 0)
+  ok('详细面板有「实际」列（dshp-tune-act）', body.indexOf('dshp-tune-act') >= 0)
+  ok('CSS 有 .dshp-tune-act 样式', src.indexOf('.dshp-tune-row .dshp-tune-act{') >= 0)
+}
+
 console.log('\n' + '='.repeat(52))
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项')
 process.exit(fail === 0 ? 0 : 1)
