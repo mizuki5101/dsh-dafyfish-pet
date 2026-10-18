@@ -708,34 +708,84 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-hint{opacity:.5;font-size:calc(10.5px * var(--dshp-ps));margin-top:calc(6px * var(--dshp-ps));line-height:1.5;white-space:pre-wrap}
 .dshp-label{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:11.5px}
 .dshp-label input[type=range]{flex:1;accent-color:var(--dshp-accent)}
-/* 详细频率面板（设置「灵动度」里的「详细面板…」）：模态，继承 root 的主题变量 */
+/* 详细频率面板（设置里的「详细面板…」）：模态，继承 root 的主题变量。
+   透明窗口里不给面板加 backdrop-filter / 大 box-shadow —— 会采样出灰边（交接文档 §1.4）。 */
 .dshp-tuning-mask{position:fixed;inset:0;z-index:2147483200;background:rgba(8,10,20,.28);
-  -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);pointer-events:auto}
+  pointer-events:auto}
 .dshp-tuning{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483201;
-  width:min(calc(560px * var(--dshp-ps)),92vw);max-height:84vh;overflow:auto;overscroll-behavior:contain;
+  width:min(calc(660px * var(--dshp-ps)),94vw);max-height:86vh;overflow:auto;overscroll-behavior:contain;
   pointer-events:auto;background:var(--dshp-bg);color:var(--dshp-fg);
   border:1px solid var(--dshp-line);border-radius:calc(16px * var(--dshp-ps));
   padding:calc(16px * var(--dshp-ps)) calc(18px * var(--dshp-ps)) calc(12px * var(--dshp-ps));
-  box-shadow:0 24px 70px rgba(10,14,30,.36);font-size:calc(12px * var(--dshp-ps))}
+  font-size:calc(12px * var(--dshp-ps))}
 .dshp-tuning h3{margin:0 0 calc(3px * var(--dshp-ps));font-size:calc(15px * var(--dshp-ps));
   display:flex;align-items:center;gap:8px}
 .dshp-tuning h3 .dshp-close{position:static;margin-left:auto}
 .dshp-tune-sec{margin:calc(12px * var(--dshp-ps)) 0 calc(3px * var(--dshp-ps));
   font-size:calc(10.5px * var(--dshp-ps));font-weight:600;opacity:.55;letter-spacing:.06em}
 .dshp-tune-note{font-size:calc(10.5px * var(--dshp-ps));opacity:.5;line-height:1.5;margin:0 0 4px}
-.dshp-tune-row{display:flex;align-items:center;gap:8px;margin:2px 0;min-height:calc(24px * var(--dshp-ps))}
+.dshp-tune-tabs{display:flex;gap:6px;margin:calc(6px * var(--dshp-ps)) 0 calc(4px * var(--dshp-ps))}
+.dshp-tune-tab{border:1px solid var(--dshp-line);background:transparent;color:inherit;font:inherit;
+  border-radius:999px;padding:calc(3px * var(--dshp-ps)) calc(13px * var(--dshp-ps));cursor:pointer;
+  font-size:calc(11.5px * var(--dshp-ps));opacity:.8;transition:background .12s,opacity .12s}
+.dshp-tune-tab:hover{background:rgba(124,92,255,.12);opacity:1}
+.dshp-tune-tab.dshp-on{background:var(--dshp-accent);border-color:transparent;color:#fff;opacity:1}
+.dshp-tune-status{font-size:calc(10.5px * var(--dshp-ps));opacity:.62;margin:calc(2px * var(--dshp-ps)) 0 calc(5px * var(--dshp-ps));
+  font-variant-numeric:tabular-nums}
+.dshp-tune-bar{display:flex;height:calc(10px * var(--dshp-ps));min-height:8px;border-radius:999px;overflow:hidden;
+  background:rgba(124,92,255,.09);margin:calc(2px * var(--dshp-ps)) 0 calc(8px * var(--dshp-ps))}
+.dshp-tune-seg{height:100%;min-width:2px;transition:flex-basis .12s ease;cursor:help}
+.dshp-tune-row{display:flex;align-items:center;gap:calc(7px * var(--dshp-ps));margin:2px 0;min-height:calc(25px * var(--dshp-ps))}
 .dshp-tune-row > span:first-child{flex:0 0 calc(104px * var(--dshp-ps));font-size:calc(11.5px * var(--dshp-ps))}
-.dshp-tune-row input[type=range]{flex:1;accent-color:var(--dshp-accent);min-width:80px}
-.dshp-tune-row .dshp-tune-val{flex:0 0 calc(42px * var(--dshp-ps));text-align:right;opacity:.7;
+.dshp-tune-row .dshp-tune-name{flex:0 0 calc(112px * var(--dshp-ps));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
+.dshp-tune-row input[type=range]{flex:1;accent-color:var(--dshp-accent);min-width:64px}
+.dshp-tune-row .dshp-tune-val{flex:0 0 calc(40px * var(--dshp-ps));text-align:right;opacity:.7;
   font-size:calc(10.5px * var(--dshp-ps));font-variant-numeric:tabular-nums}
-/* 「实际」列：把滑杆的倍数换算成真正进池的权重 / 秒数（0.6.0）。窄到放不下时先让位给滑杆。 */
-.dshp-tune-row .dshp-tune-act{flex:0 0 calc(86px * var(--dshp-ps));text-align:right;opacity:.62;
+.dshp-tune-row .dshp-tune-share{flex:0 0 calc(54px * var(--dshp-ps));text-align:right;font-weight:700;
+  font-size:calc(11px * var(--dshp-ps));font-variant-numeric:tabular-nums}
+.dshp-tune-row .dshp-tune-gap{flex:0 0 calc(84px * var(--dshp-ps));text-align:right;opacity:.6;
   font-size:calc(10px * var(--dshp-ps));font-variant-numeric:tabular-nums;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
-@media (max-width:520px){.dshp-tune-row .dshp-tune-act{display:none}}
+.dshp-tune-row .dshp-tune-mute{flex:0 0 calc(28px * var(--dshp-ps));min-height:calc(24px * var(--dshp-ps));
+  border:none;background:transparent;border-radius:calc(6px * var(--dshp-ps));color:inherit;cursor:pointer;
+  font-size:calc(12px * var(--dshp-ps));padding:0;opacity:.6;line-height:1}
+.dshp-tune-row .dshp-tune-mute:hover{opacity:1;background:rgba(124,92,255,.12)}
+.dshp-tune-row .dshp-tune-mute:disabled{opacity:.2;cursor:default}
+.dshp-tune-row.is-missing{opacity:.34}
+.dshp-tune-row.is-muted .dshp-tune-name{opacity:.5}
+.dshp-tune-head{display:flex;align-items:center;gap:calc(7px * var(--dshp-ps));padding:0 2px calc(2px * var(--dshp-ps));
+  font-size:calc(9.5px * var(--dshp-ps));opacity:.45}
+.dshp-tune-head .dshp-tune-name{flex:0 0 calc(112px * var(--dshp-ps))}
+.dshp-tune-head .dshp-tune-slider-h{flex:1;min-width:64px}
+.dshp-tune-head .dshp-tune-val{flex:0 0 calc(40px * var(--dshp-ps));text-align:right}
+.dshp-tune-head .dshp-tune-share{flex:0 0 calc(54px * var(--dshp-ps));text-align:right}
+.dshp-tune-head .dshp-tune-gap{flex:0 0 calc(84px * var(--dshp-ps));text-align:right}
+.dshp-tune-head .dshp-tune-mute{flex:0 0 calc(28px * var(--dshp-ps))}
+.dshp-tune-interval{margin-bottom:calc(4px * var(--dshp-ps))}
+.dshp-tune-interval .dshp-tune-gap{flex:0 0 calc(132px * var(--dshp-ps))}
+.dshp-tune-script .dshp-tune-gap{flex:0 0 calc(74px * var(--dshp-ps))}
+.dshp-tune-adv{border-top:1px solid var(--dshp-line);margin-top:calc(10px * var(--dshp-ps));padding-top:calc(6px * var(--dshp-ps))}
+.dshp-tune-adv summary{cursor:pointer;font-size:calc(10.5px * var(--dshp-ps));opacity:.55;outline:none}
+.dshp-tune-adv summary:hover{opacity:.85}
+.dshp-tune-adv-row{display:flex;gap:8px;font-size:calc(10px * var(--dshp-ps));opacity:.55;line-height:1.6;
+  font-variant-numeric:tabular-nums}
+.dshp-tune-adv-row span:first-child{flex:0 0 calc(112px * var(--dshp-ps))}
+.dshp-tune-sim{display:none;white-space:pre-wrap;font-size:calc(10.5px * var(--dshp-ps));line-height:1.55;
+  margin:calc(6px * var(--dshp-ps)) 0;padding:calc(8px * var(--dshp-ps));border-radius:calc(8px * var(--dshp-ps));
+  background:rgba(124,92,255,.09);font-variant-numeric:tabular-nums}
+.dshp-tune-sim.dshp-on{display:block}
+@media (max-width:640px){.dshp-tune-row .dshp-tune-gap,.dshp-tune-head .dshp-tune-gap,.dshp-tune-interval .dshp-tune-gap{display:none}}
+@media (max-width:520px){.dshp-tune-row .dshp-tune-share,.dshp-tune-head .dshp-tune-share{display:none}}
 .dshp-tuning .dshp-row{margin-top:calc(10px * var(--dshp-ps))}
 .dshp-tuning::-webkit-scrollbar{width:6px}
 .dshp-tuning::-webkit-scrollbar-thumb{background:var(--dshp-line);border-radius:3px}
+/* 组成条悬停名：不用原生 title（非激活窗口里会时有时无）。tip 挂在 body 上，
+   拿不到 .dshp-root 的 --dshp-ps，所以这里带 fallback。 */
+.dshp-tune-tip{position:fixed;left:0;top:0;z-index:2147483300;display:none;max-width:calc(240px * var(--dshp-ps,1));
+  padding:calc(4px * var(--dshp-ps,1)) calc(7px * var(--dshp-ps,1));border-radius:calc(6px * var(--dshp-ps,1));
+  background:rgba(18,26,48,.94);color:#fff;font-size:calc(10.5px * var(--dshp-ps,1));line-height:1.4;
+  white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.dshp-tune-tip.dshp-on{display:block}
 
 /* ——— HUD：右键弹出的「余额 / 本轮消耗 / 峰谷计价」面板 ———
    主人要求：右键不再是设置菜单，而是这个框；信息要醒目、要盖在最上层、
@@ -1992,6 +2042,85 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
 
     /**
+     * 详细面板（2026-10-18）：某一档的「进池份额 + 平均每次间隔」。
+     * 纯函数：baseTable = IDLE_TABLE；clipMap = IDLE_CLIP；clipChance = CFG.idleClipChance。
+     * gapSec 按该档原始节拍算；面板会再乘 idleIntervalScale / biasFactor。
+     */
+    function shareRows(tier, baseTable, scale, clipMap, clipChance) {
+      var m = MOODS[tier] || MOODS.normal
+      var names = []
+      var baseMap = {}
+      var i, k
+      for (i = 0; i < (baseTable || []).length; i++) {
+        k = baseTable[i][0]
+        if (!Object.prototype.hasOwnProperty.call(baseMap, k)) { baseMap[k] = baseTable[i][1]; names.push(k) }
+      }
+      var tierMap = m.weights || baseMap
+      if (m.weights) {
+        for (k in m.weights) {
+          if (Object.prototype.hasOwnProperty.call(m.weights, k) && names.indexOf(k) < 0) names.push(k)
+        }
+      }
+      var p = (clipChance == null ? 0.35 : Number(clipChance)) * (m.clip == null ? 1 : m.clip)
+      if (!isFinite(p)) p = 0.35
+      p = clampNum(p, 0, 1)
+      var rows = [], total = 0
+      for (i = 0; i < names.length; i++) {
+        k = names[i]
+        var base = tierMap[k]
+        var missing = base == null
+        var w = missing ? 0 : (Number(base) || 0)
+        var user = scaleOf(scale, k)
+        if (!isFinite(user) || user < 0) user = 0
+        var gate = (clipMap && clipMap[k]) ? p : 1
+        var eff = w * user * gate
+        rows.push({ name: k, base: missing ? null : w, user: user, gate: gate, effective: eff, missing: missing, share: 0, gapSec: null })
+        total += eff
+      }
+      var avgInter = (m.inter[0] + m.inter[1]) / 2
+      var avgCluster = (m.cluster[0] + m.cluster[1]) / 2
+      var perEvent = (avgInter + (avgCluster - 1) * ((GAP[0] + GAP[1]) / 2)) / avgCluster
+      for (i = 0; i < rows.length; i++) {
+        rows[i].share = total > 0 ? rows[i].effective / total : 0
+        rows[i].gapSec = rows[i].share > 0 ? perEvent / rows[i].share : null
+      }
+      return { tier: tier, total: total, perEvent: perEvent, gate: p, rows: rows }
+    }
+
+    /**
+     * 详细面板的「模拟 10 分钟」：按份额抽 draws 次，返回计数。
+     * 只模拟抽签，不含 agent 忙 / 正在演 / 小戏占用的时间。
+     */
+    function simulate(tier, baseTable, scale, clipMap, clipChance, seconds, rand, opts) {
+      var info = shareRows(tier, baseTable, scale, clipMap, clipChance)
+      opts = opts || {}
+      var per = info.perEvent
+      var iscale = Number(opts.intervalScale)
+      if (isFinite(iscale) && iscale > 0) per *= iscale
+      var bias = Number(opts.bias)
+      if (isFinite(bias) && bias > 0) per *= bias
+      var sec = Number(seconds)
+      if (!isFinite(sec) || sec <= 0) sec = 600
+      var draws = Math.max(1, Math.round(sec / Math.max(0.05, per)))
+      var rows = info.rows.filter(function (r) { return r.effective > 0 })
+      var total = 0, i
+      for (i = 0; i < rows.length; i++) total += rows[i].effective
+      var counts = {}
+      for (i = 0; i < rows.length; i++) counts[rows[i].name] = 0
+      var rnd = typeof rand === 'function' ? rand : Math.random
+      if (total > 0) {
+        for (i = 0; i < draws; i++) {
+          var x = rnd() * total
+          for (var j = 0; j < rows.length; j++) {
+            x -= rows[j].effective
+            if (x <= 0) { counts[rows[j].name]++; break }
+          }
+        }
+      }
+      return { tier: tier, seconds: sec, draws: draws, perEventSec: per, counts: counts, totalWeight: total }
+    }
+
+    /**
      * 权重版轮盘赌。mood 档有自己的权重就用它，否则退回主权重表。
      * 返回行为名；表为空时返回 fallback。
      */
@@ -2041,6 +2170,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       weightsOf: weightsOf,
       tierTable: tierTable,
       weightMatrix: weightMatrix,
+      shareRows: shareRows,
+      simulate: simulate,
       noteBehavior: noteBehavior,
       noteActivity: noteActivity,
       maybeDrowsy: maybeDrowsy,
@@ -3372,9 +3503,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       wireInteractions()
       connectSSE()
       startLoops()
-      // 窗口形状：先立刻同步一次，之后 500ms 兜底一次（面板开合/气泡/换尺寸都会主动调）
-      syncShape()
-      setInterval(syncShape, 500)
       syncAudioMeter() // 默认开；关掉时不启 PowerShell 轮询
       log(
         `就绪：${manifest.displayName} · 动作 ${Object.keys(manifest.motions || {}).length} 个 · 可用表情 ${Object.keys(EXPR).length} 个`,
@@ -3742,113 +3870,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     panel.style.setProperty('--dshp-shift-y', Math.round(dy) + 'px')
   }
 
-  /**
-   * 「窗口形状」：让外壳窗口**真正只占她那一块**（0.6.2）。
-   *
-   * 为什么非做不可：外壳窗口铺满主屏，Windows 把它当成「把 DSH 盖住了」；
-   * DSH 的 Chromium 一旦判定自己被遮挡就**停止出帧** —— 进度/滚动看着「冻住」，
-   * 点一下才追上来（0.6.1 修的是焦点，没修这个；实测杀掉外壳画面立刻恢复）。
-   * `win.setShape()` 让窗口在给定矩形之外**既不画、也不收鼠标**，
-   * 于是 DSH 没被盖住，就不会被判定遮挡。
-   * 区域 = 「她 + 当前可见的面板」；详细频率面板是模态、铺满全屏，直接恢复整窗。
-   */
-  const SHAPE_PARTS = [
-    ['.dshp-root', 'root'],
-    ['.dshp-tab', 'fixed'],
-    ['.dshp-bubble', 'fixed'],
-    ['.dshp-dock', 'dock'],
-    ['.dshp-composer', 'fixed'],
-    ['.dshp-menu', 'fixed'],
-    ['.dshp-hud', 'fixed'],
-  ]
-  let shapeKey = ''
-  /** 上一次发给外壳的矩形（拖动时按位移平移，不去读 DOM —— 读样式会强制回流，拖动会卡） */
-  let shapeRects = []
-  function shapeSend(rects) {
-    shapeRects = rects
-    window.dshpetBridge.shape(rects.map((q) => ({ x: q.x, y: q.y, width: q.width, height: q.height })))
-  }
-  function syncShape() {
-    const br = window.dshpetBridge
-    if (!br || typeof br.shape !== 'function') return
-    if (!ui || !ui.root) return // 还没建好 UI：别急着把窗口裁成 1×1
-    // 模态面板的遮罩铺满全屏，必须整窗可点
-    if (ui && ui.tuning) {
-      if (shapeKey !== 'modal') { shapeKey = 'modal'; shapeRects = []; br.shape([]) }
-      return
-    }
-    const W = Math.max(1, window.innerWidth)
-    const H = Math.max(1, window.innerHeight)
-    const rects = []
-    for (const [sel, tag] of SHAPE_PARTS) {
-      const el = document.querySelector(sel)
-      if (!el) continue
-      const cs = getComputedStyle(el)
-      if (cs.display === 'none' || cs.visibility === 'hidden') continue
-      if (Number(cs.opacity) === 0) continue
-      const b = el.getBoundingClientRect()
-      if (b.width < 2 || b.height < 2) continue
-      const x = Math.max(0, Math.round(b.left) - 8)
-      const y = Math.max(0, Math.round(b.top) - 8)
-      const w = Math.min(W, Math.round(b.right) + 8) - x
-      const h = Math.min(H, Math.round(b.bottom) + 8) - y
-      if (w < 2 || h < 2) continue
-      rects.push({ x: x, y: y, width: w, height: h, tag: tag })
-    }
-    // 藏起来了 / 一个能画的都没有 → 给 1×1 空形状，别整窗盖着别的程序
-    if (!rects.length) rects.push({ x: 0, y: 0, width: 1, height: 1, tag: 'fixed' })
-    const key = rects.map((q) => q.x + ',' + q.y + ',' + q.width + ',' + q.height).join(';')
-    if (key === shapeKey) return
-    shapeKey = key
-    shapeSend(rects)
-  }
-
-  /**
-   * 拖动中的「跟手形状」（0.6.3）。
-   *
-   * 拖动时她是**在窗口里挪**（不是搬窗口），形状必须一起挪，否则一拖快，
-   * 她就有一部分落到形状外 —— 被裁掉、露出下面 DSH 的白底（主人说的「白框」），
-   * 要等 500ms 兜底才补回来。
-   * 这里**不读 DOM**（getBoundingClientRect 会强制回流，拖动会一格一格），
-   * 直接按位移平移缓存里的矩形：root（她）和 dock（跟着她走）要挪，
-   * 气泡/菜单/输入框拖的时候不跟手，保持原矩形即可。
-   */
-  function shiftShape(dx, dy) {
-    if (!shapeRects.length || (!dx && !dy)) return
-    const W = Math.max(1, window.innerWidth)
-    const H = Math.max(1, window.innerHeight)
-    const next = [] // 缓存：不加余量，避免每帧叠加
-    const send = [] // 发给外壳：拖动时给她留一圈余量，pointermove 稀疏时也不露白
-    for (const q of shapeRects) {
-      if (q.tag !== 'root' && q.tag !== 'dock') {
-        next.push(q)
-        send.push({ x: q.x, y: q.y, width: q.width, height: q.height })
-        continue
-      }
-      const x = Math.max(0, q.x + dx)
-      const y = Math.max(0, q.y + dy)
-      const w = Math.min(W, q.x + q.width + dx) - x
-      const h = Math.min(H, q.y + q.height + dy) - y
-      if (w < 2 || h < 2) continue
-      next.push({ x: x, y: y, width: w, height: h, tag: q.tag })
-      const pad = q.tag === 'root' ? 40 : 16
-      const sx = Math.max(0, x - pad)
-      const sy = Math.max(0, y - pad)
-      send.push({
-        x: sx,
-        y: sy,
-        width: Math.min(W, x + w + pad) - sx,
-        height: Math.min(H, y + h + pad) - sy,
-      })
-    }
-    if (!next.length) return
-    const key = send.map((q) => q.x + ',' + q.y + ',' + q.width + ',' + q.height).join(';')
-    if (key === shapeKey) return
-    shapeKey = key
-    shapeRects = next
-    window.dshpetBridge.shape(send)
-  }
-
   function clampPanels() {
     // 注意：**气泡和工具栏不走 placePanel**。它们是 fixed 视口定位、由各自的
     // placeBubble()/placeDock() 摆（那两个只依赖"她的位置 + 视口"，不会读到自己
@@ -3859,7 +3880,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     placePanel(ui && ui.hud && ui.hud.el)
     placeBubble()
     placeDock()
-    syncShape()
   }
 
   function fitModel(explicitHeight) {
@@ -3952,7 +3972,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         y1: +box.y1.toFixed(3),
       },
     }
-    syncShape() // 她的大小变了 → 窗口形状跟着变
     return lastView
   }
 
@@ -4330,6 +4349,97 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const my = Math.floor(((clientY - r.top) / r.height) * mask.h)
     if (mx < 0 || my < 0 || mx >= mask.w || my >= mask.h) return false
     return mask.grid[my * mask.w + mx] === 1
+  }
+
+  /** 命中窗用：她身体的紧包围盒（视口坐标）。没有掩码时退回 stage 矩形 */
+  function hitBounds() {
+    try {
+      const stage = app && app.view && app.view.parentElement
+      if (!stage || !ui || !ui.root) return null
+      if (ui.root.classList.contains('dshp-hidden')) return null
+      const r = stage.getBoundingClientRect()
+      if (!r.width || !r.height) return null
+      const b = mask.bbox
+      if (!b) return { x: r.left, y: r.top, w: r.width, h: r.height }
+      return {
+        x: r.left + r.width * b.x0,
+        y: r.top + r.height * b.y0,
+        w: Math.max(1, r.width * (b.x1 - b.x0)),
+        h: Math.max(1, r.height * (b.y1 - b.y0)),
+      }
+    } catch (e) { return null }
+  }
+
+  /**
+   * 命中窗用：把 alpha 掩码粗化成一组矩形（相对 hitBounds 的左上角）。
+   * 只用于 setShape，让透明区域继续穿透；没有掩码时返回 null，主进程退回整块 bbox。
+   */
+  function hitRects() {
+    try {
+      if (!mask.grid || !mask.bbox) return null
+      const hb = hitBounds()
+      if (!hb) return null
+      const GW = 32, GH = 32
+      const nw = mask.bbox.x1 - mask.bbox.x0
+      const nh = mask.bbox.y1 - mask.bbox.y0
+      const bw = hb.w
+      const bh = hb.h
+      if (!(nw > 0) || !(nh > 0) || !(bw > 0) || !(bh > 0)) return null
+      const cells = []
+      for (let gy = 0; gy < GH; gy++) {
+        const cy0 = Math.floor(mask.bbox.y0 * mask.h + (gy / GH) * nh * mask.h)
+        const cy1 = Math.max(cy0 + 1, Math.floor(mask.bbox.y0 * mask.h + ((gy + 1) / GH) * nh * mask.h))
+        const row = []
+        for (let gx = 0; gx < GW; gx++) {
+          const cx0 = Math.floor(mask.bbox.x0 * mask.w + (gx / GW) * nw * mask.w)
+          const cx1 = Math.max(cx0 + 1, Math.floor(mask.bbox.x0 * mask.w + ((gx + 1) / GW) * nw * mask.w))
+          let hit = 0, total = 0
+          for (let y = cy0; y < cy1; y += 2) {
+            for (let x = cx0; x < cx1; x += 2) {
+              total++
+              if (mask.grid[y * mask.w + x]) hit++
+            }
+          }
+          row.push(total > 0 && hit / total >= 0.1)
+        }
+        cells.push(row)
+      }
+      const rects = []
+      let active = new Map()
+      for (let gy = 0; gy < GH; gy++) {
+        const runs = []
+        let start = -1
+        for (let gx = 0; gx <= GW; gx++) {
+          const on = gx < GW && cells[gy][gx]
+          if (on && start < 0) start = gx
+          if (!on && start >= 0) { runs.push([start, gx]); start = -1 }
+        }
+        const next = new Map()
+        for (const [a, b] of runs) {
+          const key = a + ':' + b
+          const prev = active.get(key)
+          if (prev) {
+            prev.h += bh / GH
+            next.set(key, prev)
+          } else {
+            const r = { x: (a / GW) * bw, y: (gy / GH) * bh, w: ((b - a) / GW) * bw, h: bh / GH }
+            rects.push(r)
+            next.set(key, r)
+          }
+        }
+        active = next
+      }
+      if (rects.length > 500) return null
+      const pad = 1.5
+      return rects.map((r) => ({
+        x: Math.max(0, r.x - pad),
+        y: Math.max(0, r.y - pad),
+        w: r.w + pad * 2,
+        h: r.h + pad * 2,
+      }))
+    } catch (e) {
+      return null
+    }
   }
 
   /**
@@ -4845,7 +4955,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         try {
           placeBubble()
         } catch (e) {}
-        syncShape() // 气泡出现 → 形状要把气泡那块让出来
         if (timer) clearTimeout(timer)
         const ttl = opts.sticky ? 0 : opts.ttl != null ? opts.ttl : CFG.bubbleTtlMs
         if (ttl > 0) timer = setTimeout(() => api.hide(), ttl)
@@ -4860,7 +4969,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         workHold = false
         buffer = ''
         el.classList.remove('dshp-on')
-        syncShape()
       },
       get visible() {
         return el.classList.contains('dshp-on')
@@ -4976,8 +5084,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       root.style.top = ny + 'px'
       root.style.right = 'auto'
       root.style.bottom = 'auto'
-      // 窗口形状跟着她一起挪（否则拖快时她被裁掉一块，露出下面的白底）
-      try { shiftShape(drag.vx, drag.vy) } catch (e) {}
     }
 
     document.addEventListener(
@@ -5045,8 +5151,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           poke(e.clientX, e.clientY)
         }
         start = null
-        // 松手后再按 DOM 实测一次形状（拖动期间是按位移平移的，可能有几像素的余量）
-        try { syncShape() } catch (err) {}
       },
       true,
     )
@@ -5054,7 +5158,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     document.addEventListener('pointercancel', () => {
       dragging = false
       start = null
-      try { syncShape() } catch (err) {}
     })
 
     document.addEventListener(
@@ -5106,21 +5209,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       e.stopPropagation()
       closePanels()
     })
-
-    /**
-     * 键盘焦点：外壳窗口平时**不抢前台**（点她不会把 DSH / 游戏挤到后台，见外壳的 applyFocusPolicy），
-     * 代价是键盘事件进不来。所以只在「文字输入框」拿到焦点时，临时把窗口变成可激活。
-     * 只认文本框：滑杆/按钮不需要键盘，点它们不该把前台抢走。
-     */
-    const wantsKeyboard = (el) => !!el && !!el.tagName &&
-      (el.tagName === 'TEXTAREA' ||
-        (el.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|reset|file|color|image)$/i.test(el.type || '')) ||
-        el.isContentEditable === true)
-    const tellKeyboard = (on) => {
-      try { if (window.dshpetBridge && window.dshpetBridge.wantKeyboard) window.dshpetBridge.wantKeyboard(on) } catch (e) {}
-    }
-    document.addEventListener('focusin', (e) => { if (wantsKeyboard(e.target)) tellKeyboard(true) }, true)
-    document.addEventListener('focusout', (e) => { if (wantsKeyboard(e.target)) tellKeyboard(false) }, true)
 
     // 睡着时点菜单里的表情/动作：先走过场，再把这次点击放行。
     // 为什么在捕获阶段拦：按钮自己的 click 会立刻 act()/playClip，把过场顶掉。
@@ -5194,6 +5282,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 另外加了连击（短时间戳很多下会炸毛）和「摸头/戳腰」分区。
    */
   const pokeState = { times: [], softAt: 0, angerAt: 0 }
+  /** 诊断：最近一次戳（命中窗/点击测试用；不参与逻辑） */
+  let lastPokeInfo = null
 
   /**
    *
@@ -5438,6 +5528,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function poke(clientX, clientY) {
     abortIdleScript()
     if (ui.root.classList.contains('dshp-hidden')) return
+    lastPokeInfo = { at: performance.now(), x: clientX, y: clientY }
     // 睡着时戳她 = 叫醒：走「圈圈眼 + 害羞」过场，不播平常那套戳戳台词
     if (idle.sleep) {
       closePanels()
@@ -5530,25 +5621,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return expr
   }
 
-  /**
-   * 待机节奏的「三档」叫法 —— 详细面板和菜单状态行共用一套词。
-   * 数据源是 @idle-rhythm 的 idle.rhythm.mood：normal / lively / drowsy（见 MOODS）。
-   * 注意：这三档是她自己切的（互动→活泼、久不互动→发呆），不是设置页的「灵动度」。
-   */
-  function idleMoodLabel() {
-    if (idle.sleep) return '睡着'
-    const m = idle.rhythm && idle.rhythm.mood
-    return m === 'lively' ? '活泼' : m === 'drowsy' ? '发呆' : '常态'
-  }
-
-  /** 菜单顶上的状态行：档位会自己变（活泼/发呆），得跟着刷新 */
-  function refreshStatusLine() {
-    const el = ui && ui.menu && ui.menu.nowEl
-    if (!el || !el.isConnected) return
-    const t = menuStatusLine()
-    if (el.textContent !== t) el.textContent = t
-  }
-
   function menuStatusLine() {
     const parts = []
     parts.push(rig.user.face ? `${rig.user.face}（手动）` : faceLabel(rig.face))
@@ -5564,8 +5636,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (baseProps.length) parts.push('常态：' + baseProps.join(' + '))
     if (device.out) parts.push('手机已掏出')
     const st = agent.status === 'idle' ? '待机' : '干活中'
-    // 括号里是「待机节奏的三档」，会随互动自己变（不是设置页的灵动度）
-    return `${st} · 现在：` + parts.join(' · ') + '（' + idleMoodLabel() + '）'
+    return `${st} · 现在：` + parts.join(' · ')
   }
 
   /**
@@ -5882,7 +5953,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.root.classList.toggle('dshp-hidden', !!hidden)
     document.body.classList.toggle('dshp-pet-hidden', !!hidden)
     if (hidden) ui.bubble.hide()
-    syncShape()
     saveLayout({ hidden: !!hidden })
     if (shell.on) shell.post(hidden ? 'hidden' : 'shown')
   }
@@ -6104,16 +6174,33 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return isFinite(v) && v >= 0 ? v : 1
   }
 
+  /** 详细面板/诊断共用：某档的占比快照（纯读，不改状态） */
+  function tuningPreview(tier) {
+    const t = tier || (idle.rhythm && idle.rhythm.mood) || 'normal'
+    const fn = DSHPetIdleRhythm && DSHPetIdleRhythm.shareRows
+    if (typeof fn !== 'function') return null
+    const r = fn(t, IDLE_TABLE, idleWeightScale(), IDLE_CLIP, CFG.idleClipChance)
+    return {
+      tier: t, gate: r.gate, total: r.total, perEvent: r.perEvent,
+      rows: r.rows.map((x) => ({
+        name: x.name, base: x.base, missing: !!x.missing,
+        share: Math.round(x.share * 10000) / 10000,
+        gapSec: x.gapSec == null ? null : Math.round(x.gapSec * 100) / 100,
+      })),
+    }
+  }
+
   function closeTuningPanel() {
     if (!ui || !ui.tuning) return
     const t = ui.tuning
     ui.tuning = null
-    syncShape() // 模态结束 → 形状收回到「她 + 面板」
     // 通知外壳的「点击穿透」判定：模态结束，恢复按鼠标下方内容决定
     window.__DSHPET_MODAL__ = false
+    if (shell.on) shell.post('modal:off')
     try { window.removeEventListener('keydown', t.onKey, true) } catch (e) {}
     try { t.mask.remove() } catch (e) {}
     try { t.el.remove() } catch (e) {}
+    try { t.tip && t.tip.remove() } catch (e) {}
   }
 
   function openTuningPanel() {
@@ -6127,92 +6214,362 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     close.title = '关闭（Esc）'
     close.addEventListener('click', closeTuningPanel)
     head.append(close)
-    panel.append(head, $('div', 'dshp-tune-note', '改完立即生效、自动保存。100% = 默认；0% = 基本不出现；200% = 两倍。'))
-    panel.append($('div', 'dshp-tune-note', '最右「实际」列 = 真正进池的数值：待机行为按 常态 / 活泼 / 发呆 三档给（— = 该档本来就没这项），小戏与间隔只算常态档。'))
+    panel.append(head)
+    panel.append($('div', 'dshp-tune-note', '看「占比 / 约每」就够了。份额 100% = 默认；0% = 关掉；200% = 两倍。'))
 
-    const addSection = (title, note) => {
-      panel.append($('div', 'dshp-tune-sec', title))
-      if (note) panel.append($('div', 'dshp-tune-note', note))
+    const TIERS = [['normal', '常态'], ['lively', '活泼'], ['drowsy', '发呆']]
+    const TIER_LABEL = { normal: '常态', lively: '活泼', drowsy: '发呆' }
+    const BEHAVIOR_LABEL = {}
+    for (const [k, label] of TUNE_BEHAVIORS) BEHAVIOR_LABEL[k] = label
+    const CAT_COLOR = {
+      glance: '#7c8cf8', peer: '#7c8cf8', sway: '#67c7a3', express: '#f79ac0',
+      mutter: '#f6c76b', nod: '#67c7a3', tilt: '#67c7a3', stretch: '#67c7a3',
+      tailWag: '#67c7a3', script: '#9b8cff', hungry: '#f6a45b', nopang: '#f6a45b',
     }
-    // 「实际」列的换算：滑杆存的是倍数，进池的是「基础权重 × 倍数」。
-    // 只做显示、不改数据模型 —— CFG 里仍是倍数（100% 删键），老存档原样兼容。
-    const fmtW = (n) => (n == null ? '—' : String(Math.round(n * 10) / 10))
-    const actualText = (spec, v) => (typeof spec === 'function' ? spec(v) : String(spec == null ? '' : spec))
-    const scaledMap = (base, key, v) => {
-      const m = Object.assign({}, base && typeof base === 'object' ? base : {})
+
+    let tier = (idle.rhythm && idle.rhythm.mood) || 'normal'
+    const tabs = $('div', 'dshp-tune-tabs')
+    const status = $('div', 'dshp-tune-status')
+    const bar = $('div', 'dshp-tune-bar')
+    const body = $('div', 'dshp-tune-body')
+    panel.append(tabs, status, bar, body)
+
+    const rowRefs = new Map()
+    const scriptRefs = new Map()
+    let info = null
+    let intervalRef = null
+    let simEl = null
+    let advEl = null
+
+    const tip = $('div', 'dshp-tune-tip')
+    document.body.append(tip)
+    const tipHide = () => tip.classList.remove('dshp-on')
+    const tipShow = (text, e) => {
+      if (!text || !e) return
+      tip.textContent = text
+      tip.classList.add('dshp-on')
+      const pad = 8
+      const x = Math.max(pad, Math.min(e.clientX + 14, window.innerWidth - tip.offsetWidth - pad))
+      const y = Math.max(pad, Math.min(e.clientY + 16, window.innerHeight - tip.offsetHeight - pad))
+      tip.style.left = x + 'px'
+      tip.style.top = y + 'px'
+    }
+
+    const fmtPct = (v) => (v * 100).toFixed(1) + '%'
+    const fmtGap = (sec) => {
+      if (sec == null || !isFinite(sec) || sec <= 0) return '—'
+      if (sec < 60) return Math.max(1, Math.round(sec)) + ' 秒'
+      return (sec / 60).toFixed(sec < 600 ? 1 : 0) + ' 分钟'
+    }
+    const currentMood = () => (idle.rhythm && idle.rhythm.mood) || 'normal'
+    const intervalFactor = () => {
+      const s0 = Number(CFG.idleIntervalScale)
+      const s = isFinite(s0) && s0 > 0 ? s0 : 1
+      const b0 = (DSHPetIdleRhythm && DSHPetIdleRhythm.biasFactor) ? DSHPetIdleRhythm.biasFactor(CFG) : 1
+      const b = isFinite(b0) && b0 > 0 ? b0 : 1
+      return s * b
+    }
+    const gapFor = (row) => (row && row.gapSec != null ? row.gapSec * intervalFactor() : null)
+    const currentScale = (key) => {
+      const bmap = CFG.idleWeightScale && typeof CFG.idleWeightScale === 'object' ? CFG.idleWeightScale : {}
+      return Math.round(tuningScale(bmap, key) * 100)
+    }
+    const setScale = (key, v) => {
+      const m = CFG.idleWeightScale && typeof CFG.idleWeightScale === 'object' ? CFG.idleWeightScale : (CFG.idleWeightScale = {})
       if (v === 100) delete m[key]; else m[key] = v / 100
-      return m
+      persistCfg()
     }
-    // 三档权重：常态 / 活泼 / 发呆（缺该项显示 —，0 = 已关掉）
-    const weightCell = (key, v) => {
-      const fn = DSHPetIdleRhythm && DSHPetIdleRhythm.weightMatrix
-      if (typeof fn !== 'function') return '—'
-      const cell = fn(IDLE_TABLE, scaledMap(CFG.idleWeightScale, key, v))[key]
-      return cell ? [cell.normal, cell.lively, cell.drowsy].map(fmtW).join(' / ') : '—'
+    const scriptScale = (name) => {
+      const smap = CFG.scriptWeightScale && typeof CFG.scriptWeightScale === 'object' ? CFG.scriptWeightScale : {}
+      return Math.round(tuningScale(smap, name) * 100)
     }
-    const addRow = (label, min, max, step, value, fmt, onChange, opts) => {
+    const setScriptScale = (name, v) => {
+      const m = CFG.scriptWeightScale && typeof CFG.scriptWeightScale === 'object' ? CFG.scriptWeightScale : (CFG.scriptWeightScale = {})
+      if (v === 100) delete m[name]; else m[name] = v / 100
+      persistCfg()
+    }
+    const scriptTotal = () => IDLE_SCRIPTS.reduce((a, s) => a + s.weight * (scriptScale(s.name) / 100), 0)
+    const simHide = () => { if (simEl) { simEl.textContent = ''; simEl.classList.remove('dshp-on') } }
+
+    const buildTabs = () => {
+      tabs.textContent = ''
+      for (const [id, label] of TIERS) {
+        const b = $('button', 'dshp-tune-tab', label)
+        b.dataset.tier = id
+        b.title = id === 'normal'
+          ? '默认档：间隔 3.5~7.5 秒'
+          : id === 'lively'
+            ? '互动后进入：间隔 1.5~3.5 秒，连做 2~3 件'
+            : '久不互动进入：间隔 7~16 秒，动作更少'
+        b.addEventListener('click', () => {
+          if (tier === id) return
+          tier = id
+          simHide()
+          buildBody()
+          refresh()
+        })
+        tabs.append(b)
+      }
+    }
+
+    const buildBar = () => {
+      bar.textContent = ''
+      tipHide()
+      if (!info) return
+      for (const row of info.rows) {
+        if (!(row.share > 0)) continue
+        const seg = $('div', 'dshp-tune-seg')
+        seg.style.flex = String(row.share)
+        seg.style.background = CAT_COLOR[row.name] || '#7c5cff'
+        const text = (BEHAVIOR_LABEL[row.name] || row.name) + ' ' + fmtPct(row.share) + ' · 约 ' + fmtGap(gapFor(row))
+        seg.setAttribute('aria-label', text)
+        seg.addEventListener('pointerenter', (e) => tipShow(text, e))
+        seg.addEventListener('pointermove', (e) => tipShow(text, e))
+        seg.addEventListener('pointerleave', tipHide)
+        bar.append(seg)
+      }
+    }
+
+    const buildAdvanced = () => {
+      const open = !!(advEl && advEl.open)
+      const d = document.createElement('details')
+      d.className = 'dshp-tune-adv'
+      d.open = open
+      const s = document.createElement('summary')
+      s.textContent = '高级：原始权重 / 三档数值'
+      d.append(s)
+      d.append($('div', 'dshp-tune-note', '票 = 该档基础权重；占比 = 票 × 份额 × 动作门 ÷ 总票。这里的数字不参与存档。'))
+      const matrix = (DSHPetIdleRhythm && DSHPetIdleRhythm.weightMatrix)
+        ? DSHPetIdleRhythm.weightMatrix(IDLE_TABLE, CFG.idleWeightScale)
+        : {}
+      const fmt = (v) => (v == null ? '—' : String(Math.round(v * 10) / 10))
+      for (const [key, label] of TUNE_BEHAVIORS) {
+        const cell = matrix[key] || {}
+        const line = $('div', 'dshp-tune-adv-row')
+        line.append($('span', null, label))
+        line.append($('span', null, '常态 ' + fmt(cell.normal) + ' / 活泼 ' + fmt(cell.lively) + ' / 发呆 ' + fmt(cell.drowsy)))
+        d.append(line)
+      }
+      return d
+    }
+
+    const makeBehaviorRow = (key, label) => {
       const row = $('div', 'dshp-tune-row')
-      const nameEl = $('span', null, label)
-      if (opts && opts.dead) nameEl.style.opacity = '.4'
+      row.dataset.key = key
+      const name = $('span', 'dshp-tune-name', label)
       const input = document.createElement('input')
       input.type = 'range'
-      input.min = String(min); input.max = String(max); input.step = String(step)
-      input.value = String(clamp(value, min, max))
-      if (opts && opts.dead) { input.disabled = true; input.style.opacity = '.35' }
-      const val = $('span', 'dshp-tune-val', fmt(Number(input.value)))
-      const act = $('span', 'dshp-tune-act', opts && opts.actual ? actualText(opts.actual, Number(input.value)) : '')
+      input.min = '0'; input.max = '200'; input.step = '5'
+      input.className = 'dshp-tune-slider'
+      input.value = String(clamp(currentScale(key), 0, 200))
+      const val = $('span', 'dshp-tune-val', input.value + '%')
+      const share = $('span', 'dshp-tune-share', '—')
+      const gap = $('span', 'dshp-tune-gap', '—')
+      const mute = $('button', 'dshp-tune-mute', '🔈')
+      mute.type = 'button'
+      const ref = { row: row, input: input, val: val, share: share, gap: gap, mute: mute, prev: Number(input.value) || 100 }
       input.addEventListener('input', () => {
         const v = Number(input.value)
-        val.textContent = fmt(v)
-        if (opts && opts.actual) act.textContent = actualText(opts.actual, v)
-        onChange(v)
+        if (v > 0) ref.prev = v
+        setScale(key, v)
+        simHide()
+        refresh()
       })
-      row.append(nameEl, input, val, act)
-      panel.append(row)
+      mute.addEventListener('click', () => {
+        if (input.disabled) return
+        if (Number(input.value) > 0) {
+          ref.prev = Number(input.value)
+          input.value = '0'
+        } else {
+          input.value = String(ref.prev || 100)
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      row.append(name, input, val, share, gap, mute)
+      return ref
     }
 
-    // ⓪ 先讲清三档是什么（这一节没有滑杆）：最容易被和设置页的「灵动度」混在一起
-    addSection('她现在的三档状态', '这三档是她自己的节奏，会随互动自动切换 —— 不是你在设置页调的那个「灵动度」。')
-    panel.append($('div', 'dshp-tune-note', '· 常态：默认档。按主表抽事，间隔 3.5~7.5 秒。'))
-    panel.append($('div', 'dshp-tune-note', '· 活泼：鼠标凑近她、或你在打字之后立刻进入；间隔缩到 1.5~3.5 秒，并连做 2~3 件，约 8 秒后回常态。'))
-    panel.append($('div', 'dshp-tune-note', '· 发呆：40 秒没有任何互动（或连续 3 次抽到「没戏」）进入；动作更少更慢、更爱看别处，你一动手就回来。'))
-    panel.append($('div', 'dshp-tune-note', '下面每一行的百分比，就是在这三档各自的菜单里给这一项加/减份额：0% 划掉、200% 份额翻倍；三档一起乘，所以全部调成同一个倍数等于没调。'))
+    const makeScriptRow = (s) => {
+      const row = $('div', 'dshp-tune-row dshp-tune-script')
+      const name = $('span', 'dshp-tune-name', s.name)
+      const input = document.createElement('input')
+      input.type = 'range'
+      input.min = '0'; input.max = '200'; input.step = '5'
+      input.className = 'dshp-tune-slider'
+      input.value = String(clamp(scriptScale(s.name), 0, 200))
+      const val = $('span', 'dshp-tune-val', input.value + '%')
+      const share = $('span', 'dshp-tune-share', '—')
+      const gap = $('span', 'dshp-tune-gap', '—')
+      const mute = $('button', 'dshp-tune-mute', '🔈')
+      mute.type = 'button'
+      const ref = { row: row, input: input, val: val, share: share, gap: gap, mute: mute, prev: Number(input.value) || 100 }
+      input.addEventListener('input', () => {
+        const v = Number(input.value)
+        if (v > 0) ref.prev = v
+        setScriptScale(s.name, v)
+        simHide()
+        refresh()
+      })
+      mute.addEventListener('click', () => {
+        if (Number(input.value) > 0) {
+          ref.prev = Number(input.value)
+          input.value = '0'
+        } else {
+          input.value = String(ref.prev || 100)
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      row.append(name, input, val, share, gap, mute)
+      return ref
+    }
 
-    // ① 整体节奏（只动 normal 档的间隔；活泼度仍是设置页那个滑块）
-    addSection('待机节奏', '整体间隔：越小越频繁（50% = 间隔减半，200% = 间隔翻倍）。右侧是常态档的秒数区间。')
-    const iv0 = Number(CFG.idleIntervalScale)
-    const iv = Math.round((isFinite(iv0) && iv0 > 0 ? iv0 : 1) * 100)
-    addRow('整体间隔', 50, 200, 5, clamp(iv, 50, 200), (v) => v + '%', (v) => {
-      CFG.idleIntervalScale = v / 100
-      persistCfg()
-    }, { actual: (v) => {
-      const r = DSHPetIdleRhythm.MOODS.normal.inter
-      return (Math.round(r[0] * v / 100 * 10) / 10) + '~' + (Math.round(r[1] * v / 100 * 10) / 10) + ' 秒'
-    } })
+    const buildBody = () => {
+      body.textContent = ''
+      rowRefs.clear()
+      scriptRefs.clear()
+      intervalRef = null
+      info = (DSHPetIdleRhythm && DSHPetIdleRhythm.shareRows)
+        ? DSHPetIdleRhythm.shareRows(tier, IDLE_TABLE, CFG.idleWeightScale, IDLE_CLIP, CFG.idleClipChance)
+        : null
 
-    // ② 每个待机行为（常态 + 活泼 + 发呆三档都按同一倍数缩放）
-    addSection('待机行为频率', '100% = 默认；0% = 基本不出现；200% = 两倍。正在演的那一次不会被打断。右侧三档顺序：常态 / 活泼 / 发呆。')
-    for (const [key, label, dead] of TUNE_BEHAVIORS) {
-      const bmap = CFG.idleWeightScale && typeof CFG.idleWeightScale === 'object' ? CFG.idleWeightScale : {}
-      const cur = Math.round(tuningScale(bmap, key) * 100)
-      addRow(label, 0, 200, 5, clamp(cur, 0, 200), (v) => v + '%', (v) => {
-        const m = CFG.idleWeightScale && typeof CFG.idleWeightScale === 'object' ? CFG.idleWeightScale : (CFG.idleWeightScale = {})
-        if (v === 100) delete m[key]; else m[key] = v / 100
+      body.append($('div', 'dshp-tune-sec', '待机节奏'))
+      body.append($('div', 'dshp-tune-note', '整体间隔：50% = 间隔减半，200% = 间隔翻倍。右侧是当前档位估算的秒数区间。'))
+      const ivRow = $('div', 'dshp-tune-row dshp-tune-interval')
+      const ivName = $('span', 'dshp-tune-name', '整体间隔')
+      const ivInput = document.createElement('input')
+      ivInput.type = 'range'
+      ivInput.min = '50'; ivInput.max = '200'; ivInput.step = '5'
+      ivInput.className = 'dshp-tune-slider'
+      const iv0 = Number(CFG.idleIntervalScale)
+      ivInput.value = String(clamp(Math.round((isFinite(iv0) && iv0 > 0 ? iv0 : 1) * 100), 50, 200))
+      const ivVal = $('span', 'dshp-tune-val', ivInput.value + '%')
+      const ivGap = $('span', 'dshp-tune-gap', '')
+      ivInput.addEventListener('input', () => {
+        CFG.idleIntervalScale = Number(ivInput.value) / 100
         persistCfg()
-      }, { dead: dead, actual: (v) => weightCell(key, v) })
+        simHide()
+        refresh()
+      })
+      ivRow.append(ivName, ivInput, ivVal, ivGap)
+      body.append(ivRow)
+      intervalRef = { input: ivInput, val: ivVal, gap: ivGap }
+
+      body.append($('div', 'dshp-tune-sec', '待机行为频率'))
+      body.append($('div', 'dshp-tune-note', '占比 = 最终进池份额（已乘动作门）；约每 = 按当前档位估算。点「静音」等于 0%，点「🔈」恢复。'))
+      const headRow = $('div', 'dshp-tune-head')
+      headRow.append(
+        $('span', 'dshp-tune-name', '行为'),
+        $('span', 'dshp-tune-slider-h', '份额'),
+        $('span', 'dshp-tune-val', ''),
+        $('span', 'dshp-tune-share', '占比'),
+        $('span', 'dshp-tune-gap', '约每'),
+        $('span', 'dshp-tune-mute', ''),
+      )
+      body.append(headRow)
+      for (const [key, label] of TUNE_BEHAVIORS) {
+        const ref = makeBehaviorRow(key, label)
+        rowRefs.set(key, ref)
+        body.append(ref.row)
+      }
+
+      body.append($('div', 'dshp-tune-sec', '小戏单项（' + IDLE_SCRIPTS.length + ' 段）'))
+      body.append($('div', 'dshp-tune-note', '只影响随机抽取；「小戏」整体频率在上面。右侧百分比 = 小戏池内份额；0% 时菜单里仍可手点。'))
+      for (const s of IDLE_SCRIPTS) {
+        const ref = makeScriptRow(s)
+        scriptRefs.set(s.name, ref)
+        body.append(ref.row)
+      }
+
+      advEl = buildAdvanced()
+      body.append(advEl)
     }
 
-    // ③ 每段小戏单独
-    addSection('小戏单项（' + IDLE_SCRIPTS.length + ' 段）', '只影响随机抽取；「小戏」整体频率在上面。0% 时菜单里仍可手点。右侧是这段自己的实际权重（小戏只在常态档进池）。')
-    for (const s of IDLE_SCRIPTS) {
-      const smap = CFG.scriptWeightScale && typeof CFG.scriptWeightScale === 'object' ? CFG.scriptWeightScale : {}
-      const cur = Math.round(tuningScale(smap, s.name) * 100)
-      addRow(s.name, 0, 200, 5, clamp(cur, 0, 200), (v) => v + '%', (v) => {
-        const m = CFG.scriptWeightScale && typeof CFG.scriptWeightScale === 'object' ? CFG.scriptWeightScale : (CFG.scriptWeightScale = {})
-        if (v === 100) delete m[s.name]; else m[s.name] = v / 100
-        persistCfg()
-      }, { actual: (v) => fmtW(s.weight * v / 100) })
+    const refresh = () => {
+      info = (DSHPetIdleRhythm && DSHPetIdleRhythm.shareRows)
+        ? DSHPetIdleRhythm.shareRows(tier, IDLE_TABLE, CFG.idleWeightScale, IDLE_CLIP, CFG.idleClipChance)
+        : null
+      const m = (DSHPetIdleRhythm && DSHPetIdleRhythm.MOODS[tier]) || { inter: [0, 0], clip: 1 }
+      const gate = info ? info.gate : 0
+      const now = currentMood()
+      status.textContent = '间隔 ' + m.inter[0] + '–' + m.inter[1] + ' 秒 · 动作门 ' + (gate * 100).toFixed(1) + '% · 现在：' + (TIER_LABEL[now] || now) + (now !== tier ? '（正在看：' + TIER_LABEL[tier] + '）' : '')
+      if (info && info.total <= 0) status.textContent += ' · ⚠ 全部关掉了，她会退回看别处'
+      for (const b of tabs.children) b.classList.toggle('dshp-on', b.dataset.tier === tier)
+
+      if (intervalRef) {
+        const v = Number(intervalRef.input.value)
+        const f = intervalFactor()
+        intervalRef.val.textContent = v + '%'
+        intervalRef.gap.textContent = (Math.round(m.inter[0] * f * 10) / 10) + '~' + (Math.round(m.inter[1] * f * 10) / 10) + ' 秒'
+      }
+
+      buildBar()
+      const byKey = {}
+      if (info) for (const row of info.rows) byKey[row.name] = row
+      for (const [key, ref] of rowRefs) {
+        const row = byKey[key]
+        if (!row || row.missing) {
+          ref.row.classList.add('is-missing')
+          ref.input.disabled = true
+          ref.mute.disabled = true
+          ref.val.textContent = '—'
+          ref.share.textContent = '—'
+          ref.gap.textContent = '该档不进池'
+          ref.mute.textContent = '—'
+          continue
+        }
+        const v = Number(ref.input.value)
+        const muted = v === 0
+        ref.row.classList.toggle('is-muted', muted)
+        ref.row.classList.remove('is-missing')
+        ref.input.disabled = false
+        ref.mute.disabled = false
+        ref.val.textContent = v + '%'
+        ref.share.textContent = fmtPct(row.share)
+        ref.gap.textContent = '约 ' + fmtGap(gapFor(row))
+        ref.mute.textContent = muted ? '🔇' : '🔈'
+        ref.mute.title = muted ? '恢复默认份额' : '静音（设为 0%）'
+        ref.row.title = (BEHAVIOR_LABEL[key] || key) + '：票 ' + row.base + ' × 份额 ' + v + '% × 动作门 ' + Math.round(row.gate * 100) + '% = ' + fmtPct(row.share)
+      }
+
+      const total = scriptTotal()
+      for (const [name, ref] of scriptRefs) {
+        const s = IDLE_SCRIPTS.find((x) => x.name === name)
+        if (!s) continue
+        const v = Number(ref.input.value)
+        const muted = v === 0
+        ref.row.classList.toggle('is-muted', muted)
+        ref.val.textContent = v + '%'
+        ref.share.textContent = total > 0 ? ((s.weight * v / 100 / total) * 100).toFixed(1) + '%' : '—'
+        ref.gap.textContent = '权重 ' + Math.round(s.weight * v / 100 * 10) / 10
+        ref.mute.textContent = muted ? '🔇' : '🔈'
+        ref.mute.title = muted ? '恢复默认' : '静音（设为 0%）'
+      }
+
+      if (advEl && advEl.parentNode) {
+        const next = buildAdvanced()
+        advEl.parentNode.replaceChild(next, advEl)
+        advEl = next
+      }
     }
+
+    simEl = $('div', 'dshp-tune-sim')
+    panel.append(simEl)
+
+    const simBtn = $('button', 'dshp-btn', '模拟 10 分钟')
+    simBtn.title = '按当前档位抽签，不含 agent 忙 / 正在演'
+    simBtn.addEventListener('click', () => {
+      if (!DSHPetIdleRhythm || !DSHPetIdleRhythm.simulate) return
+      const r = DSHPetIdleRhythm.simulate(
+        tier, IDLE_TABLE, CFG.idleWeightScale, IDLE_CLIP, CFG.idleClipChance, 600, Math.random,
+        { intervalScale: CFG.idleIntervalScale, bias: DSHPetIdleRhythm.biasFactor(CFG) },
+      )
+      const entries = Object.keys(r.counts).map((k) => [k, r.counts[k]]).filter((x) => x[1] > 0).sort((a, b) => b[1] - a[1])
+      const text = entries.length
+        ? entries.map(([k, n]) => (BEHAVIOR_LABEL[k] || k) + ' ' + n).join(' · ')
+        : '没有可抽的行为（全部关掉了）'
+      simEl.textContent = '模拟 10 分钟（' + TIER_LABEL[tier] + '，按平均动作门）：\n' + text + '\n只算抽签，不含 agent 忙 / 正在演；再点一次会变。'
+      simEl.classList.add('dshp-on')
+    })
 
     const footer = $('div', 'dshp-row')
     const reset = $('button', 'dshp-btn', '全部恢复默认')
@@ -6226,26 +6583,30 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     })
     const done = $('button', 'dshp-btn dshp-primary', '完成')
     done.addEventListener('click', closeTuningPanel)
-    footer.append(reset, done)
+    footer.append(reset, simBtn, done)
     panel.append($('div', 'dshp-tune-note', '改动影响她的下一跳；正在演的小戏不会被掐断。'), footer)
+
+    buildTabs()
+    buildBody()
+    refresh()
 
     mask.addEventListener('click', (e) => { if (e.target === mask) closeTuningPanel() })
     const onKey = (e) => { if (e.key === 'Escape') closeTuningPanel() }
     window.addEventListener('keydown', onKey, true)
+    panel.addEventListener('pointerleave', tipHide)
+    panel.addEventListener('scroll', tipHide, true)
     ui.root.append(mask, panel)
-    ui.tuning = { mask: mask, el: panel, onKey: onKey }
-    syncShape() // 模态：整窗（遮罩要能点）
-    // 关键：告诉外壳「现在是模态」，hitJS 直接返回 panel，整窗不穿透；
-    // 否则鼠标落在她身体外时窗口会 setIgnoreMouseEvents(true)，面板看得见、点不到。
+    ui.tuning = { mask: mask, el: panel, onKey: onKey, tip: tip }
     window.__DSHPET_MODAL__ = true
+    // 双窗口：模态打开时让命中窗立刻让开（不能等 90ms 轮询，鼠标可能不在窗口内）
+    if (shell.on) shell.post('modal:on')
   }
 
   function renderPane(id) {
     const panes = ui.menu.panes
     panes.textContent = ''
     // 顶上永远有一行「她现在是什么状态」，免得一堆按钮里看不出哪个是开着的
-    ui.menu.nowEl = $('div', 'dshp-hint dshp-now', menuStatusLine())
-    panes.appendChild(ui.menu.nowEl)
+    panes.appendChild($('div', 'dshp-hint dshp-now', menuStatusLine()))
     if (id === 'face' || id === 'mouth') {
       const grid = $('div', 'dshp-grid')
       // 「表情」和「口型」两个页签**共用这套渲染**：
@@ -8393,12 +8754,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 视线/自主动作：40ms 一跳（对应 clawd-on-desk 的 50ms 轮询）
     setInterval(gazeTick, 40)
 
-    // 菜单顶上的状态行：她可能在「常态/活泼/发呆」之间自己切，0.8 秒跟一次（只在菜单打开时做）
-    setInterval(() => {
-      if (!ui || !ui.menu || !ui.menu.el.classList.contains('dshp-on')) return
-      try { refreshStatusLine() } catch (e) {}
-    }, 800)
-
     // 干活时的轮播（认真/摸鱼/思考），和下面的待机大脑互斥
     setInterval(() => {
       if (agent.status === 'idle') return
@@ -8726,14 +9081,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
      * 有了这个接口，测试就能断言「池子里不会出现做不了的行为」，不用去猜概率。
      */
     /**
-     * 诊断：详细频率面板的三组值（行为/小戏/间隔）。
+     * 诊断：详细频率面板的三组值（行为/小戏/间隔）+ 当前档的占比快照。
      * 前三项是「倍数」（就是 CFG 里存的东西）；weights / scriptWeights / intervalRange 是
-     * 面板最右那一列显示的「实际值」，所以 CDP 不点滑杆也能断言换算对不对。
+     * 面板换算用的「实际值」，preview/previewFor 是「份额 / 占比 / 约每」的同一份计算，
+     * 所以 CDP 不点滑杆也能断言换算对不对。
      */
     tuningState: () => ({
       interval: (() => { const v = Number(CFG.idleIntervalScale); return isFinite(v) && v > 0 ? v : 1 })(),
+      intervalFactor: (() => {
+        const s0 = Number(CFG.idleIntervalScale)
+        const s = isFinite(s0) && s0 > 0 ? s0 : 1
+        const b0 = DSHPetIdleRhythm && DSHPetIdleRhythm.biasFactor ? DSHPetIdleRhythm.biasFactor(CFG) : 1
+        const b = isFinite(b0) && b0 > 0 ? b0 : 1
+        return Math.round(s * b * 100) / 100
+      })(),
       behavior: Object.assign({}, CFG.idleWeightScale || {}),
       scripts: Object.assign({}, CFG.scriptWeightScale || {}),
+      tier: (idle.rhythm && idle.rhythm.mood) || 'normal',
+      preview: tuningPreview(),
+      previewFor: (tier) => tuningPreview(tier),
       weights: DSHPetIdleRhythm ? DSHPetIdleRhythm.weightMatrix(IDLE_TABLE, idleWeightScale()) : {},
       scriptWeights: IDLE_SCRIPTS.reduce((a, s) => {
         a[s.name] = Math.round(s.weight * tuningScale(CFG.scriptWeightScale, s.name) * 1000) / 1000
@@ -8851,6 +9217,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       return motion.idle.enabled
     },
     hitTest,
+    hitBounds,
+    hitRects,
+    lastPoke: () => lastPokeInfo,
     /** 隐藏 / 恢复。壳子（桌面版）收起成小球后，靠它把页面里的状态一起改回来 */
     setHidden,
     /** 壳子告诉页面「你记着的连接档位是哪一档」（设置页据此高亮） */

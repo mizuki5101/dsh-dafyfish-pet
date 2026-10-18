@@ -367,8 +367,8 @@ console.log('\n【7】权重表 ↔ switch 分支 一致性')
   ok('有自定义态', S.indexOf(q + 'custom' + q) >= 0)
 }
 
-// ——— 10. 详细面板的「实际权重」表（0.6.0） ———
-console.log('\n【10】实际权重表 weightMatrix（详细面板最右的「实际」列）')
+// ——— 10. 详细面板的权重矩阵（高级折叠里仍保留） ———
+console.log('\n【10】权重矩阵 weightMatrix（详细面板高级区）')
 {
   const base = [['glance', 8], ['express', 24], ['mutter', 16], ['nod', 6]]
   const M = R.weightMatrix(base, null)
@@ -400,9 +400,35 @@ console.log('\n【10】实际权重表 weightMatrix（详细面板最右的「�
   const i0 = src.indexOf('function openTuningPanel()')
   const i1 = src.indexOf('function renderPane(', i0)
   const body = i0 >= 0 && i1 > i0 ? src.slice(i0, i1) : ''
-  ok('详细面板真的接了 weightMatrix（不是只加了函数）', body.indexOf('weightMatrix') >= 0)
-  ok('详细面板有「实际」列（dshp-tune-act）', body.indexOf('dshp-tune-act') >= 0)
-  ok('CSS 有 .dshp-tune-act 样式', src.indexOf('.dshp-tune-row .dshp-tune-act{') >= 0)
+  ok('详细面板高级区仍接 weightMatrix', body.indexOf('weightMatrix') >= 0)
+  ok('详细面板有占比列（dshp-tune-share）', body.indexOf('dshp-tune-share') >= 0)
+  ok('详细面板有模拟按钮', body.indexOf('模拟 10 分钟') >= 0)
+  ok('CSS 有 .dshp-tune-share 样式', src.indexOf('.dshp-tune-row .dshp-tune-share{') >= 0)
+}
+
+// ——— 11. 详细面板：占比 / 约每 / 模拟（2026-10-18） ———
+console.log('\n【11】详细面板的占比、约每、模拟')
+{
+  const base = [['glance', 8], ['express', 24], ['nod', 6], ['script', 14]]
+  const clip = { nod: 1 }
+  const r = R.shareRows('normal', base, null, clip, 0.35)
+  const sum = r.rows.reduce((a, x) => a + x.share, 0)
+  ok('份额加起来 = 1', Math.abs(sum - 1) < 1e-9, sum)
+  ok('动作门 = 35%', Math.abs(r.gate - 0.35) < 1e-9, r.gate)
+  const nod = r.rows.find((x) => x.name === 'nod')
+  ok('肢体动作按动作门折算（nod 6×0.35=2.1）', !!nod && Math.abs(nod.effective - 2.1) < 1e-9, nod && nod.effective)
+  ok('每行都有约每（gapSec）', r.rows.every((x) => x.missing || (x.share === 0 || x.gapSec > 0)))
+  const muted = R.shareRows('normal', base, { nod: 0 }, clip, 0.35)
+  const mn = muted.rows.find((x) => x.name === 'nod')
+  ok('静音后该行份额 = 0', !!mn && mn.share === 0 && mn.effective === 0, mn)
+  const dr = R.shareRows('drowsy', base, null, clip, 0.35)
+  const ds = dr.rows.find((x) => x.name === 'script')
+  ok('发呆档没有 script（missing）', !!ds && ds.missing === true && ds.share === 0, ds)
+  ok('发呆档动作门 = 8.75%', Math.abs(dr.gate - 0.0875) < 1e-9, dr.gate)
+  const sim = R.simulate('normal', base, null, clip, 0.35, 600, seeded(7))
+  const total = Object.values(sim.counts).reduce((a, b) => a + b, 0)
+  ok('模拟计数总和 = draws', total === sim.draws, { total: total, draws: sim.draws })
+  ok('模拟能跑出次数', sim.draws > 0 && total > 0, sim)
 }
 
 console.log('\n' + '='.repeat(52))

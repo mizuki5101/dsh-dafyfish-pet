@@ -20,11 +20,6 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
   reload: () => ipcRenderer.send('reload'),
   ballMove: (dx, dy) => ipcRenderer.send('ball-move', dx, dy),
   ballDrop: (moved) => ipcRenderer.send('ball-drop', moved),
-  // 键盘焦点：外壳窗口平时不抢前台（点她不打断 DSH / 游戏），
-  // 只有文字输入框拿到焦点时才临时要一次（见 main.js 的 applyFocusPolicy）
-  wantKeyboard: (on) => ipcRenderer.send('want-keyboard', !!on),
-  // 窗口形状：只把「她 + 面板」那块真正画出来（不整块盖住 DSH，见 pet.js 的 syncShape）
-  shape: (rects) => ipcRenderer.send('window-shape', rects),
 })
 
 // 拖动：页面里按下她 → 告诉主进程搬窗口（主进程只在鼠标确实压在她身上时才搬，

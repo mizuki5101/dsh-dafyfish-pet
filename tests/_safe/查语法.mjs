@@ -26,6 +26,9 @@ const DEFAULTS = [
   'shell/src/preload.js',
   'shell/src/petserver.js',
   'shell/src/audio.js',
+  'shell/src/hit/guard.js',
+  'shell/src/hit/hit-renderer.js',
+  'shell/src/hit/preload-hit.js',
   'tests/测试独立桌宠.mjs',
 ]
 

@@ -97,7 +97,7 @@ function verify() {
   const want = walk(SRC, '', []).map((f) => f.rel).sort()
   const missing = want.filter((f) => !got.includes(f))
   if (missing.length) throw new Error('asar 里少了：' + missing.join(', '))
-  for (const f of ['main.js', 'preload.js', 'petserver.js', 'audio.js']) {
+  for (const f of ['main.js', 'preload.js', 'petserver.js', 'audio.js', 'hit/guard.js', 'hit/preload-hit.js', 'hit/hit-renderer.js']) {
     syntaxOk(path.join(tmp, f))
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(tmp, 'package.json'), 'utf8'))
@@ -114,6 +114,13 @@ function verify() {
 /** 装到外壳目录（先备份） */
 function install() {
   if (!fs.existsSync(SHELL_ASAR)) throw new Error('找不到外壳：' + SHELL_ASAR)
+  // 双窗口的命中窗守卫需要 Koffi（原生 .node 不能从 asar 里直接加载）。
+  // 放在 resources/koffi；没有就回退单窗口，不影响主窗口。
+  const koffi = path.join(SHELL_DIR, 'resources', 'koffi', 'build', 'koffi', 'win32_x64', 'koffi.node')
+  console.log(fs.existsSync(koffi)
+    ? 'Koffi 在位：' + koffi
+    : '⚠️ 没找到 Koffi（' + koffi + '）；dualWindow=true 时会回退单窗口。\n' +
+      '   安装：npm install koffi@2.16.3，然后把 node_modules/koffi 放到 resources/koffi（只留 win32_x64 也行）')
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
   const backup = path.join(WORKSPACE, '_restore', 'app.asar.bak-' + stamp)
   fs.mkdirSync(path.dirname(backup), { recursive: true })
@@ -136,6 +143,8 @@ function copyAssets() {
   const copy = (from, to) => {
     fs.mkdirSync(to, { recursive: true })
     for (const name of fs.readdirSync(from)) {
+      // 鲸鱼娘那套原模型不拷（我们只做大肥鱼，省 2MB 和一堆混淆）
+      if (name.startsWith('c_0120')) continue
       const a = path.join(from, name)
       const b = path.join(to, name)
       const s = fs.statSync(a)

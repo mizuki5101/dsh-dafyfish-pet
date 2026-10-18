@@ -21,6 +21,7 @@ const { exec } = require('node:child_process')
 // 为什么要它、为什么不用 file://、信任栅栏怎么设，全在 petserver.js 顶部。
 const { createPetServer } = require('./petserver')
 const { createAudioMeter } = require('./audio')
+const { createHitGuard } = require('./hit/guard')
 
 // 宿主地址在启动时「发现」出来，不再写死 —— 与 macOS 版保持一致：
 // 官方桌面版（Electron，端口由宿主决定，实测 19387）和手动起的 `dsh web`（3080）都要能连上。
@@ -84,6 +85,10 @@ let win = null
 let ballWin = null
 let tray = null
 let pollTimer = null
+let topmostTimer = null
+// fullscreenPrimary：窗口固定 0,0，拖动由页面自己移动 root（不再搬窗口，
+// 否则窗口右/下边缘会跑到屏幕中间，把尾巴/裙摆切掉）。
+let pageDragging = false
 let cursorFeed = null
 let lastCursor = null
 let dragTimer = null
@@ -96,10 +101,24 @@ let lowPower = false
 let overPanel = false
 let failCount = 0
 let lastHit = 'none'
-/** 输入框临时要来的键盘焦点（见 applyFocusPolicy） */
-let keyboardWanted = false
-/** 窗口形状（见 window-shape）：只打一次日志，别刷屏 */
-let shapeLogged = false
+// 双窗口（2026-10-18）：渲染窗始终穿透，命中窗只收身体上的 pointer。
+// 默认关闭；settings.json 里写 {"dualWindow": true} 才启用。
+let hitWin = null
+let hitGuard = null
+let dualWindow = false
+let hitRect = null
+let hitRects = null
+let hitClip = null
+let hitShapeKey = ''
+let hitShapeWarned = false
+let hitShapeLogged = false
+let hitVisibleSent = null
+let hitRectBusy = false
+let hitSyncTimer = null
+let uiMode = false
+let modalMode = false
+let hitDragging = false
+let lastHitPoint = null
 
 // ——————————————————————————————————————————————————————————————
 // 通行证：插件启动时会写 ~/.dsh/dsh-live2d-pet-desktop.json
@@ -261,7 +280,10 @@ const hitJS = (x, y) => `(function(){try{
   // 否则鼠标落在她身体外时窗口会 setIgnoreMouseEvents(true) → 面板看得见、点不到。
   if(window.__DSHPET_MODAL__) return 'panel';
   var el=document.elementFromPoint(${x},${y});
-  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-bubble,.dshp-composer,.dshp-dock,.dshp-tab,.dshp-tuning,.dshp-tuning-mask'));
+  // 只把“真正可点的控件/面板”算 UI。dock 容器、气泡容器本身不算 ——
+  // 否则鼠标只是从她身上/尾巴附近划过，也会进 UI 模式（setIgnoreMouseEvents(false)），
+  // 透明窗会掉 WS_EX_LAYERED，出现灰边 + 尾巴被裁 + 一闪一闪。
+  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-composer,.dshp-tuning,.dshp-tuning-mask,.dshp-tab,.dshp-tab-btn,.dshp-btn,.dshp-bubble button,.dshp-bubble input,.dshp-bubble textarea'));
   if(ui) return 'panel';
   if(window.DSHPet&&DSHPet.hitTest&&DSHPet.hitTest(${x},${y})) return 'model';
   return 'none';
@@ -272,49 +294,456 @@ function setIgnore(on) {
   win.setIgnoreMouseEvents(on, { forward: true })
 }
 
-/**
- * 点她**不抢前台焦点**（2026-10-18 修）。
- *
- * 病根：透明窗口默认是可激活的，点她 = 把外壳窗口提到前台。于是
- *   ① DSH 窗口失去前台 → Chromium 把它的渲染降频，进度看起来「停住了」，
- *      要再点一下别处才接着动；
- *   ② 全屏/无边框游戏（实测《胡闹厨房 2》）一失去前台就直接缩回桌面。
- * 做法：窗口平时带 **WS_EX_NOACTIVATE**（Electron 的 setFocusable(false)）——
- * 鼠标照常吃，但点击不激活窗口、不改变前台。只有光标点进**文字输入框**时，
- * 才由页面通过 want-keyboard 临时把窗口变成可激活 + focus()，否则聊天框打不进字。
- * 兜底：托盘「点她不抢前台焦点」可以一键回到老行为（写 settings.json: clickStealFocus=true）。
- */
-function stealsFocus() {
-  return readSettings().clickStealFocus === true
+// ——————————————————————————————————————————————————————————————
+// 双窗口（2026-10-18）：命中窗 + 渲染窗
+//
+// 渲染窗始终 setIgnoreMouseEvents(true,{forward:true})；命中窗只覆盖她的
+// alpha 紧包围盒，收真实 pointer 后交给这里，再用 sendInputEvent 注入渲染页。
+// 命中窗的“不激活”靠 hit/guard.js（WS_EX_NOACTIVATE + Chrome.IgnoreMouseActivate）。
+// ——————————————————————————————————————————————————————————————
+function dualEnabled() {
+  return !!(dualWindow && hitWin && !hitWin.isDestroyed())
 }
 
-function applyFocusPolicy() {
-  if (!win || win.isDestroyed()) return
-  const steal = stealsFocus()
-  keyboardWanted = false
-  try { win.setFocusable(steal) } catch (e) {}
-  bootLog('焦点策略：' + (steal ? '点她会激活窗口（旧行为）' : '点她不抢前台（WS_EX_NOACTIVATE）'))
+function renderBounds() {
+  try {
+    return win && !win.isDestroyed() ? win.getContentBounds() : null
+  } catch (e) {
+    return null
+  }
 }
 
-/** 文字输入框拿到 / 失去 DOM 焦点时，临时切换「这个窗口能不能被激活」 */
-function setKeyboardFocus(on) {
-  if (!win || win.isDestroyed()) return
-  if (stealsFocus()) return // 旧行为：整窗一直可激活，不用临时切
-  const want = !!on
-  if (want === keyboardWanted) return
-  keyboardWanted = want
-  try { win.setFocusable(want) } catch (e) {}
-  if (want) { try { win.focus() } catch (e) {} }
-  bootLog('键盘焦点：' + (want ? '临时可激活（点了输入框）' : '还给桌面（不抢前台）'))
+function applyHitShape() {
+  if (!dualEnabled() || !hitClip) return
+  const out = []
+  if (Array.isArray(hitRects) && hitRects.length) {
+    for (const r of hitRects) {
+      const l = Math.max(0, r.x - hitClip.ox)
+      const t = Math.max(0, r.y - hitClip.oy)
+      const rr = Math.min(hitClip.w, r.x + r.w - hitClip.ox)
+      const bb = Math.min(hitClip.h, r.y + r.h - hitClip.oy)
+      if (rr - l < 1 || bb - t < 1) continue
+      out.push({
+        x: Math.round(l),
+        y: Math.round(t),
+        width: Math.max(1, Math.round(rr - l)),
+        height: Math.max(1, Math.round(bb - t)),
+      })
+    }
+  }
+  const shape = out.length && out.length <= 500 ? out : null
+  const key = hitClip.w + 'x' + hitClip.h + '|' + (shape
+    ? shape.map((r) => r.x + ',' + r.y + ',' + r.width + ',' + r.height).join(';')
+    : 'full')
+  if (key === hitShapeKey) return
+  hitShapeKey = key
+  try {
+    hitWin.setShape(shape || [])
+    if (!hitShapeLogged) {
+      hitShapeLogged = true
+      bootLog('双窗口：命中形状 ' + (shape ? shape.length + ' 块' : '整块矩形'))
+    }
+  } catch (e) {
+    if (!hitShapeWarned) {
+      hitShapeWarned = true
+      bootLog('双窗口：setShape 不可用，退回矩形（' + (e && e.message) + '）')
+    }
+    try { hitWin.setShape([]) } catch (e2) {}
+  }
 }
+
+function updateHitWindowBounds() {
+  if (!dualEnabled() || !hitRect) return
+  const rb = renderBounds()
+  if (!rb) return
+  // 她可能半出屏：命中窗只取渲染窗内那一段，别把窗口铺到屏幕外
+  const x0 = Math.max(0, Math.min(rb.width, hitRect.x))
+  const y0 = Math.max(0, Math.min(rb.height, hitRect.y))
+  const x1 = Math.max(x0, Math.min(rb.width, hitRect.x + hitRect.w))
+  const y1 = Math.max(y0, Math.min(rb.height, hitRect.y + hitRect.h))
+  if (x1 - x0 < 2 || y1 - y0 < 2) {
+    try { if (hitWin.isVisible()) hitWin.hide() } catch (e) {}
+    return
+  }
+  const x = Math.round(rb.x + x0)
+  const y = Math.round(rb.y + y0)
+  const w = Math.max(2, Math.round(x1 - x0))
+  const h = Math.max(2, Math.round(y1 - y0))
+  hitClip = { ox: x0 - hitRect.x, oy: y0 - hitRect.y, w: w, h: h }
+  try {
+    const b = hitWin.getBounds()
+    if (b.x !== x || b.y !== y || b.width !== w || b.height !== h) {
+      hitWin.setBounds({ x: x, y: y, width: w, height: h })
+    }
+  } catch (e) {}
+  applyHitShape()
+}
+
+function sendHitVisibility(value) {
+  if (!dualEnabled()) return
+  const v = !!value
+  if (hitVisibleSent === v) return
+  hitVisibleSent = v
+  try { hitWin.webContents.send('hit:visibility', v) } catch (e) {}
+}
+
+function raiseTopmost(toggle) {
+  try {
+    if (win && !win.isDestroyed()) {
+      // 已经 topmost 的窗口再设 true 不一定能抢回任务栏上面；
+      // 只有窗口压到工作区外（任务栏/屏幕边缘）时才做一次 false→true 重新入栈。
+      if (toggle) win.setAlwaysOnTop(false)
+      win.setAlwaysOnTop(true, 'screen-saver')
+    }
+  } catch (e) {}
+  if (dualEnabled()) {
+    try {
+      if (toggle) hitWin.setAlwaysOnTop(false)
+      hitWin.setAlwaysOnTop(true, 'screen-saver')
+    } catch (e) {}
+  }
+}
+
+function syncHitWindow() {
+  if (!dualEnabled()) return
+  const visible = !!(
+    win && !win.isDestroyed() && win.isVisible() && !collapsed && !uiMode && hitRect
+  )
+  if (!visible) {
+    sendHitVisibility(false)
+    try { if (hitWin.isVisible()) hitWin.hide() } catch (e) {}
+    return
+  }
+  updateHitWindowBounds()
+  try {
+    if (!hitWin.isVisible()) hitWin.showInactive()
+    hitWin.setAlwaysOnTop(true, 'screen-saver')
+  } catch (e) {}
+  sendHitVisibility(true)
+}
+
+async function queryHitBounds() {
+  if (pageDragging) return // 页面内拖动中：命中窗必须留在原地，否则注入坐标会跟丢
+  if (!dualWindow || !win || win.isDestroyed() || !win.isVisible()) {
+    hitRect = null
+    hitRects = null
+    syncHitWindow()
+    return
+  }
+  if (hitRectBusy) return
+  hitRectBusy = true
+  try {
+    const r = await win.webContents.executeJavaScript(
+      '(function(){try{return {b:(window.DSHPet&&DSHPet.hitBounds?DSHPet.hitBounds():null),r:(window.DSHPet&&DSHPet.hitRects?DSHPet.hitRects():null)}}catch(e){return {b:null,r:null}}})()',
+    )
+    hitRect = r && r.b && Number(r.b.w) > 1 && Number(r.b.h) > 1 ? r.b : null
+    hitRects = r && Array.isArray(r.r) ? r.r : null
+  } catch (e) {
+    hitRect = null
+    hitRects = null
+  }
+  hitRectBusy = false
+  syncHitWindow()
+}
+
+function enterUiMode() {
+  if (!dualWindow || uiMode) return
+  uiMode = true
+  setIgnore(false)
+  if (dualEnabled()) {
+    sendHitVisibility(false)
+    try { hitWin.hide() } catch (e) {}
+  }
+  raiseTopmost()
+  bootLog('双窗口：UI 模式（渲染窗可交互，hitVisible=' + (dualEnabled() ? hitWin.isVisible() : false) + '）')
+}
+
+function leaveUiMode(force) {
+  if (!dualWindow || !uiMode) return
+  if (modalMode && !force) return
+  uiMode = false
+  setIgnore(true)
+  syncHitWindow()
+  raiseTopmost()
+  bootLog('双窗口：命中模式（渲染窗穿透，hitVisible=' + (dualEnabled() ? hitWin.isVisible() : false) + '）')
+}
+
+function hitToRender(p) {
+  if (!dualEnabled()) return null
+  const hb = hitWin.getContentBounds()
+  const rb = renderBounds()
+  if (!hb || !rb) return null
+  return {
+    x: Math.round(hb.x - rb.x + Number(p && p.x ? p.x : 0)),
+    y: Math.round(hb.y - rb.y + Number(p && p.y ? p.y : 0)),
+  }
+}
+
+function injectMouse(type, pt, button, clickCount) {
+  if (!win || win.isDestroyed() || !pt) return
+  const ev = { type: type, x: pt.x, y: pt.y }
+  if (type !== 'mouseMove' && type !== 'mouseLeave') {
+    ev.button = button || 'left'
+    ev.clickCount = clickCount || 1
+  }
+  try { win.webContents.sendInputEvent(ev) } catch (e) {}
+}
+
+function startWindowDrag(at) {
+  if (!win || win.isDestroyed() || !win.isVisible()) return false
+  if (readFullscreenPrimary()) {
+    // 铺满主屏：不搬窗口，让 pet.js 自己的 DOM 拖动跑。
+    // 命中窗在拖动期间保持原位（pointer capture 会继续收 move），松手后再 queryHitBounds。
+    pageDragging = true
+    hitDragging = true
+    return true
+  }
+  // 命中窗给的坐标可能带小数/在窗口搬动后短暂过期；系统光标是拖动的最终真相。
+  // 两者差得不多就用命中窗的按下点（少 3px 阈值误差），差太多就用系统光标。
+  const cur = screen.getCursorScreenPoint()
+  const ax = at && Number.isFinite(at.x) ? at.x : null
+  const ay = at && Number.isFinite(at.y) ? at.y : null
+  // 用按下点的屏幕坐标（at）作为拖动原点：3px 阈值内光标已经移动了，
+  // 用系统光标当原点会把这 3px（测试里 10px）吃掉，松手后宠物停在鼠标旁边。
+  // at 只在离谱地远（例如合成输入）时才不用。
+  const near = ax != null && ay != null && Math.abs(ax - cur.x) <= 250 && Math.abs(ay - cur.y) <= 250
+  dragFrom = {
+    mouse: {
+      x: Math.round(near ? ax : cur.x),
+      y: Math.round(near ? ay : cur.y),
+    },
+    win: win.getPosition(),
+  }
+  clearInterval(dragTimer)
+  dragTimer = setInterval(() => {
+    if (!dragFrom || !win || win.isDestroyed()) return
+    const p = screen.getCursorScreenPoint()
+    const nx = dragFrom.win[0] + (p.x - dragFrom.mouse.x)
+    const ny = dragFrom.win[1] + (p.y - dragFrom.mouse.y)
+    // Windows/Electron setPosition 只接受整数；命中窗给来的屏幕坐标可能是小数，
+    // 直接传会抛 "conversion failure"，拖动就会一卡一卡、命中窗也跟不上。
+    if (!Number.isFinite(nx) || !Number.isFinite(ny)) return
+    win.setPosition(Math.round(nx), Math.round(ny))
+    updateHitWindowBounds()
+  }, 16)
+  try {
+    win.webContents.executeJavaScript("document.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true}))").catch(() => {})
+  } catch (e) {}
+  return true
+}
+
+function stopWindowDrag(endPoint) {
+  if (pageDragging) {
+    pageDragging = false
+    hitDragging = false
+    clearInterval(dragTimer)
+    dragTimer = null
+    dragFrom = null
+    // 页面 root 已经移到新位置；稍等一帧再让命中窗跟过去（16ms 足够，别让连续拖动等太久）。
+    setTimeout(() => { if (dualEnabled()) queryHitBounds() }, 16)
+    return
+  }
+  // 16ms 定时器可能比鼠标慢一帧：松手时补最后一次位置，
+  // 否则她会停在光标左边/右边几像素，下一次按下就落在形状外，表现为“拖不动/回原点”。
+  if (dragFrom && win && !win.isDestroyed()) {
+    try {
+      const os = screen.getCursorScreenPoint()
+      const ep = endPoint && Number.isFinite(endPoint.sx) && Number.isFinite(endPoint.sy)
+        ? { x: endPoint.sx, y: endPoint.sy }
+        : os
+      const nx = dragFrom.win[0] + (ep.x - dragFrom.mouse.x)
+      const ny = dragFrom.win[1] + (ep.y - dragFrom.mouse.y)
+      if (Number.isFinite(nx) && Number.isFinite(ny)) {
+        win.setPosition(Math.round(nx), Math.round(ny))
+        updateHitWindowBounds()
+      }
+    } catch (e) {}
+  }
+  clearInterval(dragTimer)
+  dragTimer = null
+  dragFrom = null
+  hitDragging = false
+  // 铺满主屏时窗口位置没有意义，别把拖动后的偏移写进 pos.json，
+  // 否则关掉 fullscreenPrimary 后会恢复到一个奇怪的坐标。
+  if (!readFullscreenPrimary()) savePos()
+  raiseTopmost()
+}
+
+function destroyHitWindow() {
+  clearInterval(hitSyncTimer)
+  hitSyncTimer = null
+  if (hitGuard) {
+    try { hitGuard.dispose() } catch (e) {}
+    hitGuard = null
+  }
+  if (hitWin && !hitWin.isDestroyed()) {
+    try { hitWin.destroy() } catch (e) {}
+  }
+  hitWin = null
+  hitRect = null
+  hitRects = null
+  hitClip = null
+  hitShapeKey = ''
+  hitShapeLogged = false
+  hitVisibleSent = null
+}
+
+function initHitWindow() {
+  if (!dualWindow || hitWin) return
+  try {
+    hitWin = new BrowserWindow({
+      width: 2,
+      height: 2,
+      x: -10000,
+      y: -10000,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      hasShadow: false,
+      skipTaskbar: true,
+      show: false,
+      alwaysOnTop: true,
+      focusable: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'hit', 'preload-hit.js'),
+        contextIsolation: true,
+        backgroundThrottling: false,
+      },
+    })
+    hitWin.setAlwaysOnTop(true, 'screen-saver')
+    hitWin.setMenuBarVisibility(false)
+    hitWin.loadFile(path.join(__dirname, 'hit', 'hit.html'))
+    hitGuard = createHitGuard({ log: bootLog })
+    const ok = hitGuard.prepare(hitWin)
+    if (!ok) {
+      bootLog('双窗口：守卫不可用，回退单窗口')
+      try { hitWin.destroy() } catch (e) {}
+      hitWin = null
+      dualWindow = false
+      return
+    }
+    hitWin.on('closed', () => {
+      clearInterval(hitSyncTimer)
+      hitSyncTimer = null
+      hitWin = null
+    })
+    hitWin.webContents.on('did-finish-load', () => { queryHitBounds() })
+    hitWin.webContents.on('render-process-gone', (_e, details) => {
+      bootLog('双窗口：命中窗进程挂了（' + (details && details.reason) + '），1 秒后重建')
+      clearInterval(hitSyncTimer)
+      hitSyncTimer = null
+      if (hitGuard) { try { hitGuard.dispose() } catch (e) {} hitGuard = null }
+      try { hitWin.destroy() } catch (e) {}
+      hitWin = null
+      setTimeout(() => { if (dualWindow) initHitWindow() }, 1000)
+    })
+    hitSyncTimer = setInterval(queryHitBounds, 300)
+    queryHitBounds()
+    bootLog('双窗口：命中窗已创建（hwnd=' + hitGuard.hwnd + '）')
+  } catch (e) {
+    bootLog('双窗口：命中窗创建失败：' + (e && e.stack ? e.stack : e))
+    try { if (hitWin) hitWin.destroy() } catch (err) {}
+    hitWin = null
+    dualWindow = false
+  }
+}
+
+ipcMain.on('hit:down', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const pt = hitToRender(p)
+  if (!pt) return
+  lastHitPoint = pt
+  injectMouse('mouseMove', pt)
+  injectMouse('mouseDown', pt, 'left', 1)
+})
+
+ipcMain.on('hit:move', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const pt = hitToRender(p)
+  if (!pt) return
+  lastHitPoint = pt
+  injectMouse('mouseMove', pt)
+})
+
+ipcMain.on('hit:up', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const pt = hitToRender(p) || lastHitPoint
+  if (!pt) return
+  injectMouse('mouseUp', pt, 'left', 1)
+  lastHitPoint = null
+})
+
+ipcMain.on('hit:drag-start', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const sx = Number(p && p.sx)
+  const sy = Number(p && p.sy)
+  if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
+  hitDragging = true
+  startWindowDrag({ x: Math.round(sx), y: Math.round(sy) })
+})
+
+ipcMain.on('hit:drag-end', (_e, endPoint) => {
+  if (!dualEnabled()) return
+  const pt = lastHitPoint
+  stopWindowDrag(endPoint)
+  if (pt) injectMouse('mouseUp', pt, 'left', 1)
+  lastHitPoint = null
+})
+
+ipcMain.on('hit:contextmenu', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const pt = hitToRender(p)
+  if (!pt) return
+  injectMouse('mouseDown', pt, 'right', 1)
+  injectMouse('mouseUp', pt, 'right', 1)
+})
+
+ipcMain.on('hit:leave', () => {
+  // 不再往页面注入 (-20,-20)：鼠标只是划过命中窗形状的空隙/边缘时，
+  // 那一下会把 gaze 拽到左上角，表现就是视线一抽一抽。
+  // 真实光标位置由 cursorFeed 持续提供。
+})
+
+ipcMain.on('hit:wheel', (_e, p) => {
+  if (!dualEnabled() || uiMode) return
+  const pt = hitToRender(p)
+  if (!pt) return
+  try {
+    win.webContents.sendInputEvent({
+      type: 'mouseWheel',
+      x: pt.x,
+      y: pt.y,
+      deltaX: Number(p && p.dx) || 0,
+      deltaY: Number(p && p.dy) || 0,
+      canScroll: true,
+    })
+  } catch (e) {}
+})
+
+ipcMain.on('hit:cancel', () => {
+  if (!dualEnabled()) return
+  stopWindowDrag()
+  lastHitPoint = null
+  try {
+    win.webContents.executeJavaScript("document.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true}))").catch(() => {})
+  } catch (e) {}
+})
 
 async function poll() {
   if (!win || win.isDestroyed() || !win.isVisible()) return
+  if (pageDragging) return // 页面内拖动时别抢 UI 模式/别 hide 命中窗
   const p = screen.getCursorScreenPoint()
   const b = win.getBounds()
   if (p.x < b.x || p.x > b.x + b.width || p.y < b.y || p.y > b.y + b.height) {
     lastHit = 'none'
-    setIgnore(true)
+    overPanel = false
+    if (dualWindow) {
+      leaveUiMode()
+      setIgnore(true)
+      syncHitWindow()
+    } else {
+      setIgnore(true)
+    }
     return
   }
   if (dragTimer) return // 拖动中不抢事件（否则鼠标一离开她就变穿透，拖动会断）
@@ -322,10 +751,25 @@ async function poll() {
     const kind = await win.webContents.executeJavaScript(hitJS(Math.round(p.x - b.x), Math.round(p.y - b.y)))
     if (kind !== lastHit) bootLog('鼠标命中：' + kind)
     lastHit = kind
+    if (dualWindow) {
+      // 命中模式：渲染窗永远穿透，命中窗收身体点击；
+      // UI 模式：命中窗让开，渲染窗变可交互（按钮/面板/输入框才能激活）。
+      if (kind === 'panel') {
+        overPanel = true
+        enterUiMode()
+      } else {
+        overPanel = false
+        leaveUiMode()
+        setIgnore(true)
+        syncHitWindow()
+      }
+      return
+    }
     overPanel = kind === 'panel'
     setIgnore(kind === 'none')
   } catch (e) {
     setIgnore(true)
+    if (dualWindow) syncHitWindow()
   }
 }
 
@@ -333,6 +777,8 @@ async function poll() {
 // 主窗口
 // ——————————————————————————————————————————————————————————————
 function createMain() {
+  dualWindow = readSettings().dualWindow === true
+  if (dualWindow) bootLog('双窗口：settings.json dualWindow=true')
   const FULLSCREEN_PRIMARY = readFullscreenPrimary()
   const waFs = screen.getPrimaryDisplay().workArea
   win = new BrowserWindow({
@@ -354,9 +800,13 @@ function createMain() {
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setIgnoreMouseEvents(true, { forward: true })
   win.setMenuBarVisibility(false)
-  // 点她不抢前台（见 applyFocusPolicy）：默认 WS_EX_NOACTIVATE，输入框才临时可激活
-  applyFocusPolicy()
-  win.on('blur', () => { if (keyboardWanted) setKeyboardFocus(false) })
+  // 别让 Win+Up / 拖到屏幕边缘把窗口最大化/缩放：透明桌宠一旦被系统改成
+  // 比屏幕还大，就会出现“尾巴被裁 / 命中窗跑到屏幕外 / 和任务栏抢占图层”。
+  try { win.setMaximizable(false) } catch (e) {}
+  try { win.setMinimizable(false) } catch (e) {}
+  try { win.setFullScreenable(false) } catch (e) {}
+  try { win.webContents.setVisualZoomLevelLimits(1, 1) } catch (e) {}
+  if (dualWindow) initHitWindow()
 
   const wa = screen.getPrimaryDisplay().workArea
   if (FULLSCREEN_PRIMARY) {
@@ -372,10 +822,19 @@ function createMain() {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  win.webContents.on('zoom-changed', () => {
+    // Ctrl+滚轮/缩放会把透明窗的 CSS 视口撑到比窗口还大，命中窗和模型都会错位。
+    try { win.webContents.setZoomFactor(1) } catch (e) {}
+  })
   win.webContents.on('did-finish-load', () => {
     failCount = 0
-    // 页面重新加载后先恢复矩形，等它上报新形状（否则会沿用上一版的裁剪区域）
-    try { win.setShape([]) } catch (e) {}
+    try { win.webContents.setZoomFactor(1) } catch (e) {}
+    // 页面刷新/崩溃恢复后模态状态已经没了；别让 modalMode 卡住，否则命中窗永远不会回来。
+    if (dualWindow) {
+      modalMode = false
+      if (uiMode) leaveUiMode(true)
+      queryHitBounds()
+    }
     win.webContents.executeJavaScript('window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(' + lowPower + ')').catch(() => {})
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 1200)
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 3000)
@@ -392,6 +851,7 @@ function createMain() {
     const [x, y] = win.getPosition()
     const [cx, cy] = clampToDisplays(x, y)
     if (cx !== x || cy !== y) win.setPosition(cx, cy)
+    if (dualWindow) updateHitWindowBounds()
     const now = Date.now()
     if (now - (globalThis.__lastSaveAt || 0) > 400) {
       globalThis.__lastSaveAt = now
@@ -399,34 +859,26 @@ function createMain() {
       if (!readFullscreenPrimary()) savePos()
     }
   })
-  win.on('closed', () => { win = null })
-
-  // 页面：文字输入框拿到焦点时临时要键盘（否则点她不抢前台 + 打字打不进去）
-  ipcMain.on('want-keyboard', (_e, on) => setKeyboardFocus(!!on))
-
-  /**
-   * 页面：窗口形状（0.6.2）。
-   *
-   * 铺满主屏的透明窗口会被 Windows 当成「把下面的窗口盖住了」——DSH 的 Chromium
-   * 判定自己遮挡就停止出帧，表现成「进度/滚动冻住，点一下才追上来」。
-   * 页面上报「她 + 可见面板」的矩形，这里用 setShape 把窗口真正收窄：
-   * 区域外既不画也不收鼠标，DSH 就不会被盖住。
-   * 关掉的办法：settings.json 里写 {"noWindowShape": true}。
-   */
-  ipcMain.on('window-shape', (_e, rects) => {
-    if (!win || win.isDestroyed()) return
-    if (readSettings().noWindowShape === true) return
-    try {
-      if (!Array.isArray(rects)) rects = []
-      win.setShape(rects)
-      if (!shapeLogged) { shapeLogged = true; bootLog('窗口形状：已启用（' + rects.length + ' 块）') }
-    } catch (e) {
-      bootLog('setShape 失败：' + (e && e.message))
-    }
+  win.on('move', () => { if (dualWindow) updateHitWindowBounds() })
+  win.on('resize', () => {
+    // ⚠️ 拖动 setPosition 也可能触发 resize；这里只修尺寸，绝不把位置拽回 (0,0)。
+    if (readFullscreenPrimary()) applyFullscreenPrimaryBounds(false)
+    else if (dualWindow) updateHitWindowBounds()
+  })
+  win.on('hide', () => { if (dualWindow) syncHitWindow() })
+  win.on('show', () => {
+    raiseTopmost()
+    if (dualWindow) setTimeout(syncHitWindow, 60)
+  })
+  win.on('closed', () => {
+    destroyHitWindow()
+    win = null
   })
 
   // 拖动：页面里按下她 → 交给主进程搬窗口（拖动期间用 16ms 快速轮询，跟手）
   ipcMain.on('drag-start', async (_e, at) => {
+    // 双窗口下身体拖动由 hit 窗口接管；渲染窗收到的是注入事件（screenX=0），不能信。
+    if (dualWindow) return
     // 小球用的是同一个 preload，也会发 drag-start；主窗口只是 hide() 没 destroy()，
     // 不加这条守卫就会把看不见的主窗口搬走（PR 反馈）
     if (!win || win.isDestroyed() || !win.isVisible()) return
@@ -440,21 +892,9 @@ function createMain() {
       )
       if (kind === 'panel') return // 真控件（滑块/按钮/输入框）→ 让给网页
     } catch (e) {}
-    dragFrom = { mouse: at, win: win.getPosition() }
-    clearInterval(dragTimer)
-    dragTimer = setInterval(() => {
-      if (!dragFrom || !win) return
-      const p = screen.getCursorScreenPoint()
-      win.setPosition(dragFrom.win[0] + (p.x - dragFrom.mouse.x), dragFrom.win[1] + (p.y - dragFrom.mouse.y))
-    }, 16)
-    win.webContents.executeJavaScript("document.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true}))").catch(() => {})
+    startWindowDrag(at)
   })
-  ipcMain.on('drag-end', () => {
-    clearInterval(dragTimer)
-    dragTimer = null
-    dragFrom = null
-    savePos()
-  })
+  ipcMain.on('drag-end', () => stopWindowDrag())
   // 前端那个 ↗ 符号：用默认浏览器打开 DSH 界面
   ipcMain.on('install-plugin', () => installPlugin())
   // 前端（pet.js）发来的指令，和 macOS 版一一对应。
@@ -469,6 +909,15 @@ function createMain() {
       case 'shown':
       case 'expand':
         if (collapsed) expand()
+        break
+      // 详细面板是模态：页面直接通知，别等 90ms 轮询（鼠标可能不在窗口里）
+      case 'modal:on':
+        modalMode = true
+        if (dualWindow) enterUiMode()
+        break
+      case 'modal:off':
+        modalMode = false
+        if (dualWindow) leaveUiMode(true)
         break
       case 'open-dsh':
         openDsh()
@@ -516,25 +965,45 @@ function createMain() {
   // 用 Electron 原生 sendInputEvent 把全局光标位置喂进去（比 executeJavaScript 省得多）。
   cursorFeed = setInterval(() => {
     try {
-      if (!win || win.isDestroyed() || !win.isVisible() || dragTimer) return
+      if (!win || win.isDestroyed() || !win.isVisible() || dragTimer || pageDragging) return
       const p = screen.getCursorScreenPoint()
       // 与 macOS 同理：原来 60ms + 3px 死区会让视线目标「跳着给」，看着卡
       if (lastCursor && Math.abs(lastCursor.x - p.x) < 1 && Math.abs(lastCursor.y - p.y) < 1) return
       lastCursor = p
-      const b = win.getBounds()
-      // 把「整个屏幕」映射到窗口坐标里（与 macOS 同理）：
-      // 否则鼠标跑到窗口外就会被夹住，看着像「到屏幕边缘就不跟了」。
-      const disp = screen.getDisplayNearestPoint(p).bounds
-      const nx = (p.x - disp.x) / Math.max(1, disp.width)
-      const ny = (p.y - disp.y) / Math.max(1, disp.height)
+      // 直接用窗口内容坐标，别把“整个显示器”压缩映射到窗口 ——
+      // 那会把 y 按 1067→1020 压扁，视线对不准鼠标，和命中窗注入的精确坐标打架就抽。
+      const b = win.getContentBounds()
       win.webContents.sendInputEvent({
         type: 'mouseMove',
-        x: Math.round(nx * b.width),
-        y: Math.round(ny * b.height),
+        x: Math.round(p.x - b.x),
+        y: Math.round(p.y - b.y),
       })
     } catch (e) {}
   }, 16)
   pollTimer = setInterval(poll, 90)
+  // 2 秒一次的安全网：窗口被系统/Aero Snap 放大到比屏幕还大时复位；
+  // 顺便把 render/hit 两个窗口重新抬到 topmost，避免任务栏插在它们中间。
+  topmostTimer = setInterval(() => {
+    if (!win || win.isDestroyed() || !win.isVisible()) return
+    try {
+      if (readFullscreenPrimary()) {
+        const d = screen.getPrimaryDisplay()
+        const b = win.getBounds()
+        const maxW = Math.min(d.workArea.width, d.bounds.width)
+        const maxH = Math.min(d.workArea.height, d.bounds.height)
+        if (b.width > maxW + 20 || b.height > maxH + 20) applyFullscreenPrimaryBounds(true)
+        // 窗口压到任务栏/工作区外：先把 topmost 摘掉再挂回去，才能重新压过任务栏。
+        const overWork = (
+          b.x < d.workArea.x || b.y < d.workArea.y ||
+          b.x + b.width > d.workArea.x + d.workArea.width ||
+          b.y + b.height > d.workArea.y + d.workArea.height
+        )
+        raiseTopmost(overWork)
+      } else {
+        raiseTopmost(false)
+      }
+    } catch (e) {}
+  }, 2000)
   win.once('ready-to-show', () => {
     bootLog('ready-to-show：窗口即将显示')
     bootLog('ready-to-show')
@@ -637,6 +1106,49 @@ function clampToDisplays(x, y) {
     return [p.x + p.width - 560, p.y + p.height - 300]
   } catch (e) {
     return [x, y]
+  }
+}
+
+/**
+ * 铺满主屏模式：显示器分辨率/缩放/ HDR 变化后，窗口不会自动跟着变。
+ * 不处理的话会出现「窗口还是旧尺寸、比工作区大、她被挤到屏幕外」。
+ */
+let fullscreenBoundsGuard = false
+function applyFullscreenPrimaryBounds(resetPosition) {
+  if (fullscreenBoundsGuard) return
+  if (!win || win.isDestroyed() || !readFullscreenPrimary()) return
+  try {
+    const d = screen.getPrimaryDisplay()
+    const wa = d.workArea
+    const db = d.bounds
+    // 有些 DPI/显示器切换的瞬间 workArea 会给出比 bounds 还大的值；
+    // 绝不把窗口设成比屏幕还大，否则她会跑到屏幕外、命中窗也一起跑。
+    const w = Math.max(200, Math.min(wa.width, db.width))
+    const h = Math.max(200, Math.min(wa.height, db.height))
+    const x = wa.x
+    const y = wa.y
+    const b = win.getBounds()
+    const sizeWrong = b.width !== w || b.height !== h
+    // resetPosition 只在显示器指标变化/尺寸异常 watchdog 时为 true。
+    // resize 事件（拖动也可能触发）必须保留当前位置，否则窗口会在鼠标和原点之间来回弹。
+    const posWrong = !!resetPosition && (b.x !== x || b.y !== y)
+    if (sizeWrong || posWrong) {
+      fullscreenBoundsGuard = true
+      win.setBounds({
+        x: posWrong ? x : b.x,
+        y: posWrong ? y : b.y,
+        width: w,
+        height: h,
+      })
+      fullscreenBoundsGuard = false
+      bootLog('铺满主屏：窗口复位（sizeWrong=' + sizeWrong + ', posWrong=' + posWrong + ' → ' + w + '×' + h + '）')
+    }
+    if (dualWindow) {
+      updateHitWindowBounds()
+      queryHitBounds()
+    }
+  } catch (e) {
+    fullscreenBoundsGuard = false
   }
 }
 
@@ -751,8 +1263,6 @@ function createBall() {
     skipTaskbar: true,
     show: false,
     alwaysOnTop: true,
-    // 小球同理：点它只是「展开」，不该把前台抢过去（玩游戏时点一下就被切出去）
-    focusable: false,
     // ⚠️ 小球也必须挂 preload：它是靠 window.dshpetBridge 把点击/拖动报回来的，
     // 不挂就等于「小球点不动、拖不了」（写完先自查发现的）
     webPreferences: { contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
@@ -794,6 +1304,7 @@ function snapBall() {
 
 function collapse() {
   if (!win || collapsed) return
+  bootLog('收起成小球（page hidden）')
   collapsed = true
   savePos()
   const [wx, wy] = win.getPosition()
@@ -804,12 +1315,14 @@ function collapse() {
   ballWin.showInactive()
   ballWin.setAlwaysOnTop(true, 'screen-saver')
   win.hide()
+  if (dualWindow) syncHitWindow()
   ballDrag = [ballWin.getPosition()[0], ballWin.getPosition()[1]]
   setTimeout(snapBall, 30)
 }
 
 function expand() {
   if (!collapsed) return
+  bootLog('展开（page shown）')
   collapsed = false
   if (ballWin) {
     ballDrag = null
@@ -819,6 +1332,7 @@ function expand() {
     win.showInactive()
     win.setAlwaysOnTop(true, 'screen-saver')
     win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {})
+    if (dualWindow) setTimeout(syncHitWindow, 300)
   }
 }
 
@@ -859,12 +1373,6 @@ function createTray() {
             if (win) win.webContents.executeJavaScript('window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(' + lowPower + ')').catch(() => {})
           },
         },
-        {
-          label: '点她不抢前台焦点（不打断 DSH / 游戏）',
-          type: 'checkbox',
-          checked: !stealsFocus(),
-          click: (mi) => toggleFocusSteal(!mi.checked),
-        },
         { label: '打开 DSH 界面', click: () => openDsh() },
         { label: linkOff ? '连接 DSH：已关闭（点我打开）' : '连接 DSH：自动（点我关掉）',
           click: () => toggleLink() },
@@ -897,11 +1405,13 @@ function toggleVisible() {
   if (!win || win.isDestroyed()) return
   if (winVisible()) {
     win.hide()
+    if (dualWindow) syncHitWindow()
     bootLog('托盘：隐藏桌宠')
   } else {
     win.showInactive()
     win.setAlwaysOnTop(true, 'screen-saver')
     win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {})
+    if (dualWindow) setTimeout(syncHitWindow, 300)
     bootLog('托盘：显示桌宠')
   }
 }
@@ -930,24 +1440,6 @@ function toggleLink() {
     if (petServer) petServer.clearUpstream()
     petSay('好，先不连 DSH，我陪你就好')
   }
-}
-
-/**
- * 托盘开关：「点她抢前台焦点」——默认关（= 不抢）。
- * 为什么留这个开关：不抢焦点靠的是 Windows 窗口样式（WS_EX_NOACTIVATE），
- * 万一某个输入法/某个软件因此不认我们的输入，一键就能回到老行为，不用重装外壳。
- */
-function toggleFocusSteal(steal) {
-  const cfg = readSettings()
-  cfg.clickStealFocus = !!steal
-  try {
-    fs.mkdirSync(path.dirname(settingsPath()), { recursive: true })
-    fs.writeFileSync(settingsPath(), JSON.stringify(cfg, null, 2))
-  } catch (e) {
-    bootLog('写 settings.json 失败：' + (e && e.message))
-  }
-  applyFocusPolicy()
-  petSay(steal ? '好，点我会切到最前面' : '好，点我不抢前台啦')
 }
 
 function resetPos() {
@@ -1003,9 +1495,7 @@ if (!gotLock) {
     try {
       if (win && !win.isDestroyed()) {
         if (collapsed) expand()
-        // show() 会抢前台；点不抢焦点的窗口用 showInactive，只把窗口提上来
-        if (stealsFocus()) win.show()
-        else win.showInactive()
+        win.show()
         win.setAlwaysOnTop(true, 'screen-saver')
       }
     } catch (e) {}
@@ -1019,6 +1509,9 @@ app.whenReady().then(() => {
     app.setAppUserModelId('com.andersen216.dsh.whalegirlpet')
     createMain()
     bootLog('主窗口已创建')
+    screen.on('display-metrics-changed', () => applyFullscreenPrimaryBounds(true))
+    screen.on('display-added', () => applyFullscreenPrimaryBounds(true))
+    screen.on('display-removed', () => applyFullscreenPrimaryBounds(true))
     createTray()
     bootLog('托盘已创建')
     ipcMain.on('reload', load)
@@ -1044,7 +1537,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => app.quit())
 app.on('before-quit', () => {
   clearInterval(pollTimer)
+  clearInterval(topmostTimer)
   clearInterval(dragTimer)
+  destroyHitWindow()
   if (audioMeter) audioMeter.stop()
   if (petServer) {
     bootLog('退出：关掉本地服务')
