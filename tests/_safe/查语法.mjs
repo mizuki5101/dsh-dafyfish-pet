@@ -19,6 +19,9 @@ import { fileURLToPath } from 'node:url'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..', '..')
 
+// 开发仓库的测试在 _research-data/，公开仓库叫 tests/ —— 同一份脚本两边都要能跑
+const DATA_DIR = fs.existsSync(path.join(ROOT, '_research-data')) ? '_research-data' : 'tests'
+
 const DEFAULTS = [
   'pet-plugin/assets/pet.js',
   'pet-plugin/lib/index.js',
@@ -38,12 +41,13 @@ const DEFAULTS = [
   'shell/src/heart/settings.js',
   'shell/src/heart/opener.js',
   'shell/src/heart/chat.js',
+  'shell/src/heart/memo.js',
   'shell/src/heart/server.js',
-  '_research-data/测试独立桌宠.mjs',
-  '_research-data/测试心跳决策.mjs',
-  '_research-data/测试心跳纯函数.mjs',
-  '_research-data/验证独立外壳.mjs',
-  '_research-data/验证断开降级.mjs',
+  DATA_DIR + '/测试独立桌宠.mjs',
+  DATA_DIR + '/测试心跳决策.mjs',
+  DATA_DIR + '/测试心跳纯函数.mjs',
+  DATA_DIR + '/验证独立外壳.mjs',
+  DATA_DIR + '/验证断开降级.mjs',
 ]
 
 const files = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULTS
@@ -60,6 +64,12 @@ for (const rel of files) {
   try {
     src = fs.readFileSync(abs, 'utf8')
   } catch (e) {
+    // 默认清单里有些只是开发仓库的排障脚本，公开仓库没有 —— 跳过，不算失败。
+    // 显式在命令行点名的文件缺了才算错。
+    if (!process.argv.slice(2).length && e.code === 'ENOENT') {
+      console.log('· ' + rel + ' —— 不存在，跳过')
+      continue
+    }
     console.log('✗ ' + rel + ' —— 读不出来：' + e.message)
     bad++
     continue
