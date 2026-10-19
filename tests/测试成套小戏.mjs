@@ -364,6 +364,38 @@ console.log('\n【16】第 8 段小戏「听见什么」（2026-10-17）')
   }
 }
 
+console.log('\n【17】第 9 段小戏「夜深了」（2026-10-18）')
+{
+  const sc = DATA.find((x) => x.name === '夜深了')
+  ok('数据表里有「夜深了」', !!sc, sc && sc.name)
+  ok('minGap = 120s', !!sc && sc.minGap === 120, sc && sc.minGap)
+  ok('when = night（只进深夜随机池）', !!sc && sc.when === 'night', sc && sc.when)
+  ok(
+    '3 步：clip(叹气) → face(挤眼) → line',
+    !!sc && sc.steps.length === 3 &&
+      sc.steps[0].do === 'clip' && sc.steps[0].arg === '叹气' &&
+      sc.steps[1].do === 'face' && sc.steps[1].arg === '挤眼' &&
+      sc.steps[2].do === 'line' && /早点睡/.test(sc.steps[2].arg),
+    sc && sc.steps,
+  )
+  const st = E.makeState()
+  E.start(st, sc, 0)
+  const at = (ms) => E.frame(st, ms, { holdSec: 0.8 }).filter((x) => x.verb !== 'end')
+  const a0 = at(0)
+  const a1 = at(2800)
+  const a2 = at(4600)
+  ok(
+    '按 0 / 2.8 / 4.6 秒依次放出三步',
+    a0.length === 1 && a0[0].arg === '叹气' &&
+      a1.length === 1 && a1[0].arg === '挤眼' &&
+      a2.length === 1 && /早点睡/.test(a2[0].arg),
+    { a0, a1, a2 },
+  )
+  const end = E.frame(st, 5400, { holdSec: 0.8 }).some((x) => x.verb === 'end')
+  ok('4.6 + 0.8 秒后报 end（时长 ' + E.durOf(sc).toFixed(1) + 's）', end === true)
+  ok('随机池过滤 when:night（且看 lateNight 状态）', /s\.when !== 'night'/.test(src) && /lateNight/.test(src))
+}
+
 console.log('\n' + '='.repeat(52))
 console.log('通过 ' + pass + ' 项，失败 ' + fail + ' 项')
 process.exit(fail === 0 ? 0 : 1)

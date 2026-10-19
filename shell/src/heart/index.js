@@ -14,6 +14,10 @@ const decide = require('./decide')
 const vision = require('./vision')
 const gate = require('./gate')
 const { pickOpener } = require('./opener')
+const { MAX_ENTRIES: MEMO_MAX } = require('./memo')
+
+/** 判重要对照最近几句（喂给提示词的只有 3 句，判重可以多看几句） */
+const DUP_LOOKBACK = 6
 
 const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
@@ -26,7 +30,24 @@ function createHeart(opts) {
   const getAgentState = typeof o.getAgentState === 'function' ? o.getAgentState : async () => ({ status: 'idle', sleeping: false })
   const onAction = typeof o.onAction === 'function' ? o.onAction : null
   const onOpener = typeof o.onOpener === 'function' ? o.onOpener : null
+  /** 读图开始/结束（true/false）：页面据此静音，期间不许冒新气泡 */
+  const onSeal = typeof o.onSeal === 'function' ? o.onSeal : null
+  /**
+   * seal 用**计数**而不是布尔：定时 tick 和「听到声音立刻看一眼」可能并发，
+   * 两个都 seal(true) 时，先结束的那个不能替另一个解封。
+   */
+  let sealDepth = 0
+  let sealSent = false
+  function setSeal(on) {
+    sealDepth = Math.max(0, sealDepth + (on ? 1 : -1))
+    const want = sealDepth > 0
+    if (!onSeal || want === sealSent) return
+    sealSent = want
+    try { onSeal(want) } catch (e) {}
+  }
   const clock = typeof o.now === 'function' ? o.now : () => Date.now()
+  /** 短期记忆（memo.json）：重启后她还知道自己刚才说过什么。没有就退化回内存 */
+  const memo = o.memo || null
 
   let cfg = normalize({})
   let timer = null
@@ -42,17 +63,23 @@ function createHeart(opts) {
   let okCount = 0
   let failCount = 0
   let says = []
-  /** 最近 3 句台词（防 15 秒一轮时复读） */
-  let recentSays = []
+  /** 最近说过的台词（防复读）；有 memo 时从磁盘恢复，外壳重启也不清零 */
+  let recentSays = memo ? memo.says() : []
   let lastSayAt = 0
   let lastMotionAt = 0
-  let lastText = ''
+  let lastText = memo && memo.last() ? memo.last().say : ''
   let lastAction = null
   /** 上一次「看到的画面」类别（不管说没说）—— 用来判断「这个场景是不是第一次见」 */
   let lastSeenNote = null
+  /** 上一次的 see（枚举，稳定）—— 画面指纹拿不到时当「同一场景」的兜底判据 */
+  let lastSee = null
   /** 同一个画面连续看了几次（用来触发「坐太久了，提醒一下」） */
   let sameSeenCount = 0
   let lastInferMs = 0
+  /** 最近一次**成功**调用的端点：{ baseUrl, model, source, at } */
+  let lastEndpoint = null
+  /** 最近一次推理失败的原因（字符串，含 hint），成功或未调用时为空 */
+  let lastInferError = null
   /** 上一轮因为「笼统/退化」重试了几次（0 或 1） */
   let lastRetries = 0
   /** 调试口：下一次 tick 强制冒一句开场白（CDP 验收用，绕过「DSH 空闲」检查） */
@@ -69,6 +96,10 @@ function createHeart(opts) {
     } catch (e) {
       cfg = normalize({})
     }
+    // 改了配置（尤其是模型/API）就把失败退避清掉：
+    // 否则用户刚改对地址，还要干等 20 秒才会重试，看起来像「配置没生效」。
+    backoffUntil = 0
+    inferFails = 0
     return cfg
   }
 
@@ -138,9 +169,10 @@ function createHeart(opts) {
    * 看一眼 → 让模型判断 → 仲裁 → 交给主进程执行。
    * 只有这里会真正「花 GPU」；调用方负责先过 gate。
    */
-  async function think(cap, openerLine, forceIdle) {
+  async function think(cap, openerLine, forceIdle, ignoreBackoff) {
     const t = clock()
-    if (backoffUntil && t < backoffUntil) return { ok: false, reason: 'backoff' }
+    // 手动「立即看一眼」/调试口不受失败退避限制；定时心跳才退避
+    if (!ignoreBackoff && backoffUntil && t < backoffUntil) return { ok: false, reason: 'backoff' }
     if (!cap || !cap.jpeg) return { ok: false, reason: 'no-image' }
 
     const now = new Date(t)
@@ -163,9 +195,17 @@ function createHeart(opts) {
     let attempts = 0
     let retryWhy = ''
     let retryNudge = decide.RETRY_NUDGE
+    /**
+     * 第二次重试是否**不带图**。
+     * 画面没变（或台词重复）时，再看同一张图只会说同一件事 —— 2026-10-19 实测；
+     * 不带图还顺带省掉约 1100 个视觉 token（prefill 从 ~1.2s 降到 ~0.2s）。
+     */
+    let retryNoImage = false
+    const sameDiff = cap.diff
     while (attempts < 2) {
+      const useImage = !(attempts > 0 && retryNoImage)
       const messages = buildMessages({
-        imageDataUrl: 'data:image/jpeg;base64,' + cap.jpeg,
+        imageDataUrl: useImage ? 'data:image/jpeg;base64,' + cap.jpeg : '',
         newScene: isNew,
         systemOverride: cfg.prompt,
         situation,
@@ -187,10 +227,16 @@ function createHeart(opts) {
         inferFails++
         lastSkip = 'infer:' + r.error
         lastReason = 'infer-failed'
+        const detail = r.detail || {}
+        lastInferError = (detail.baseUrl ? detail.baseUrl + ' · ' : '') +
+          (detail.hint || r.error) +
+          (detail.models && detail.models.length ? '（列表里前几个：' + detail.models.slice(0, 6).join('、') + '）' : '')
+        lastEndpoint = null
         const wait = Math.min(300, cfg.failBackoffSec * Math.min(8, inferFails))
         backoffUntil = t + wait * 1000
-        log('心跳：推理失败 ' + r.error + '（' + (r.candidates || 0) + ' 个候选端点，' + wait + 's 后再试）')
-        return { ok: false, reason: lastSkip, candidates: r.candidates || 0 }
+        log('心跳：推理失败 ' + r.error + (detail.baseUrl ? ' @ ' + detail.baseUrl : '') +
+          (detail.hint ? ' — ' + detail.hint : '') + '（' + wait + 's 后再试）')
+        return { ok: false, reason: lastSkip, candidates: r.candidates || 0, error: lastInferError }
       }
       totalMs += r.ms
       lastCall = r
@@ -202,10 +248,13 @@ function createHeart(opts) {
       }
       parsed = p
       // 复读也要重试：同一画面里 9B 会把上一句几乎一字不差地再说一遍。
-      const dup = p.action.say ? decide.isDuplicate(p.action.say, recentSays) : false
+      const dup = p.action.say ? decide.isDuplicate(p.action.say, recentSays.slice(-DUP_LOOKBACK)) : false
       if (attempts === 0 && (decide.needsRetry(p.flags, p.action) || dup)) {
         retryWhy = dup ? 'duplicate' : p.flags.garbled ? 'garbled' : 'empty-speech'
         retryNudge = dup ? decide.RETRY_DUP : decide.RETRY_NUDGE
+        // 重复，或者画面跟上一帧几乎一样 ⇒ 第二次不给图（garbled 除外：它需要看着画面修正）
+        retryNoImage = decide.retryWithoutImage(p.flags, dup, sameDiff, cfg.capture.diffThreshold)
+        if (retryNoImage) retryNudge = decide.RETRY_TOPIC
         attempts++
         continue
       }
@@ -217,13 +266,27 @@ function createHeart(opts) {
     lastInferMs = totalMs
     lastRetries = attempts
     const r = lastCall || { ok: false, error: 'no-call', candidate: null, ms: 0 }
+    // 配置是一回事，**实际打中的端点**是另一回事 —— 状态面板要显示后者
+    if (r && r.ok && r.candidate) {
+      lastEndpoint = { baseUrl: r.candidate.baseUrl, model: r.candidate.model, source: r.candidate.source, at: t }
+      lastInferError = null
+    }
 
+    // 本轮最终那次请求带没带图：无图重试拿到的 topic/see 是猜的，不能拿来更新场景记录
+    const hadImage = !(attempts > 0 && retryNoImage)
     if (parsed && parsed.ok) {
-      // 场景跟踪用 topic（比 note/see 更具体）
+      // 「是不是同一个画面」用**画面指纹**判断，不用 topic 文本：
+      // topic 是模型自由生成的（「桌面图标密密麻麻排满」vs「密密麻麻的图标墙」永远不相等），
+      // 以前按字符串全等比较 ⇒ sameSeenCount 恒为 0，「坐太久了」那条感知从没触发过。
+      // see 只在拿不到指纹（首帧）时兜底。
+      const sameByImage = typeof sameDiff === 'number' && sameDiff <= cfg.capture.diffThreshold
+      const sameBySee = hadImage && !!parsed.action.see && parsed.action.see === lastSee
+      sameSeenCount = decide.nextSameCount(sameSeenCount, sameByImage, sameBySee, lastSeenNote !== null)
       const seen = parsed.action.topic || parsed.action.note || parsed.action.see || ''
-      if (lastSeenNote && seen && seen === lastSeenNote) sameSeenCount++
-      else sameSeenCount = 0
-      lastSeenNote = seen || lastSeenNote
+      if (hadImage) {
+        lastSeenNote = seen || lastSeenNote
+        if (parsed.action.see) lastSee = parsed.action.see
+      }
     }
     if (!parsed || !parsed.ok) {
       lastSkip = 'decide:' + ((parsed && parsed.reason) || retryWhy || 'unknown')
@@ -231,7 +294,7 @@ function createHeart(opts) {
       log('心跳：模型输出解析失败 —— ' + String((lastCall && lastCall.text) || '').slice(0, 120))
       return { ok: false, reason: lastSkip, text: (lastCall && lastCall.text) || '' }
     }
-    if (retryWhy) log('心跳：第一次输出不合格（' + retryWhy + '），已重试一次')
+    if (retryWhy) log('心跳：第一次输出不合格（' + retryWhy + '），已重试一次' + (retryNoImage ? '（这次不带图，换话题）' : ''))
 
     const stRaw = await getAgentState().catch(() => null)
     const st = { status: forceIdle ? 'idle' : (stRaw && stRaw.status), sleeping: !!(stRaw && stRaw.sleeping) }
@@ -257,7 +320,9 @@ function createHeart(opts) {
       lastSayAt = t
       says.push(t)
       recentSays.push(arb.action.say)
-      if (recentSays.length > 3) recentSays = recentSays.slice(-3)
+      if (recentSays.length > MEMO_MAX) recentSays = recentSays.slice(-MEMO_MAX)
+      // 落盘：连 topic/see 一起存 —— 以后要按「这个场景我说过什么」检索时不用改存储格式
+      if (memo) memo.add({ at: t, say: arb.action.say, topic: arb.action.topic, see: arb.action.see })
     }
     if (arb.action.motion || arb.action.face) lastMotionAt = t
     lastReason = 'acted'
@@ -330,18 +395,26 @@ function createHeart(opts) {
         }
       } catch (e) {}
     }
-    const cap = await captureNow({ manual: false, includeImage: true })
-    if (!cap.ok) return cap
+    // 读图期间静默：从采集开始到模型给出动作（或失败）为止，页面不许冒新气泡。
+    // 开场白在上面已经推过了 —— 它是「探头」提示，属于读图之前。
+    // 注意：think() 里的 onAction（正式台词）也在这段之内，所以它会先入队、unseal 后显示。
+    setSeal(true)
+    try {
+      const cap = await captureNow({ manual: false, includeImage: true })
+      if (!cap.ok) return cap
 
-    // 2026-10-18 用户要求「每轮都说话」，所以**不再**因为「画面没变」跳过推理：
-    // 静态文档前她也要能说「主人在看文档呀，这页好像有点长」。
-    // 代价是静态画面每轮都会推理一次；要省电就把间隔调大（面板 15~600s）。
-    void cap.diff
-    if (!cfg.model.provider && !cfg.model.baseUrl) {
-      // 理论上 normalize 保证 provider 有值；这里只是防御
-      return { ok: false, reason: 'no-model-config' }
+      // 2026-10-18 用户要求「每轮都说话」，所以**不再**因为「画面没变」跳过推理：
+      // 静态文档前她也要能说「主人在看文档呀，这页好像有点长」。
+      // 代价是静态画面每轮都会推理一次；要省电就把间隔调大（面板 15~600s）。
+      void cap.diff
+      if (!cfg.model.provider && !cfg.model.baseUrl) {
+        // 理论上 normalize 保证 provider 有值；这里只是防御
+        return { ok: false, reason: 'no-model-config' }
+      }
+      return think(cap, openerLine, debugIdle, force)
+    } finally {
+      setSeal(false)
     }
-    return think(cap, openerLine, debugIdle)
   }
 
   async function tick() {
@@ -366,10 +439,50 @@ function createHeart(opts) {
     return tickBody(true, { ignoreBusy: o2.ignoreBusy === true })
   }
 
+  /**
+   * 面板「确认 API 连接」：真发一条最小 ping。
+   * 好处：① 验证地址/模型名/鉴权；② llama-swap 收到请求会自动加载对应模型。
+   * 只写 lastEndpoint/lastInferError，不碰台词、不碰聊天记忆。
+   */
+  async function probe() {
+    reload()
+    const rr = await vision.resolve(cfg)
+    if (!rr.ok) {
+      lastEndpoint = null
+      lastInferError = (rr.baseUrl ? rr.baseUrl + ' · ' : '') + (rr.hint || rr.error)
+      return { ok: false, error: rr.error, detail: rr }
+    }
+    const c = rr.candidate
+    // 用 ping：接受「有 choices 但 content 为空」的思考模型（reasoning_content 也算合法回复）
+    const r = await vision.ping(c, { timeoutMs: 90000 })
+    if (!r.ok) {
+      lastEndpoint = null
+      lastInferError = c.baseUrl + ' · ' + r.error
+      return { ok: false, error: r.error, endpoint: c }
+    }
+    lastEndpoint = { baseUrl: c.baseUrl, model: c.model, source: c.source, at: clock() }
+    lastInferError = null
+    return {
+      ok: true,
+      text: String(r.text || '').trim().slice(0, 80),
+      reasoning: String(r.reasoning || '').trim().slice(0, 120),
+      empty: !!r.empty,
+      ms: r.ms,
+      endpoint: lastEndpoint,
+    }
+  }
+
+  /** 主动扫描（面板按钮）：返回候选，不自动应用 */
+  async function scan() {
+    reload()
+    const results = await vision.scan(cfg)
+    return { ok: true, at: clock(), results }
+  }
+
   async function providers() {
     reload()
-    const list = await vision.resolveCandidates(cfg)
-    return list.map((c) => ({ baseUrl: c.baseUrl, model: c.model, source: c.source }))
+    const results = await vision.scan(cfg)
+    return results.map((c) => ({ baseUrl: c.baseUrl, model: c.suggested, source: c.source }))
   }
 
   function start() {
@@ -423,6 +536,9 @@ function createHeart(opts) {
       okCount,
       failCount,
       model: describe(cfg),
+      /** 实际打中的端点（成功过才有） */
+      endpoint: lastEndpoint,
+      lastInferError,
       running: !!timer,
     }
   }
@@ -434,6 +550,8 @@ function createHeart(opts) {
     captureNow,
     tickNow,
     providers,
+    scan,
+    probe,
     reload,
     config: () => cfg,
     /** 回应模式占用模型期间，让心跳让路（成对调用） */

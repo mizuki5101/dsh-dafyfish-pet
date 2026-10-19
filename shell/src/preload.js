@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     settings: () => ipcRenderer.invoke('heart:settings'),
     save: (patch) => ipcRenderer.invoke('heart:save', patch || {}),
     model: (action) => ipcRenderer.invoke('heart:model', { action: action || 'status' }),
+    scan: () => ipcRenderer.invoke('heart:scan'),
+    test: () => ipcRenderer.invoke('heart:test'),
     // 回应模式：对话按钮直接问聊天模型（带最近 12 轮记忆）
     chat: (payload) => ipcRenderer.invoke('heart:chat', payload || {}),
     clearChat: () => ipcRenderer.invoke('heart:chat-clear'),

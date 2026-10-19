@@ -187,6 +187,20 @@ console.log('\n【7】配置覆写与可关闭')
   ok('把速度阈值调到极高 → 甩鼠标不再触发', r3.counts.swoosh === 0)
 }
 
+console.log('\n【7.5】夜深了（lateNight 上下文，2026-10-18）')
+{
+  function at(hour, cfg) { return S.frame(S.makeState(), { hour: hour }, cfg || {}, 0).lateNight }
+  ok('23 点算夜深了', at(23) === true)
+  ok('凌晨 0 点算夜深了', at(0) === true)
+  ok('凌晨 5:59 算夜深了', at(5) === true)
+  ok('早上 6 点整不算', at(6) === false)
+  ok('中午不算', at(12) === false)
+  ok('可配置 22–5（左闭右开）', at(22, { sensorNightStart: 22, sensorNightEnd: 5 }) === true && at(4, { sensorNightStart: 22, sensorNightEnd: 5 }) === true && at(5, { sensorNightStart: 22, sensorNightEnd: 5 }) === false)
+  ok('start === end 视为关闭', at(23, { sensorNightStart: 23, sensorNightEnd: 23 }) === false)
+  ok('纯函数不直接读系统时间（hour 由 sensorTick 注入）', !/new Date|Date\.now/.test(m[0]))
+  ok('makeState 带 lateNight 字段', S.makeState().lateNight === false)
+}
+
 console.log('\n【8】活泼节流（noteActivity 不能被刷爆）')
 {
   const st = S.makeState()

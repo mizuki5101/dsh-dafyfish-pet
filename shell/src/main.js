@@ -1667,8 +1667,18 @@ app.whenReady().then(() => {
       const promptModule = require('./heart/prompt')
       const vision = require('./heart/vision')
       const { CHAT_SYSTEM, createChatMemory } = require('./heart/chat')
+      const { createMemo } = require('./heart/memo')
+      const { normalize: normalizeHeart } = require('./heart/config')
       modelServer = createModelServer({ log: bootLog })
-      chatMemory = createChatMemory({ file: path.join(app.getPath('userData'), 'heart', 'chat.json'), maxTurns: 12 })
+      // 对话历史按 token 预算裁（默认 16K ≈ 30~40 轮短对话），不再固定 12 轮
+      const heartCfg0 = normalizeHeart((readSettings() || {}).heart)
+      chatMemory = createChatMemory({
+        file: path.join(app.getPath('userData'), 'heart', 'chat.json'),
+        maxTokens: heartCfg0.chatMaxTokens,
+        minTurns: 6,
+      })
+      // 她主动搭话的短期记忆（12 条）：重启后不重复自己说过的话
+      const heartMemo = createMemo({ file: path.join(app.getPath('userData'), 'heart', 'memo.json'), max: 12 })
       heartSettingsPayload = () => {
         const cfg = heart ? heart.config() : null
         const pub = cfg
@@ -1704,6 +1714,7 @@ app.whenReady().then(() => {
       heart = createHeart({
         log: bootLog,
         readSettings,
+        memo: heartMemo,
         getWindow: () => win,
         getMaskRects: petMaskRects,
         getAgentState: petAgentState,
@@ -1715,6 +1726,14 @@ app.whenReady().then(() => {
             bootLog('心跳：探头「' + line + '」')
           } catch (e) {}
         },
+        // 读图期间的静默开关：采集开始 → 模型出结果，这期间页面的新气泡只排队不显示。
+        // 用同一条 control 通道，不新增协议。
+        onSeal: (on) => {
+          if (!petServer) return
+          try {
+            petServer.push({ t: 'control', seal: !!on })
+          } catch (e) {}
+        },
         // 动作出口：推一条 control 到页面（和 /dsh-pet/control 同一条通道、同一套字段）。
         // 不经过 DSH —— 所以 DSH 关着她也能有心跳。
         onAction: (control, action, meta) => {
@@ -1724,8 +1743,9 @@ app.whenReady().then(() => {
           }
           try {
             petServer.push(control)
-            // 她主动说的话也进聊天记忆：回应模式的模型才能「接着刚才那句」
-            if (control.say && chatMemory) chatMemory.add('assistant', control.say)
+            // 2026-10-19：心跳台词不再写进 chat.json（会挤满对话预算，模型还会接着
+            // 自己的独白说「那就好」→「快把白饭端来」）。改由 heart:chat 在请求时
+            // 把最近一条拼进 system 当旁白。
             bootLog(
               '心跳 → 页面：' + JSON.stringify({ say: control.say || '', mood: control.mood || '', motion: control.motion || '',
                 face: control.expression || '', model: meta && meta.model, ms: meta && meta.ms }),
@@ -1764,13 +1784,24 @@ app.whenReady().then(() => {
         return heart.tickNow(opts || {})
       })
       ipcMain.handle('heart:providers', () => (heart ? heart.providers() : []))
+      // 「扫描本地端点」按钮：只在这里探测端口；心跳推理本身永远不自动发现
+      ipcMain.handle('heart:scan', () => (heart ? heart.scan() : { ok: false, results: [] }))
+      // 「确认 API 连接」：真发一条 ping（也能让 llama-swap 把模型加载起来）
+      ipcMain.handle('heart:test', () => (heart ? heart.probe() : { ok: false, error: 'no-heart' }))
       // 「回应模式」：对话按钮直接问聊天模型（不走 DSH），带最近 12 轮记忆
       ipcMain.handle('heart:chat', async (_e, req) => {
         if (!heart || !chatMemory) return { ok: false, reason: 'no-heart' }
         const text = String((req && req.text) || '').trim().slice(0, 1000)
         if (!text) return { ok: false, reason: 'empty' }
         const cfg = heart.config()
-        const messages = [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
+        // 心跳台词不写进对话历史，但「接着刚才那句」的能力要保留：
+        // 把最近一条主动台词拼进 system，并明确告诉模型「无关就忽略、不要硬接」。
+        const note = heartMemo ? heartMemo.last() : null
+        let sys = CHAT_SYSTEM
+        if (note && note.say && note.at && Date.now() - note.at < 30 * 60 * 1000) {
+          sys += '\n（你刚才自己嘀咕过：「' + note.say.slice(0, 60) + '」。如果和主人现在说的无关，就忽略它，不要硬接。）'
+        }
+        const messages = [{ role: 'system', content: sys }].concat(chatMemory.messages(), [
           { role: 'user', content: text },
         ])
         // 聊天期间让心跳让路：llama-server 只有 -np 1 一个槽位，抢起来会「想好久」
@@ -1801,14 +1832,17 @@ app.whenReady().then(() => {
       // 读：配置 + 运行状态 + 模型进程 + 默认提示词（面板要能「恢复默认」）
       ipcMain.handle('heart:settings', () => heartSettingsPayload())
       // 写：只接受白名单字段，合并进 settings.json 的 heart 段，然后按新配置重排定时器
-      ipcMain.handle('heart:save', (_e, patch) => {
+      ipcMain.handle('heart:save', async (_e, patch) => {
         try {
-          patchHeart(settingsPath(), sanitizeHeartPatch(patch))
+          const clean = sanitizeHeartPatch(patch)
+          patchHeart(settingsPath(), clean)
           if (heart) {
             heart.reload()
             heart.start()
           }
-          bootLog('心跳：设置已保存 ' + JSON.stringify(sanitizeHeartPatch(patch)))
+          // 注意：**不**在保存 baseUrl 时自动停本地模型。
+          // 有人同时用云端 API + 本地模型（llama-swap 自己会换模型），自动停会打断那边。
+          bootLog('心跳：设置已保存 ' + JSON.stringify(clean))
           return heartSettingsPayload()
         } catch (e) {
           return { ok: false, reason: String((e && e.message) || e), config: null }
@@ -1818,7 +1852,14 @@ app.whenReady().then(() => {
       ipcMain.handle('heart:model', async (_e, req) => {
         if (!modelServer || !heart) return { ok: false, reason: 'no-heart' }
         const action = (req && req.action) || 'status'
-        if (action === 'start') return modelServer.start(heart.config())
+        if (action === 'start') {
+          // 自定义 API 优先：配置了地址就不允许再起本地模型（否则又是「API 在跑、9B 也在占显存」）
+          const cfg = heart.config()
+          if (cfg.model.baseUrl) {
+            return { ok: false, reason: '已启用自定义 API（' + cfg.model.baseUrl + '），不会再启动本地模型；要用本地请先清空 API 地址' }
+          }
+          return modelServer.start(cfg)
+        }
         if (action === 'stop') return modelServer.stop()
         return { ok: true, model: modelServer.status() }
       })

@@ -110,6 +110,10 @@
       idleRhythm: true,
       /** 待机性格偏向：-1 更安静（间隔拉长）~ +1 更活泼（间隔缩短、更容易连做） */
       idleMoodBias: 0,
+      /** 气泡最短停留（毫秒）：一条聊天/互动气泡至少显示这么久才允许被下一条替换。0 = 关闭排队 */
+      bubbleMinHoldMs: 5000,
+      /** 读图期间等回复的上限（毫秒）：超过它还没等到回复气泡，就不再「预留队首」，其他气泡照常放行 */
+      bubbleReplyWaitMs: 10000,
     },
     BOOT.config || {},
   )
@@ -3425,7 +3429,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       soft: spec.soft,
       ms,
     })
-    if (spec.line) ui.bubble.show(spec.line, { name: 'DS 鲸鱼娘', ttl: Math.max(ms, 1800) })
+    if (spec.line) {
+      ui.bubble.show(spec.line, {
+        name: 'DS 鲸鱼娘',
+        ttl: Math.max(ms, 1800),
+        // 面板手选：气泡也一起抢占（不排队、不清空后等 5s）
+        force: !!spec.force,
+      })
+    }
     if (spec.motion) {
       playOneShot(spec.motion)
       // 只有**真的做动作**时才暂时不盯鼠标；单纯换个表情不该把视线也停掉，
@@ -4906,54 +4917,228 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let buffer = ''
     // 工作气泡占用中 → 互动气泡让位（见下面 show 里的优先级守卫）
     let workHold = false
+
+    // —— 2026-10-19：最少停留 + 排队 + 读图期间静默 ——
+    // 原来 show() 直接覆盖：上一句还没看完就被下一句顶掉，看起来像刷屏。
+    // 现在：非流式气泡至少停留 MIN_HOLD_MS 才允许被替换；seal 期间（她在读图）
+    // 新气泡只入队、不显示；队列最多 3 条，超了丢最旧的（内容已经过时）。
+    // 0 = 关闭排队（回到旧的「直接顶掉」行为）。
+    const MIN_HOLD_MS = (() => {
+      const v = Number(CFG.bubbleMinHoldMs)
+      return Number.isFinite(v) && v >= 0 ? v : 5000
+    })()
+    const MAX_QUEUE = 3
+    let shownAt = 0
+    let busyShown = false
+    let sealed = false
+    let sealTimer = null
+    let drainTimer = null
+    /** 已收到密封，正在等「读图后的那条回复」——它优先于其他气泡，排到队首 */
+    let expectingReply = false
+    let replyTimer = null
+    const queue = []
+
+    function clearReplyWait() {
+      expectingReply = false
+      if (replyTimer) {
+        clearTimeout(replyTimer)
+        replyTimer = null
+      }
+    }
+
+    function render(text, opts) {
+      opts = opts || {}
+      if (opts.name) headText.textContent = opts.name
+      if (opts.stream) {
+        if (!streaming) {
+          buffer = ''
+          streaming = true
+        }
+        buffer += text
+        body.textContent = buffer.length > 4000 ? '…' + buffer.slice(-4000) : buffer
+      } else {
+        streaming = false
+        buffer = String(text == null ? '' : text)
+        body.textContent = buffer
+      }
+      body.scrollTop = body.scrollHeight
+      foot.textContent = opts.foot || ''
+      dot.classList.toggle('dshp-pulse', !!opts.busy)
+      el.classList.add('dshp-on')
+      // 出现时立刻按当前鼠标位置摆一次 —— 原来这里**没有定位**，
+      // 而 placePanel 只对已 dshp-on 的面板生效，于是气泡一直停在初始位置、
+      // 靠边时尾部被屏幕切掉。
+      try {
+        placeBubble()
+      } catch (e) {}
+      // 表情/动作跟着这条气泡一起上场：排队时它们也一起延后，不会「先演完再说话」。
+      // 只有真正显示出来的气泡才会执行 —— 被丢弃/过期的那条不会白演动作。
+      if (typeof opts.onShow === 'function') {
+        const fn = opts.onShow
+        opts.onShow = null // 同一条气泡后续的 stream 增量别再演一遍动作
+        try {
+          fn()
+        } catch (e) {}
+      }
+      if (timer) clearTimeout(timer)
+      timer = null
+      shownAt = Date.now()
+      busyShown = !!opts.busy
+      // sticky 不自动消失；其余至少停留 MIN_HOLD_MS
+      // （开场白 2.6s、戳一下 2s 都会被拉长到 5s —— 这是有意的，避免一闪而过）
+      const ttl = opts.sticky ? 0 : opts.ttl != null ? opts.ttl : CFG.bubbleTtlMs
+      const hold = ttl > 0 ? Math.max(ttl, opts.minHold === 0 ? 0 : MIN_HOLD_MS) : 0
+      if (hold > 0) timer = setTimeout(() => api.hide(true), hold)
+    }
+
+    function scheduleDrain(delay) {
+      if (drainTimer) clearTimeout(drainTimer)
+      drainTimer = setTimeout(drain, Math.max(0, delay))
+    }
+
+    function drain() {
+      drainTimer = null
+      if (sealed || !queue.length) return
+      if (el.classList.contains('dshp-on')) {
+        const age = Date.now() - shownAt
+        if (age < MIN_HOLD_MS) {
+          scheduleDrain(MIN_HOLD_MS - age + 20)
+          return
+        }
+      }
+      const next = queue.shift()
+      render(next.text, next.opts)
+    }
+
+    function enqueue(text, opts, age) {
+      queue.push({ text, opts })
+      if (queue.length > MAX_QUEUE) queue.shift()
+      if (!sealed) scheduleDrain(Math.max(0, MIN_HOLD_MS - age + 20))
+    }
+
     const api = {
       el,
       show(text, opts) {
         opts = opts || {}
+        // 手动操作用 force：面板里点的表情/动作要立刻落地 —— 清掉积压、打断当前气泡、
+        // 也不让 workHold 挡（用户主动点的东西优先于屏幕上还挂着的旧内容）。
+        if (opts.force) {
+          queue.length = 0
+          clearReplyWait()
+          if (drainTimer) {
+            clearTimeout(drainTimer)
+            drainTimer = null
+          }
+          workHold = !!opts.work
+          render(text, opts)
+          return
+        }
+        // —— 「她在想」占位（用户刚在聊天框发了一条）：必须立刻出现 ——
+        // 两个原因：
+        //   1) 排队会让界面看起来「发了没反应」；
+        //   2) 它是 sticky（不会自己消失），一旦排进队里就永远不 hide，
+        //      后面的回复会被顶掉、前一条旧回复反而在后面冒出来 —— 顺序就乱了。
+        // 聊天优先于心跳台词，所以顺手把积压清掉。
+        if (opts.busy) {
+          workHold = true
+          queue.length = 0
+          clearReplyWait()
+          if (drainTimer) {
+            clearTimeout(drainTimer)
+            drainTimer = null
+          }
+          render(text, opts)
+          return
+        }
         // （戳一下、待机台词这些带 ttl 的）安静等着，不许把汇报顶掉。
         // 正常模式下 workHold 为 false，互动照旧。
         const isWork = !!(opts.work || opts.sticky || opts.stream || opts.busy)
         if (!isWork && workHold && el.classList.contains('dshp-on')) return
         if (isWork) workHold = true
-        if (opts.name) headText.textContent = opts.name
-        if (opts.stream) {
-          if (!streaming) {
-            buffer = ''
-            streaming = true
-          }
-          buffer += text
-          body.textContent = buffer.length > 4000 ? '…' + buffer.slice(-4000) : buffer
-        } else {
-          streaming = false
-          buffer = String(text == null ? '' : text)
-          body.textContent = buffer
+
+        // 流式增量、以及「占位（她在想）→ 正式回复」都算**同一个气泡**的生命周期：
+        // 它们是更新而不是新气泡，不该被 5 秒规则卡住。
+        if (opts.stream && streaming) {
+          render(text, opts)
+          return
         }
-        body.scrollTop = body.scrollHeight
-        foot.textContent = opts.foot || ''
-        // 内容变了 → 尺寸可能变 → 重新摆一次（此时它还没显示，量不到尺寸，
-        // 所以真正的摆放放在下面 dshp-on 之后）
-        dot.classList.toggle('dshp-pulse', !!opts.busy)
-        el.classList.add('dshp-on')
-        // 出现时立刻按当前鼠标位置摆一次 —— 原来这里**没有定位**，
-        // 而 placePanel 只对已 dshp-on 的面板生效，于是气泡一直停在初始位置、
-        // 靠边时尾部被屏幕切掉。
-        try {
-          placeBubble()
-        } catch (e) {}
-        if (timer) clearTimeout(timer)
-        const ttl = opts.sticky ? 0 : opts.ttl != null ? opts.ttl : CFG.bubbleTtlMs
-        if (ttl > 0) timer = setTimeout(() => api.hide(), ttl)
+        if (busyShown && !opts.busy) {
+          render(text, opts)
+          return
+        }
+
+        // 心跳的那条回复：**排到队首**，其他气泡一律排它后面。
+        // 不管当前有没有气泡都走队列 —— 这样 unseal 时它一定是第一条出来的。
+        if (opts.heart && expectingReply) {
+          clearReplyWait()
+          queue.unshift({ text, opts })
+          if (queue.length > MAX_QUEUE) queue.pop() // 超了丢最旧的（队尾）
+          scheduleDrain(0)
+          return
+        }
+
+        if (!el.classList.contains('dshp-on')) {
+          render(text, opts)
+          return
+        }
+
+        const age = Date.now() - shownAt
+        if (sealed || age < MIN_HOLD_MS) {
+          enqueue(text, opts, age)
+          return
+        }
+        render(text, opts)
+      },
+      /**
+       * 读图期间静默：true = 新气泡只入队；false = 立刻放行。
+       * 由心跳主进程在「采集 → 模型出结果」这一段推 seal/unseal。
+       */
+      seal(on) {
+        sealed = !!on
+        if (sealTimer) {
+          clearTimeout(sealTimer)
+          sealTimer = null
+        }
+        if (sealed) {
+          // 声明「马上会有一条读图后的回复」：它占队首，其他气泡只能排在它后面
+          expectingReply = true
+          if (replyTimer) clearTimeout(replyTimer)
+          const v = Number(CFG.bubbleReplyWaitMs)
+          const wait = Number.isFinite(v) && v >= 0 ? v : 10000
+          // 等不到回复就不占位了：否则她一旦超时/失败，其他气泡会被一直堵着
+          replyTimer = setTimeout(() => {
+            clearReplyWait()
+            sealed = false
+            drain()
+          }, wait)
+          // 兜底：主进程没发 unseal（读图超时/进程崩）时自动放行。
+          // 60s 而不是 30s：一次 tick 最多两次推理（20s 超时 ×2）。
+          sealTimer = setTimeout(() => api.seal(false), 60000)
+        } else {
+          clearReplyWait()
+          scheduleDrain(0)
+        }
+      },
+      get sealed() {
+        return sealed
+      },
+      get queued() {
+        return queue.length
       },
       note(text) {
         foot.textContent = text
       },
-      hide() {
+      hide(auto) {
         if (timer) clearTimeout(timer)
         timer = null
         streaming = false
         workHold = false
+        busyShown = false
         buffer = ''
         el.classList.remove('dshp-on')
+        shownAt = 0
+        // 只有「自然到期」才放队列；手动 hide（开面板/收 HUD）不该把积压的气泡倒出来
+        if (auto === true) scheduleDrain(0)
       },
       get visible() {
         return el.classList.contains('dshp-on')
@@ -5536,6 +5721,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         mood: busyHit.mood,
         line: pickFresh(busyHit.lines, 'busy-line-' + busyHit.mood),
         ms: 2200,
+        // 点身体 = 用户主动操作，和面板一个待遇：气泡直接抢占，不排队
+        force: true,
       })
       return
     }
@@ -5553,7 +5740,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       pokeState.angerAt = now
       // 别每次都同一张脸：生气/警觉/嘟嘴里挑一个，台词也从扩过的池子里抽
       const face = pick(['grumpy', 'grumpy', 'alert', 'pout'])
-      act({ mood: face, props: [], line: pickFresh(SAY.many, 'many'), ms: 2600 })
+      act({ mood: face, props: [], line: pickFresh(SAY.many, 'many'), ms: 2600, force: true })
       return
     }
 
@@ -5567,6 +5754,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         props: [],
         line: pickFresh(SAY.ticklish, 'ticklish'),
         ms: 2400,
+        force: true,
       })
       return
     }
@@ -5574,7 +5762,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // 原作者把「鲸鱼喷水」这个动画绑在**左键点她**上（按键表：LeftMouseButton
     // → 喷水.motion3.json）。所以戳她的时候偶尔真的喷一下水——照人家的设计来。
     if (Math.random() < 0.12) {
-      playAction('splash')
+      playAction('splash', true)
       return
     }
 
@@ -5590,6 +5778,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       line: pickFresh(hit.lines, 'line-' + hit.mood),
       heart: hit.fx === 'heart',
       ms,
+      force: true,
     })
   }
 
@@ -5627,7 +5816,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 给一个到点就过期的 TTL → 不会卡住
    *   · 台词只在真的说了话的时候才占用气泡，不会连点刷屏
    */
-  function playItem(kind, key) {
+  function playItem(kind, key, force) {
     const table = kind === 'face' ? FACE_ACT : null
     const info = (table && table[key]) || {}
     const lines = info.lines || (SAY[key] ? SAY[key] : null)
@@ -5642,7 +5831,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }, ms + 400)
     }
     // 这里只负责「她说点什么 + 换个配得上的表情」。
-    return act({ mood, line, props: [], heart: !!info.heart, ms })
+    // force：菜单里点的（不是 agent/待机触发的）→ 气泡直接抢占，不等排队
+    return act({ mood, line, props: [], heart: !!info.heart, ms, force: !!force })
   }
 
   /**
@@ -5651,7 +5841,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    * 关键区别：**动作只走 override 层**（act 的 TTL 到期就没了），
    * 绝不写进 rig.userProps，所以不会一直挂着。
    */
-  function playAction(key) {
+  function playAction(key, force) {
     const a = ACTIONS[key]
     if (!a) return 0
     const expr = a.expr && EXPR[a.expr] ? a.expr : null
@@ -5667,6 +5857,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       heart: !!a.heart,
       motion,
       ms: a.ms || 3000,
+      // force：菜单里手选的动作用，气泡/动作直接抢占；agent 调用（DSHPet.playAction）不开
+      force: !!force,
     })
   }
 
@@ -6817,15 +7009,26 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
       // —— 本地模型 ——
       box.append($('div', 'dshp-hint', '本地模型（llama.cpp ≥ b11582，路径可手填）'))
+      const usingApi = !!(cfg.model && cfg.model.baseUrl)
       const stLine = $('div', 'dshp-hint', ms.running
-        ? '运行中 · :' + ms.port + ' · pid ' + ms.pid
+        ? '运行中' + (usingApi ? '（未使用，建议点「停止」释放显存）' : '') + ' · :' + ms.port + ' · pid ' + ms.pid
         : '未运行' + (ms.lastError ? ' · ' + ms.lastError : ''))
       box.append(stLine)
 
-      const btnStart = $('button', 'dshp-btn', '启动模型')
+      const btnStart = $('button', 'dshp-btn', usingApi ? '启动本地模型（已忽略）' : '启动本地模型')
+      btnStart.disabled = usingApi
+      btnStart.title = usingApi ? '已配置自定义 API，本地模型不会再启动；要用本地请先清空 API 地址' : ''
       const btnStop = $('button', 'dshp-btn', '停止')
+      const btnScan = $('button', 'dshp-btn', '扫描本地端点')
+      const btnCheck = $('button', 'dshp-btn', '确认 API 连接')
       const btnTick = $('button', 'dshp-btn', '立即看一眼')
       const resLine = $('div', 'dshp-hint', '')
+      const checkLine = $('div', 'dshp-hint', '')
+      const scanLine = $('div', 'dshp-hint', '')
+      const scanBox = document.createElement('div')
+      scanBox.style.display = 'flex'
+      scanBox.style.flexDirection = 'column'
+      scanBox.style.gap = '4px'
       btnStart.addEventListener('click', async () => {
         btnStart.disabled = true
         stLine.textContent = '启动中…（最多 60 秒）'
@@ -6857,8 +7060,79 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         else resLine.textContent = '这次不说：' + ((r && r.reason) || '未知')
       })
       const rowM = $('div', 'dshp-row')
-      rowM.append(btnStart, btnStop, btnTick)
-      box.append(rowM, resLine)
+      rowM.append(btnStart, btnStop, btnScan, btnCheck, btnTick)
+      box.append(rowM, checkLine, scanLine, scanBox, resLine)
+
+      // 「确认 API 连接」：真发一条 ping；llama-swap 收到请求就会把对应模型加载起来
+      btnCheck.addEventListener('click', async () => {
+        btnCheck.disabled = true
+        checkLine.textContent = '确认中…（真发一条 ping；llama-swap 换模型时可能要等几十秒）'
+        let r = null
+        try {
+          r = await HB.test()
+        } catch (e) {
+          r = { ok: false, error: String((e && e.message) || e) }
+        }
+        btnCheck.disabled = false
+        if (r && r.ok && r.endpoint) {
+          const reply = r.text
+            ? '回复「' + r.text + '」'
+            : r.reasoning
+              ? '思考模式已回复（无正文；思考前 40 字：' + String(r.reasoning).slice(0, 40) + '…）'
+              : '合法响应（无正文）'
+          checkLine.textContent = '连接正常：' + r.endpoint.baseUrl + ' / ' + r.endpoint.model +
+            ' · ' + r.ms + 'ms · ' + reply
+        } else {
+          const d = (r && r.detail) || {}
+          checkLine.textContent = '连接失败：' + ((d.hint || d.error || (r && r.error) || '未知'))
+        }
+      })
+
+      // 「扫描」只在用户点它时探测端口；心跳推理永远只打配置里的那一个端点
+      btnScan.addEventListener('click', async () => {
+        btnScan.disabled = true
+        scanLine.textContent = '扫描中…（只读 /v1/models，不加载模型）'
+        scanBox.textContent = ''
+        let r = null
+        try {
+          r = await HB.scan()
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        btnScan.disabled = false
+        const results = (r && r.results) || []
+        if (!r || !r.ok) {
+          scanLine.textContent = '扫描失败：' + ((r && r.reason) || '未知')
+          return
+        }
+        if (!results.length) {
+          scanLine.textContent = '没发现端点（先启动 llama-server，或手填 API 地址）'
+          return
+        }
+        scanLine.textContent = '发现 ' + results.length + ' 个端点；选模型后点「用这个」写入配置（不会自动切换）'
+        for (const it of results) {
+          const row = $('div', 'dshp-row')
+          row.append($('span', 'dshp-hint', it.baseUrl))
+          const sel = document.createElement('select')
+          sel.style.maxWidth = '220px'
+          sel.style.font = 'inherit'
+          for (const mid of it.models || []) {
+            const op = document.createElement('option')
+            op.value = mid
+            op.textContent = mid
+            sel.append(op)
+          }
+          if (it.suggested) sel.value = it.suggested
+          const use = $('button', 'dshp-btn', '用这个')
+          use.addEventListener('click', async () => {
+            use.disabled = true
+            await save({ model: { baseUrl: it.baseUrl, model: sel.value } })
+            use.disabled = false
+          })
+          row.append(sel, use)
+          scanBox.append(row)
+        }
+      })
 
       // —— 端口 / 路径 ——
       const mkInput = (label, value, onChange, opts) => {
@@ -6902,8 +7176,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         mkInput('视觉投影', sv.mmproj, (v) => save({ modelServer: { mmproj: v } }), {
           placeholder: 'D:\\llama\\weights\\mmproj-model-f16.gguf',
         }),
-        $('div', 'dshp-hint', '填完路径点「启动模型」；它会在 ' + (mm.port || 19411) + ' 端口起 llama-server。也可以自己起，外面的服务会被自动发现。'),
-        $('div', 'dshp-hint', '自定义 API（OpenAI 兼容）：填了地址就优先用它，不需要本地模型。'),
+        $('div', 'dshp-hint', '填完路径点「启动模型」；它会在 ' + (mm.port || 19411) + ' 端口起 llama-server。'),
+        $('div', 'dshp-hint', '本地端点只在你点「扫描」时探测；心跳不会在后台自动发现，避免误用别的服务。'),
+        $('div', 'dshp-hint', '自定义 API（OpenAI 兼容）：填了地址就优先用它；保存地址不会自动停本地模型（llama-swap 会自己换模型）。'),
         mkInput('API 地址', mm.baseUrl, (v) => save({ model: { baseUrl: v } }), { placeholder: 'https://api.example.com/v1' }),
         mkInput('模型名', mm.model, (v) => save({ model: { model: v } }), { placeholder: 'qwen3.5-9b / gpt-4o-mini' }),
         mkInput('API Key', '', (v) => save({ model: { apiKey: v } }), { type: 'password', placeholder: mm.apiKeySet ? '已设置（清空并保存=删除）' : 'sk-...' }),
@@ -6927,7 +7202,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       rowP.append(btnSaveP, btnResetP)
       box.append(ta, rowP)
 
-      // —— 最近一次状态 ——
+      // —— 实际使用 / 最近一次状态 ——
+      const ep = st.endpoint
+      const epText = ep
+        ? '实际使用：' + ep.baseUrl + ' / ' + ep.model + (ep.source === 'manual' ? '' : '（' + ep.source + '）')
+        : st.lastInferError
+          ? '实际使用：尚无（最近失败：' + String(st.lastInferError).slice(0, 120) + '）'
+          : '实际使用：尚未调用过模型'
+      box.append($('div', 'dshp-hint', epText))
       const last = st.lastReason || 'never'
       const lastText = st.lastText ? '「' + String(st.lastText).slice(0, 40) + '」' : ''
       box.append($('div', 'dshp-hint', '最近：' + last + (lastText ? ' · ' + lastText : '') + (st.lastInferMs ? ' · 推理 ' + st.lastInferMs + 'ms' : '')))
@@ -6996,11 +7278,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           // 所以这里不写 30 秒的 rig.user 手动层，只走一次性 override。
           clearUserFace()
           if (rep) {
-            playItem('face', rep)   // 有情绪条目 → 走原来那条路（带 FACE_ACT 的台词/mood）
+            playItem('face', rep, true)   // 有情绪条目 → 走原来那条路（带 FACE_ACT 的台词/mood）
           } else {
             // 没有情绪条目的新表情：直接把 face 交给 override 层。
             // 不写 rig.user 手动层 —— 菜单表情是"演三四秒"，不是常驻。
-            act({ face: expr, mood: 'neutral', props: [], line: pickFresh(lines, 'face-' + expr), ms: 3600 })
+            // force：手点的，气泡直接抢占（不排在心跳台词后面）
+            act({ face: expr, mood: 'neutral', props: [], line: pickFresh(lines, 'face-' + expr), ms: 3600, force: true })
           }
           renderPane(id)
         })
@@ -7027,7 +7310,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         const b = $('button', 'dshp-chip', a.label)
         b.title = `点了她会说：${a.lines[0]}` + (a.note ? `\n${a.note}` : '') + (a.motion ? `\n动作：${a.motion}` : '')
         b.addEventListener('click', () => {
-          playAction(key)
+          playAction(key, true) // 手点：气泡/动作直接抢占，不排队
           renderPane('action')
         })
         grid.appendChild(b)
@@ -7058,7 +7341,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         b.title = '演一遍「' + sc.name + '」\n时长 ' + dur.toFixed(1) + 's · ' + (sc.steps || []).length + ' 步 · 冷却 ' + sc.minGap + 's\n' + steps
         b.addEventListener('click', () => {
           const got = startIdleScriptByName(sc.name)
-          if (got) ui.bubble.show('（演一段）' + got, { name: 'DS 鲸鱼娘', ttl: 1800 })
+          // 手点的小戏：提示气泡也直接抢占（否则要等前一条满 5s 才冒出来）
+          if (got) ui.bubble.show('（演一段）' + got, { name: 'DS 鲸鱼娘', ttl: 1800, force: true })
           renderPane(id)
         })
         grid.appendChild(b)
@@ -7818,21 +8102,46 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 外部（用户菜单，或 agent 自己调 /dsh-pet/control）驱动的表演。 */
   function handleControl(m) {
+    // 读图静默开关：心跳在「采集 → 模型出结果」期间推 seal，这期间不许冒别的气泡。
+    // 只影响气泡排队，不碰表情/动作/道具。
+    if (m.seal !== undefined) {
+      try { ui.bubble.seal(!!m.seal) } catch (e) {}
+    }
     if (m.clearProps) clearProps()
     if (m.props && typeof m.props === 'object') {
       for (const [k, v] of Object.entries(m.props)) setProp(k, !!v)
     }
-    if (m.expression !== undefined) {
-      rig.face = m.expression === null || !EXPR[m.expression] ? null : m.expression
-      mood = 'custom'
-      rig.dirty = true
+    // —— 表情/动作必须和台词**同时**发生 ——
+    // 气泡现在会排队（每条至少 5s），如果动作在这里先演，等气泡真正出来时
+    // 动作早就结束了，看起来就是「动作和话不同步」。
+    // 所以打包成 onShow，交给气泡在**真正显示的那一刻**执行；
+    // 被 workHold 丢掉、或者排队时过期没显示的那条，动作也不会白演。
+    const perform = () => {
+      if (m.expression !== undefined) {
+        rig.face = m.expression === null || !EXPR[m.expression] ? null : m.expression
+        mood = 'custom'
+        rig.dirty = true
+      }
+      if (m.mood != null || m.expression) {
+        act({ mood: m.mood, face: m.expression, ms: m.bubbleMs || 5000 })
+      }
+      if (m.motion) playMotion(m.motion)
     }
-    if (m.mood != null || m.expression) {
-      act({ mood: m.mood, face: m.expression, ms: m.bubbleMs || 5000 })
-    }
-    if (m.motion) playMotion(m.motion)
     const text = m.say || m.bubble
-    if (text) ui.bubble.show(String(text), { name: 'DS 鲸鱼娘', ttl: m.bubbleMs || 5000 })
+    // heart：心跳主动说的那句 → 排到「等读图回复」的队首（见 makeBubble 的 expectingReply）。
+    // ⚠️ **不带 work**：工作气泡优先 —— DSH 的汇报还挂在屏幕上时，这句直接在
+    // show 的 workHold 守卫那里让位，不抢工作气泡的位置（2026-10-19 用户明确要求）。
+    if (text) {
+      ui.bubble.show(String(text), {
+        name: 'DS 鲸鱼娘',
+        ttl: m.bubbleMs || 5000,
+        heart: !!m.heart,
+        onShow: perform,
+      })
+    } else {
+      // 只有表情/动作、没有台词（例如纯表情指令）：没有气泡可等，立即演
+      perform()
+    }
     // 工作简报（/dsh-pet/control 的 report 字段）：头顶挂信封，点开是大号面板
     if (m.report) {
       try {

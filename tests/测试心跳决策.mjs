@@ -81,6 +81,22 @@ console.log('\n【2】白名单夹取')
   ok('isDuplicate: 不同句不判重', D.isDuplicate('今天想吃白饭', ['主人，喝口水吧']) === false)
   ok('isDuplicate: 太短不判重', D.isDuplicate('嗯嗯', ['嗯嗯']) === false)
   ok('RETRY_DUP 要求换说法', /换个角度|不要重复/.test(D.RETRY_DUP))
+  ok('RETRY_TOPIC 要求离开屏幕换话题', /不用再看屏幕/.test(D.RETRY_TOPIC) && /topic 填空字符串/.test(D.RETRY_TOPIC))
+  ok('RETRY_TOPIC 和 RETRY_DUP 不是同一套指令', D.RETRY_TOPIC !== D.RETRY_DUP)
+
+  // 2026-10-19：同一画面计数（旧实现按 topic 文本全等 ⇒ 恒为 0）
+  ok('nextSameCount: 首帧不计数', D.nextSameCount(0, true, true, false) === 0)
+  ok('nextSameCount: 画面没变累加', D.nextSameCount(2, true, false, true) === 3)
+  ok('nextSameCount: 画面变了归零', D.nextSameCount(2, false, false, true) === 0)
+  ok('nextSameCount: 只靠 see 兜底也算同一画面', D.nextSameCount(1, false, true, true) === 2)
+  ok('nextSameCount: 坏输入不炸', D.nextSameCount(undefined, true, false, true) === 1)
+
+  // 2026-10-19：第二次重试不带图（省视觉 token + 逼它换话题）
+  ok('retryWithoutImage: 台词重复 ⇒ 不带图', D.retryWithoutImage({}, true, 99, 6) === true)
+  ok('retryWithoutImage: 画面没变 ⇒ 不带图', D.retryWithoutImage({}, false, 3, 6) === true)
+  ok('retryWithoutImage: 画面变了 ⇒ 带图', D.retryWithoutImage({}, false, 20, 6) === false)
+  ok('retryWithoutImage: garbled 必须带图修正', D.retryWithoutImage({ garbled: true }, false, 2, 6) === false)
+  ok('retryWithoutImage: 首帧 diff=null ⇒ 带图', D.retryWithoutImage({}, false, null, 6) === false)
 
   const badJson = D.sanitize('not json')
   ok('非 JSON → bad-json', badJson.ok === false && badJson.reason === 'bad-json')
@@ -136,6 +152,12 @@ console.log('\n【5】提示词与 schema')
   ok('允许泛泛的关心话', /泛泛的关心/.test(newSceneMsgs[0].content))
   ok('动作词表不在用户消息里（会污染画面识别）', !/尾巴快摆/.test(newSceneMsgs[1].content[0].text))
   ok('动作词表在 system 里', /尾巴快摆/.test(newSceneMsgs[0].content))
+  // 2026-10-19：旧示例把 see/mood 写成实值，实测 8/8 条回复全是 chat/thinking（表情永远「思考中」）
+  ok('示例给了两个不同的 see（不锁死 chat）',
+    /"see":"coding"/.test(msgs[0].content) && /"see":"browsing"/.test(msgs[0].content) && !/"see":"chat"/.test(msgs[0].content))
+  ok('示例给了两个不同的 mood（不锁死 thinking）',
+    /"mood":"happy"/.test(msgs[0].content) && /"mood":"shy"/.test(msgs[0].content) && !/"mood":"thinking"/.test(msgs[0].content))
+  ok('明确要求按实际自己挑，不要照抄', /不要固定抄/.test(msgs[0].content))
   ok('情境行可解析', (() => { try { JSON.parse(P.situationText({ time: '1', weekday: 'x' })); return true } catch (e) { return false } })())
 
   const s = P.SCHEMA
@@ -163,6 +185,12 @@ console.log('\n【6】词表镜像 / 端点归一化')
   ok('没给名字时挑视觉模型', V.pickModelName(['qwen3.5-9b', 'minicpm-v-4.7'], '') === 'minicpm-v-4.7')
   ok('都不像就取第一个', V.pickModelName(['a', 'b'], '') === 'a')
   ok('空列表返回空串', V.pickModelName([], 'x') === '')
+  ok('严格匹配：精确命中', V.matchModel(['qwen3.5-9b', 'minicpm-v4.7-1b'], 'minicpm-v4.7-1b').ok === true)
+  ok('严格匹配：不做模糊回退', V.matchModel(['bonsai2-27b-v3-vision', 'qwen3.5-9b'], 'minicpm-v4.7-1b').ok === false)
+  ok('严格匹配：未命中返回候选列表', (() => { const r = V.matchModel(['a', 'b'], 'c'); return r.error === 'model-not-found' && r.models.length === 2 })())
+  ok('严格匹配：空模型名报 no-model', V.matchModel(['a'], '').error === 'no-model')
+  ok('严格匹配：大小写敏感', V.matchModel(['MiniCPM-V-4.7-1B'], 'minicpm-v4.7-1b').ok === false)
+  ok('严格匹配：自动去空格', V.matchModel([' qwen3.5-9b '], 'qwen3.5-9b').ok === true)
 
   ok('hourCount 只看最近一小时', D.hourCount([NOW - 1000, NOW - 7200000], NOW) === 1)
   ok('isNightHour 边界', D.isNightHour(23) && D.isNightHour(5) && !D.isNightHour(6))
@@ -247,6 +275,38 @@ console.log('\n【9】回应模式：聊天记忆 / 自定义 API 配置')
   ok('清空后为空', mem2.size() === 0 && JSON.parse(fs.readFileSync(tmp, 'utf8')).messages.length === 0)
   fs.unlinkSync(tmp)
   ok('CHAT_SYSTEM 有「大肥鱼」人设', /大肥鱼/.test(CH.CHAT_SYSTEM) && /主人/.test(CH.CHAT_SYSTEM))
+
+  // 2026-10-19：历史改成 token 预算（默认 16K），不再固定 12 轮
+  const tmp2 = tmp + '.b'
+  ok('estimateTokens：中文≈1 字 1 token', (() => { const t = CH.estimateTokens('一二三四五六七八九十'); return t >= 10 && t <= 20 })())
+  ok('estimateTokens：英文≈4 字符 1 token', (() => { const t = CH.estimateTokens('abcdefgh'); return t >= 4 && t <= 10 })())
+  const mem3 = CH.createChatMemory({ file: tmp2 })
+  ok('默认预算 16K', mem3.maxTokens === 16384 && CH.DEFAULT_MAX_TOKENS === 16384)
+  const many = []
+  for (let i = 0; i < 40; i++) {
+    many.push({ role: 'user', content: '问题 ' + i + '：' + '字'.repeat(200) })
+    many.push({ role: 'assistant', content: '回答 ' + i + '：' + '字'.repeat(200) })
+  }
+  const trimmed = CH.trimMessages(many, { maxTokens: 4096, minTurns: 6 })
+  ok('超预算会裁掉旧轮次', trimmed.length < many.length && trimmed.length > 0)
+  ok('裁完第一条是 user（不会只有回答没有提问）', trimmed[0].role === 'user')
+  ok('至少保留 minTurns 轮', trimmed.filter((m) => m.role === 'user').length >= 6, trimmed.filter((m) => m.role === 'user').length)
+  ok('保留的是最新内容', /回答 39/.test(trimmed[trimmed.length - 1].content))
+  try { fs.unlinkSync(tmp2) } catch (e) {}
+
+  // 旧数据：开头一串 assistant（心跳独白）没有对应的 user，应被清掉
+  const tmp3 = tmp + '.c'
+  fs.writeFileSync(tmp3, JSON.stringify({
+    messages: [
+      { role: 'assistant', content: '独白1' },
+      { role: 'assistant', content: '独白2' },
+      { role: 'user', content: '你好' },
+      { role: 'assistant', content: '主人好' },
+    ],
+  }))
+  const mem4 = CH.createChatMemory({ file: tmp3 })
+  ok('旧数据里的孤儿独白被清掉', mem4.size() === 2 && mem4.messages()[0].content === '你好', mem4.messages())
+  try { fs.unlinkSync(tmp3) } catch (e) {}
 
   const CFG = require('../shell/src/heart/config.js')
   ok('默认工作模式', CFG.normalize({}).mode === 'dsh')

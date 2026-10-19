@@ -16,6 +16,13 @@ const DEFAULTS = {
   lookOpener: true,
   /** 对话按钮往哪送：'dsh' = 工作模式（走 DSH 会话）；'pet' = 回应模式（直接问聊天模型） */
   mode: 'dsh',
+  /**
+   * 回应模式保留的对话历史预算（粗略 token 估算）。
+   * 16384 ≈ 30~40 轮短对话；超了才从最旧裁，至少保留 6 轮。
+   * 为什么不直接顶到模型窗口上限：首次/换模型没有前缀缓存，全量 prefill
+   * 本机 9B 约 977 tok/s，太长会让第一句等几十秒。
+   */
+  chatMaxTokens: 16384,
   /** 听觉感知 burst 时立刻看一眼（等价「立即看一眼」） */
   audioTrigger: true,
   nightQuiet: true,
@@ -79,6 +86,7 @@ function normalize(raw) {
     maxSaysPerHour: num(src.maxSaysPerHour, DEFAULTS.maxSaysPerHour, 1, 600),
     lookOpener: bool(src.lookOpener, DEFAULTS.lookOpener),
     mode: src.mode === 'pet' ? 'pet' : 'dsh',
+    chatMaxTokens: num(src.chatMaxTokens, DEFAULTS.chatMaxTokens, 2048, 131072),
     audioTrigger: bool(src.audioTrigger, DEFAULTS.audioTrigger),
     nightQuiet: bool(src.nightQuiet, DEFAULTS.nightQuiet),
     skipWhenIdleSec: num(src.skipWhenIdleSec, DEFAULTS.skipWhenIdleSec, 0, 86400),

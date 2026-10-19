@@ -196,6 +196,17 @@ const RETRY_NUDGE =
 const RETRY_DUP =
   '上一句和最近说过的几乎一样。请换个角度或说法重写，不要重复最近说过的话。'
 
+/**
+ * 第二次重试**不带图**时用：逼它离开屏幕，换个话题。
+ *
+ * 为什么需要：2026-10-19 实测，静止桌面（图标墙）上第一版几乎必然和上一轮重复
+ * （12125/12126 相隔 30 秒、台词一字不差），而**带着同一张图重试仍然落在同一件事上**
+ * （12132→12133「这么多程序挤在一起」前缀一字不差）。再看一眼没有新信息，
+ * 只能换个输入：不给图，让它聊主人/自己/时间。
+ */
+const RETRY_TOPIC =
+  '这次不用再看屏幕了：这个画面你刚刚已经说过。请换个话题 —— 问问主人在忙什么、说说你自己、或者提醒一下时间/该休息了；topic 填空字符串，不要再提屏幕上的东西。'
+
 /** 两句台词的相似度（二字片段 Jaccard）；用于「防复读」 */
 function isDuplicate(say, recent) {
   const norm = (s) => String(s || '').replace(/[\s\p{P}]/gu, '')
@@ -217,6 +228,37 @@ function isDuplicate(say, recent) {
 
 function hourCount(list, now) {
   return (Array.isArray(list) ? list : []).filter((t) => Number.isFinite(t) && now - t < 3600 * 1000).length
+}
+
+/**
+ * 「同一个画面看了第几次」。
+ *
+ * 用**画面指纹**判断，不用 topic 文本：topic 是模型自由生成的
+ * （「桌面图标密密麻麻排满」vs「密密麻麻的图标墙」永远不相等），
+ * 旧实现按字符串全等比较 ⇒ 计数恒为 0，「坐太久了」那条感知从没触发过。
+ *
+ * @param {number} prev          上一次的计数
+ * @param {boolean} sameByImage  画面指纹判定为同一画面
+ * @param {boolean} sameBySee    see 枚举相同（首帧没有指纹时的兜底）
+ * @param {boolean} hasBaseline  之前看过至少一次
+ */
+function nextSameCount(prev, sameByImage, sameBySee, hasBaseline) {
+  if (!hasBaseline) return 0
+  if (!sameByImage && !sameBySee) return 0
+  return Math.max(0, Number(prev) || 0) + 1
+}
+
+/**
+ * 重试时要不要把图去掉。
+ *
+ * 画面没变、或台词重复时，再看同一张图只会说同一件事（2026-10-19 实测）；
+ * 去掉图既省约 1100 视觉 token，又能逼模型换个话题。
+ * garbled 例外：它需要看着画面才能修正。
+ */
+function retryWithoutImage(flags, dup, diff, threshold) {
+  if (dup) return true
+  if (flags && flags.garbled) return false
+  return typeof diff === 'number' && diff <= threshold
 }
 
 function isNightHour(hour) {
@@ -270,7 +312,9 @@ function arbitrate(action, state, cfg, now) {
 
 /** 动作 → 页面 /dsh-pet/control 的字段（SSE 直接推这个形状） */
 function toControl(action, ms) {
-  const out = { t: 'control' }
+  // heart=true：这是**心跳主动说的那一句**（不是 DSH 工具气泡、也不是看屏前的开场白）。
+  // 页面据此把它排到「等读图回复」的队首，别的气泡只能排在它后面。
+  const out = { t: 'control', heart: true }
   if (action.say) out.say = action.say
   if (action.mood) out.mood = action.mood
   if (action.motion) out.motion = action.motion
@@ -282,5 +326,6 @@ function toControl(action, ms) {
 module.exports = {
   MAX_SAY, MAX_TOPIC, MAX_NOTE, MAX_SAYS_PER_HOUR, MOTION_MIN_GAP_MS, RETRY_NUDGE,
   extractJson, clampText, stripArtifacts, sanitize, needsRetry, arbitrate, toControl,
-  hourCount, isNightHour, isGeneric, looksGarbled, overlapsTopic, isDuplicate, RETRY_DUP,
+  hourCount, isNightHour, isGeneric, looksGarbled, overlapsTopic, isDuplicate, RETRY_DUP, RETRY_TOPIC,
+  nextSameCount, retryWithoutImage,
 }

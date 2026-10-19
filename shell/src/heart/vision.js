@@ -69,33 +69,77 @@ async function listModels(baseUrl, opts) {
 }
 
 /**
- * 候选端点（按优先级）。
- * @param {object} cfg heart 配置
- * @returns {Promise<Array<{baseUrl:string, model:string, apiKey:string, source:string}>>}
+ * 严格匹配：手动填了模型名，就必须在 /v1/models 里**精确出现**。
+ *
+ * 为什么不做「像就行」的回退：2026-10-18 的事故就是回退到「第一个带 vision 的模型」，
+ * 把用户读文献的 bonsai2-27B 当成桌宠模型拉起来、还收到了完整提示词。
+ * 现在只认精确匹配；不匹配就报错，让用户去改配置。
+ *
+ * @returns {{ok:true, model:string, models:string[]}|{ok:false, error:string, wanted?:string, models:string[]}}
  */
-async function resolveCandidates(cfg) {
+function matchModel(models, wanted) {
+  const list = (models || []).map((x) => String(x).trim()).filter(Boolean)
+  const want = String(wanted == null ? '' : wanted).trim()
+  if (!want) return { ok: false, error: 'no-model', models: list }
+  const hit = list.find((x) => x === want)
+  if (hit) return { ok: true, model: hit, models: list }
+  return { ok: false, error: 'model-not-found', wanted: want, models: list }
+}
+
+/**
+ * 解析当前配置的**唯一**端点 —— 不做任何自动发现。
+ * 没填 baseUrl 就直接报错，让用户点面板的「扫描」或手填。
+ */
+async function resolve(cfg) {
   const m = (cfg && cfg.model) || {}
-  const manual = normalizeBase(m.baseUrl)
-  const out = []
-
-  if (manual) {
-    const models = await listModels(manual, { apiKey: m.apiKey, timeoutMs: 1200 })
-    out.push({ baseUrl: manual, model: pickModelName(models || [m.model], m.model), apiKey: m.apiKey || '', source: 'manual' })
+  const base = normalizeBase(m.baseUrl)
+  if (!base) {
+    return { ok: false, error: 'no-endpoint', hint: '未配置 API 地址：点「扫描」选择本地端点，或手填自定义 API' }
   }
-  if (m.provider === 'openai' || m.provider === 'separate' || manual) return out
+  const models = await listModels(base, { apiKey: m.apiKey, timeoutMs: 1500 })
+  if (!models) {
+    return { ok: false, error: 'endpoint-unreachable', baseUrl: base, hint: '连不上 ' + base + '/models（服务没起，或不是 OpenAI 兼容）' }
+  }
+  const mm = matchModel(models, m.model)
+  if (!mm.ok) {
+    return {
+      ok: false, error: mm.error, baseUrl: base, wanted: mm.wanted || '',
+      models: mm.models.slice(0, 20),
+      hint: mm.error === 'no-model'
+        ? '请填模型名，或点「扫描」从列表里选'
+        : '模型名「' + mm.wanted + '」不在 ' + base + ' 的 /v1/models 里；可用：' + mm.models.slice(0, 6).join('、'),
+    }
+  }
+  return {
+    ok: true,
+    candidate: { baseUrl: base, model: mm.model, apiKey: m.apiKey || '', source: 'manual' },
+    models,
+  }
+}
 
-  // 用户填的端口排第一（面板里的「API 端口」）；其余常见端口兜底。
+/**
+ * 只在用户点「扫描」时调用：探测手填端口 + 常见端口，返回**候选列表**（不自动使用）。
+ * @returns {Promise<Array<{baseUrl:string, models:string[], suggested:string, source:string}>>}
+ */
+async function scan(cfg) {
+  const m = (cfg && cfg.model) || {}
+  const bases = []
+  const manual = normalizeBase(m.baseUrl)
+  if (manual) bases.push({ base: manual, source: 'manual' })
   const ports = []
   const preferred = Number(m.port)
   if (preferred > 0 && preferred < 65536) ports.push(preferred)
   for (const p of DEFAULT_PORTS) if (!ports.includes(p)) ports.push(p)
+  for (const port of ports) bases.push({ base: 'http://127.0.0.1:' + port + '/v1', source: 'auto:' + port })
 
-  for (const port of ports) {
-    const base = 'http://127.0.0.1:' + port + '/v1'
-    if (manual && base === manual) continue
-    const models = await listModels(base, { timeoutMs: 700 })
+  const seen = new Set()
+  const out = []
+  for (const b of bases) {
+    if (seen.has(b.base)) continue
+    seen.add(b.base)
+    const models = await listModels(b.base, { timeoutMs: 700 })
     if (!models) continue
-    out.push({ baseUrl: base, model: pickModelName(models, m.model), apiKey: '', source: 'auto:' + port })
+    out.push({ baseUrl: b.base, models, suggested: pickModelName(models, m.model), source: b.source })
   }
   return out
 }
@@ -147,19 +191,68 @@ async function chat(candidate, messages, opts) {
 }
 
 /**
- * 自动挑一个能用的端点并请求；前一个失败就换下一个。
- * @returns {Promise<{ok:true,text,ms,usage,candidate}|{ok:false,error,candidates:number}>}
+ * 连通性 ping：只要 HTTP 2xx + 合法 OpenAI 响应（有 choices）就算成功。
+ *
+ * 为什么不能复用 chat()：chat() 要求 content 非空；而开了思考模式的模型
+ * （Qwen3.5 / Llama 等）经常把话全放在 reasoning_content 里，content 是空串——
+ * 实际连接完全正常，却被判成 empty content。这里显式接受空正文。
  */
-async function infer(cfg, messages, opts) {
-  const cands = await resolveCandidates(cfg)
-  if (!cands.length) return { ok: false, error: 'no-endpoint', candidates: 0 }
-  let lastErr = ''
-  for (const c of cands.slice(0, 3)) {
-    const r = await chat(c, messages, opts)
-    if (r.ok) return Object.assign({}, r, { candidate: c })
-    lastErr = r.error || 'unknown'
+async function ping(candidate, opts) {
+  const o = opts || {}
+  const body = {
+    model: candidate.model || 'default',
+    messages: [
+      { role: 'system', content: '这是连通性测试。只回复 ok 两个字母，不要解释。' },
+      { role: 'user', content: 'ping' },
+    ],
+    temperature: 0,
+    max_tokens: 8,
+    stream: false,
   }
-  return { ok: false, error: lastErr || 'all-failed', candidates: cands.length }
+  const t0 = Date.now()
+  try {
+    return await withTimeout(async (signal) => {
+      const r = await fetch(candidate.baseUrl + '/chat/completions', {
+        method: 'POST',
+        headers: authHeaders(candidate.apiKey),
+        body: JSON.stringify(body),
+        signal,
+      })
+      const ms = Date.now() - t0
+      if (!r.ok) {
+        let detail = ''
+        try {
+          detail = (await r.text()).slice(0, 200)
+        } catch (e) {}
+        return { ok: false, error: 'http ' + r.status + (detail ? ' ' + detail : ''), status: r.status, ms }
+      }
+      let j = null
+      try {
+        j = await r.json()
+      } catch (e) {
+        return { ok: false, error: 'invalid-json', ms }
+      }
+      const ch = j && j.choices && j.choices[0]
+      if (!ch) return { ok: false, error: 'no-choices', ms }
+      const msg = ch.message || {}
+      const text = String(msg.content == null ? '' : msg.content).trim()
+      const reasoning = String(msg.reasoning_content || msg.reasoning || '').trim()
+      return { ok: true, ms, text, reasoning, empty: !text }
+    }, o.timeoutMs || 90000)
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e), ms: Date.now() - t0 }
+  }
 }
 
-module.exports = { DEFAULT_PORTS, normalizeBase, pickModelName, listModels, resolveCandidates, chat, infer }
+/**
+ * 只打「当前配置的那一个端点」；不自动切换、不探测别的端口。
+ * @returns {Promise<{ok:true,text,ms,usage,candidate}|{ok:false,error,candidates:number,detail?:object}>}
+ */
+async function infer(cfg, messages, opts) {
+  const rr = await resolve(cfg)
+  if (!rr.ok) return { ok: false, error: rr.error, detail: rr, candidates: 0 }
+  const r = await chat(rr.candidate, messages, opts)
+  return Object.assign({}, r, { candidate: rr.candidate, candidates: 1 })
+}
+
+module.exports = { DEFAULT_PORTS, normalizeBase, pickModelName, matchModel, listModels, resolve, scan, chat, ping, infer }

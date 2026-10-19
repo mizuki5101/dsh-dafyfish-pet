@@ -8,12 +8,15 @@
  */
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import fs from 'node:fs'
+import os from 'node:os'
 
 const require = createRequire(import.meta.url)
 const H = require('../shell/src/heart/hash.js')
 const G = require('../shell/src/heart/gate.js')
 const C = require('../shell/src/heart/config.js')
 const M2 = require('../shell/src/heart/mask.js')
+const MEMO = require('../shell/src/heart/memo.js')
 
 let pass = 0
 let fail = 0
@@ -179,6 +182,44 @@ console.log('\n【5】截图遮罩 mask')
   const m = M2.maskImage(buf2, 20, 20, [{ x: 0, y: 0, w: 5, h: 5 }, { x: 15, y: 15, w: 10, h: 10 }], 0)
   ok('并集两块都遮', m.rects.length === 2 && m.pixels === 25 + 25, m)
   ok('完全在外的矩形被丢掉', M2.maskImage(buf2, 20, 20, [{ x: 50, y: 50, w: 5, h: 5 }], 0).rects.length === 0)
+}
+
+console.log('\n【6】短期记忆 memo（落盘 + 清洗）')
+{
+  ok('坏条目被丢掉', MEMO.normalizeList([{ say: 'x' }, null, { say: '' }, { say: 'y' }], 10).length === 2)
+  ok('只留最近 max 条（旧→新）', (() => {
+    const l = Array.from({ length: 20 }, (_, i) => ({ say: 's' + i }))
+    const r = MEMO.normalizeList(l, 12)
+    return r.length === 12 && r[0].say === 's8' && r[11].say === 's19'
+  })())
+  ok('recentLines 只要文本、新的在后', (() => {
+    const r = MEMO.recentLines([{ say: 'a' }, { say: 'b' }, { say: 'c' }, { say: 'd' }], 3)
+    return r.length === 3 && r[0] === 'b' && r[2] === 'd'
+  })())
+  ok('过长台词被截断', MEMO.sanitizeEntry({ say: '一'.repeat(200) }).say.length === MEMO.MAX_SAY)
+
+  const file = path.join(os.tmpdir(), 'dshp-memo-' + Date.now() + '-' + Math.random().toString(16).slice(2) + '.json')
+  try {
+    const m = MEMO.createMemo({ file, max: 12 })
+    ok('新文件为空', m.size() === 0 && m.last() === null)
+    ok('空台词不入库', m.add({ say: '   ' }) === null && m.size() === 0)
+
+    m.add({ at: 1, say: '第一句', topic: '桌面', see: 'browsing' })
+    m.add({ say: '第二句' })
+    ok('add 后有条目', m.size() === 2 && m.last().say === '第二句')
+    ok('没给时间时自动补', m.last().at > 0)
+
+    const m2 = MEMO.createMemo({ file, max: 12 })
+    ok('重开后还记得（真落盘）', m2.size() === 2 && m2.says()[0] === '第一句' && m2.says()[1] === '第二句')
+    ok('topic/see 一起存了', m2.entries()[0].topic === '桌面' && m2.entries()[0].see === 'browsing')
+
+    for (let i = 0; i < 20; i++) m2.add({ say: '灌' + i })
+    ok('超过上限只留最近 12', m2.size() === 12 && m2.last().say === '灌19')
+    m2.clear()
+    ok('clear 清空并落盘', m2.size() === 0 && MEMO.createMemo({ file }).size() === 0)
+  } finally {
+    try { fs.unlinkSync(file) } catch (e) {}
+  }
 }
 console.log('\n——— 结果：' + pass + ' 通过 / ' + fail + ' 失败 ———')
 process.exit(fail ? 1 : 0)

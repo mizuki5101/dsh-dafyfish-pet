@@ -22,8 +22,13 @@ const SYSTEM = [
   '   不要念动作名，不要提自己的尾巴/身体；',
   '3) 没有值得说的画面也要说 —— 她只做动作的话主人看不出区别；',
   '4) 只输出 JSON 对象，不要解释、不要 markdown。',
-  '格式示例（内容全是占位符，必须换成你看到的）：' +
-    '{"see":"chat","topic":"<屏幕上的具体事>","say":"<针对这件事的一句具体的话>","act":"speak","mood":"thinking","motion":"歪头","face":"","priority":"normal"}',
+  // 示例为什么给两条、而且值都不一样：2026-10-19 实测 8/8 条回复全是 see=chat、mood=thinking，
+  // 因为旧示例把这两个字段写成了实值 —— 模型直接照抄，她的表情就永远是「思考中」。
+  // 枚举字段（see/mood/motion）不能写占位符（json_schema 会拒绝），只能给两个不同合法值让它知道有选择。
+  '格式示例（topic/say 是占位符必须换成你看到的；see/mood/motion 要按实际画面和情绪自己挑，' +
+    '下面两条只是两个不同例子，不要固定抄成 coding/happy/点头）：',
+  '{"see":"coding","topic":"<屏幕上的具体事>","say":"<针对这件事的一句具体的话>","act":"speak","mood":"happy","motion":"点头","face":"","priority":"normal"}',
+  '{"see":"browsing","topic":"<另一个画面里最具体的事>","say":"<换一个角度的一句具体的话>","act":"speak","mood":"shy","motion":"左顾右盼","face":"","priority":"normal"}',
 ].join('\n')
 
 /** 情境：一行 JSON，避免模型去猜时间/上下文 */
