@@ -50,10 +50,17 @@ const DEFAULTS = [
   DATA_DIR + '/验证断开降级.mjs',
 ]
 
-const files = process.argv.slice(2).length ? process.argv.slice(2) : DEFAULTS
+// ⚠️ 不能只看 argv 判断「是不是用户显式点名」：没有 --experimental-vm-modules 时
+//    本脚本会 spawn 自己并把 files 作为参数传下去，子进程里的 argv 永远非空。
+//    所以用环境变量标记「这是二次启动」，否则「缺文件跳过」在 CI 里永远不生效。
+const EXPLICIT = process.argv.slice(2).length > 0 && !process.env.DSHP_SYNTAX_CHILD
+const files = EXPLICIT ? process.argv.slice(2) : DEFAULTS
 const needVmModules = !process.execArgv.some((a) => a.includes('experimental-vm-modules') || a.includes('--experimental-vm-modules'))
 if (needVmModules && typeof vm.SourceTextModule !== 'function') {
-  const r = spawnSync(process.execPath, ['--experimental-vm-modules', '--no-warnings', fileURLToPath(import.meta.url), ...files], { stdio: 'inherit' })
+  const r = spawnSync(process.execPath, ['--experimental-vm-modules', '--no-warnings', fileURLToPath(import.meta.url), ...files], {
+    stdio: 'inherit',
+    env: Object.assign({}, process.env, { DSHP_SYNTAX_CHILD: '1' }),
+  })
   process.exit(r.status === null ? 1 : r.status)
 }
 
@@ -66,7 +73,7 @@ for (const rel of files) {
   } catch (e) {
     // 默认清单里有些只是开发仓库的排障脚本，公开仓库没有 —— 跳过，不算失败。
     // 显式在命令行点名的文件缺了才算错。
-    if (!process.argv.slice(2).length && e.code === 'ENOENT') {
+    if (!EXPLICIT && e.code === 'ENOENT') {
       console.log('· ' + rel + ' —— 不存在，跳过')
       continue
     }
