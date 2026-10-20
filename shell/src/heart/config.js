@@ -45,6 +45,23 @@ const DEFAULTS = {
   },
   escalate: { toDsh: false },
   memory: { enabled: true, storeImages: false, keepDays: 14 },
+  /**
+   * 「刷一条视频」：点按钮才刷，60 秒冷却。
+   * enabled 默认 true —— 它不发任何写请求（只读 B 站公开接口），开关只是给「不想让她上网」的人。
+   * source：'search' = 按 keywords 随机挑一个检索（相关、可预期）；
+   *         'rcmd'   = 首页推荐流（会刷到不感兴趣的东西，2026-10-20 用户实测后改成 search 默认）。
+   * keywords：一天里轮着用；空数组时自动退回 rcmd。
+   */
+  bili: {
+    enabled: true,
+    cooldownSec: 60,
+    /** 抽帧数（3~10，默认 3）。面板里是滑块；light 档最多用 3 帧。 */
+    maxFrames: 3,
+    memoMax: 40,
+    memoDays: 14,
+    source: 'search',
+    keywords: ['AI 工具', '大模型 实测', '动画 杂谈', '独立游戏'],
+  },
   /** 提示词覆盖（空 = 用 prompt.js 里的默认 SYSTEM） */
   prompt: '',
   /** 「一键启动」用的本地引擎配置（空路径 = 需要用户在面板里填） */
@@ -116,6 +133,20 @@ function normalize(raw) {
       enableThinking: model.enableThinking === true,
     },
     escalate: { toDsh: esc.toDsh === true },
+    bili: {
+      enabled: bool((src.bili || {}).enabled, DEFAULTS.bili.enabled),
+      cooldownSec: num((src.bili || {}).cooldownSec, DEFAULTS.bili.cooldownSec, 10, 600),
+      maxFrames: num((src.bili || {}).maxFrames, DEFAULTS.bili.maxFrames, 3, 10),
+      memoMax: num((src.bili || {}).memoMax, DEFAULTS.bili.memoMax, 5, 200),
+      memoDays: num((src.bili || {}).memoDays, DEFAULTS.bili.memoDays, 1, 90),
+      source: (src.bili || {}).source === 'rcmd' ? 'rcmd' : 'search',
+      keywords: Array.isArray((src.bili || {}).keywords)
+        ? (src.bili || {}).keywords
+            .filter((x) => typeof x === 'string' && x.trim())
+            .map((x) => x.trim().slice(0, 24))
+            .slice(0, 10)
+        : DEFAULTS.bili.keywords.slice(),
+    },
     memory: {
       enabled: bool(mem.enabled, DEFAULTS.memory.enabled),
       storeImages: mem.storeImages === true,

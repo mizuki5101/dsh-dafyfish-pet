@@ -60,4 +60,62 @@ function patchHeart(file, patch) {
   return all
 }
 
-module.exports = { readJson, writeJson, deepMerge, patchHeart }
+/**
+ * 设置面板提交的 patch → 只保留认识的字段（白名单）。
+ *
+ * 为什么必须有：面板发过来的是**页面构造的对象**，不该什么都能写进 settings.json。
+ * 为什么放到这个文件：白名单漏字段的症状极其隐蔽 —— 保存返回 ok、界面刷新了、
+ * 但值没变（2026-10-20 的 bili 就是这个：滑块和视频口味全被丢掉）。
+ * 放在纯函数文件里才能被测到（见 测试心跳纯函数.mjs 的【5】）。
+ */
+function sanitizeHeartPatch(p) {
+  const src = p && typeof p === 'object' ? p : {}
+  const out = {}
+  if (typeof src.enabled === 'boolean') out.enabled = src.enabled
+  for (const k of ['intervalSec', 'lookMinGapSec', 'sayMinGapSec', 'maxLooksPerHour', 'maxSaysPerHour']) {
+    if (src[k] !== undefined && Number.isFinite(Number(src[k]))) out[k] = Math.round(Number(src[k]))
+  }
+  if (typeof src.lookOpener === 'boolean') out.lookOpener = src.lookOpener
+  if (typeof src.prompt === 'string') out.prompt = src.prompt.slice(0, 4000)
+  if (src.mode === 'dsh' || src.mode === 'pet') out.mode = src.mode
+  if (typeof src.audioTrigger === 'boolean') out.audioTrigger = src.audioTrigger
+  if (src.model && typeof src.model === 'object') {
+    const m = {}
+    if (typeof src.model.provider === 'string') m.provider = src.model.provider
+    if (src.model.port !== undefined && Number.isFinite(Number(src.model.port))) m.port = Math.round(Number(src.model.port))
+    if (typeof src.model.baseUrl === 'string') m.baseUrl = src.model.baseUrl.trim().slice(0, 300)
+    if (typeof src.model.model === 'string') m.model = src.model.model.trim().slice(0, 200)
+    if (typeof src.model.apiKey === 'string') m.apiKey = src.model.apiKey.slice(0, 500)
+    if (Object.keys(m).length) out.model = m
+  }
+  if (src.modelServer && typeof src.modelServer === 'object') {
+    const s = {}
+    for (const k of ['exe', 'model', 'mmproj', 'extraArgs']) {
+      if (typeof src.modelServer[k] === 'string') s[k] = src.modelServer[k].slice(0, 500)
+    }
+    if (Object.keys(s).length) out.modelServer = s
+  }
+  // 刷视频：视频口味 + 抽帧数（2026-10-20）
+  if (src.bili && typeof src.bili === 'object') {
+    const b = {}
+    if (typeof src.bili.enabled === 'boolean') b.enabled = src.bili.enabled
+    if (src.bili.source === 'search' || src.bili.source === 'rcmd') b.source = src.bili.source
+    // 空数组要放行：这是「清空口味、退回首页推荐」的合法操作
+    if (Array.isArray(src.bili.keywords)) {
+      b.keywords = src.bili.keywords
+        .filter((x) => typeof x === 'string' && x.trim())
+        .map((x) => x.trim().slice(0, 24))
+        .slice(0, 10)
+    }
+    if (src.bili.maxFrames !== undefined && Number.isFinite(Number(src.bili.maxFrames))) {
+      b.maxFrames = Math.round(Number(src.bili.maxFrames))
+    }
+    if (src.bili.cooldownSec !== undefined && Number.isFinite(Number(src.bili.cooldownSec))) {
+      b.cooldownSec = Math.round(Number(src.bili.cooldownSec))
+    }
+    if (Object.keys(b).length) out.bili = b
+  }
+  return out
+}
+
+module.exports = { readJson, writeJson, deepMerge, patchHeart, sanitizeHeartPatch }

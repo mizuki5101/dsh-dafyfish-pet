@@ -17,6 +17,7 @@ const G = require('../shell/src/heart/gate.js')
 const C = require('../shell/src/heart/config.js')
 const M2 = require('../shell/src/heart/mask.js')
 const MEMO = require('../shell/src/heart/memo.js')
+const SET = require('../shell/src/heart/settings.js')
 
 let pass = 0
 let fail = 0
@@ -122,6 +123,13 @@ console.log('\n【4】配置归一化')
   ok('默认 16x / 切片 2 / 关思考', d.model.downsample === '16x' && d.model.maxSliceNums === 2 && d.model.enableThinking === false)
   ok('默认不存图', d.memory.storeImages === false)
   ok('默认不升级 DSH', d.escalate.toDsh === false)
+  // 2026-10-20：刷视频（只读，默认开；冷却与帧数可调）
+  ok('刷视频默认开', d.bili.enabled === true)
+  ok('刷视频冷却默认 60s', d.bili.cooldownSec === 60)
+  ok('刷视频帧数默认 3', d.bili.maxFrames === 3)
+  ok('刷视频冷却被夹在 10~600', C.normalize({ bili: { cooldownSec: 1 } }).bili.cooldownSec === 10 && C.normalize({ bili: { cooldownSec: 9999 } }).bili.cooldownSec === 600)
+  ok('刷视频帧数被夹在 3~10', C.normalize({ bili: { maxFrames: 99 } }).bili.maxFrames === 10 && C.normalize({ bili: { maxFrames: 1 } }).bili.maxFrames === 3)
+  ok('刷视频可关', C.normalize({ bili: { enabled: false } }).bili.enabled === false)
 
   const c = C.normalize({
     enabled: 'yes',
@@ -155,6 +163,21 @@ console.log('\n【4】配置归一化')
   ok('默认端口 19411', C.normalize({}).model.port === 19411)
 }
 
+
+console.log('\n【4.5】保存白名单 sanitizeHeartPatch')
+{
+  const b = SET.sanitizeHeartPatch({ bili: { maxFrames: 6, keywords: ['AI 工具', ' 独立游戏 评测 ', '', 123] } })
+  ok('bili.maxFrames 放行', b.bili && b.bili.maxFrames === 6, b.bili)
+  ok('keywords 去空 / 去空格 / 只留字符串',
+    JSON.stringify(b.bili.keywords) === JSON.stringify(['AI 工具', '独立游戏 评测']), b.bili)
+  ok('空数组放行（清空口味 → 退回推荐）', Array.isArray(SET.sanitizeHeartPatch({ bili: { keywords: [] } }).bili.keywords))
+  ok('keywords 最多 10 个', SET.sanitizeHeartPatch({ bili: { keywords: Array(20).fill('k') } }).bili.keywords.length === 10)
+  ok('未知顶层字段被丢', SET.sanitizeHeartPatch({ nope: 1 }).nope === undefined)
+  ok('未知子字段被丢', SET.sanitizeHeartPatch({ bili: { nope: 1 } }).bili === undefined)
+  ok('坏数字不进（maxFrames=x）', SET.sanitizeHeartPatch({ bili: { maxFrames: 'x' } }).bili === undefined)
+  ok('原有字段照旧（intervalSec 取整）', SET.sanitizeHeartPatch({ intervalSec: '30.6' }).intervalSec === 31)
+  ok('空 patch 不炸', JSON.stringify(SET.sanitizeHeartPatch(null)) === '{}')
+}
 
 console.log('\n【5】截图遮罩 mask')
 {

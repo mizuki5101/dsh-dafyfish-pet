@@ -51,35 +51,9 @@ let chatMemory = null
  * 为什么不在页面侧保证：页面是回环服务发的，但它仍然是「外部输入」；
  * 写 settings.json 的东西必须在主进程再过滤一次（和 /dsh-pet/say 的 dryRun 一个道理）。
  */
-function sanitizeHeartPatch(p) {
-  const src = p && typeof p === 'object' ? p : {}
-  const out = {}
-  if (typeof src.enabled === 'boolean') out.enabled = src.enabled
-  for (const k of ['intervalSec', 'lookMinGapSec', 'sayMinGapSec', 'maxLooksPerHour', 'maxSaysPerHour']) {
-    if (src[k] !== undefined && Number.isFinite(Number(src[k]))) out[k] = Math.round(Number(src[k]))
-  }
-  if (typeof src.lookOpener === 'boolean') out.lookOpener = src.lookOpener
-  if (typeof src.prompt === 'string') out.prompt = src.prompt.slice(0, 4000)
-  if (src.mode === 'dsh' || src.mode === 'pet') out.mode = src.mode
-  if (typeof src.audioTrigger === 'boolean') out.audioTrigger = src.audioTrigger
-  if (src.model && typeof src.model === 'object') {
-    const m = {}
-    if (typeof src.model.provider === 'string') m.provider = src.model.provider
-    if (src.model.port !== undefined && Number.isFinite(Number(src.model.port))) m.port = Math.round(Number(src.model.port))
-    if (typeof src.model.baseUrl === 'string') m.baseUrl = src.model.baseUrl.trim().slice(0, 300)
-    if (typeof src.model.model === 'string') m.model = src.model.model.trim().slice(0, 200)
-    if (typeof src.model.apiKey === 'string') m.apiKey = src.model.apiKey.slice(0, 500)
-    if (Object.keys(m).length) out.model = m
-  }
-  if (src.modelServer && typeof src.modelServer === 'object') {
-    const s = {}
-    for (const k of ['exe', 'model', 'mmproj', 'extraArgs']) {
-      if (typeof src.modelServer[k] === 'string') s[k] = src.modelServer[k].slice(0, 500)
-    }
-    if (Object.keys(s).length) out.modelServer = s
-  }
-  return out
-}
+/* sanitizeHeartPatch 已挪到 heart/settings.js（2026-10-20）：
+ * 它是一层**字段白名单**，而白名单漏字段的症状是「保存了但没生效」——
+ * 上次漏了 bili，滑块和视频口味存不进去。放在纯函数文件里才能被测到。 */
 /** 重新发现 DSH 的节奏：离线时每 8 秒试一次，每 6 次才扫一次端口（netstat 要起子进程，别太频） */
 let syncAttempt = 0
 let syncBusy = false
@@ -1662,7 +1636,7 @@ app.whenReady().then(() => {
     // 也只是「没有心跳」，不能把主窗口一起搞死。
     try {
       const { createHeart } = require('./heart')
-      const { patchHeart } = require('./heart/settings')
+      const { patchHeart, sanitizeHeartPatch } = require('./heart/settings')
       const { createModelServer } = require('./heart/server')
       const promptModule = require('./heart/prompt')
       const vision = require('./heart/vision')
@@ -1701,6 +1675,14 @@ app.whenReady().then(() => {
                 apiKeySet: !!cfg.model.apiKey,
               },
               modelServer: cfg.modelServer,
+              // 刷视频：面板要显示「视频口味」和抽帧数
+              bili: {
+                enabled: cfg.bili.enabled,
+                source: cfg.bili.source,
+                keywords: cfg.bili.keywords,
+                maxFrames: cfg.bili.maxFrames,
+                cooldownSec: cfg.bili.cooldownSec,
+              },
             }
           : null
         return {
@@ -1754,6 +1736,29 @@ app.whenReady().then(() => {
             bootLog('心跳：推动作失败 ' + ((e && e.message) || e))
           }
         },
+        // 刷视频（2026-10-20）：记忆文件放在 userData，和心跳的 memo.json 同级
+        biliMemoFile: path.join(app.getPath('userData'), 'bili-memo.json'),
+        // 进度（list/pick/detail/frames/watch）——页面可以拿它显示「正在看…」
+        onBiliStage: (stage, info) => {
+          if (!petServer) return
+          try {
+            petServer.push({ t: 'control', biliStage: String(stage || ''), biliInfo: info || null })
+          } catch (e) {}
+        },
+        // 详情落进「邮件」面板。silent：正文很长，别再多冒一条气泡盖掉台词。
+        onReport: (r) => {
+          if (!petServer) return
+          try {
+            petServer.push({
+              t: 'control',
+              report: {
+                title: r.title, body: r.body, bv: r.bv, url: r.url,
+                up: r.up, worth: r.worth, at: r.at, silent: true,
+              },
+            })
+            bootLog('刷视频 → 邮件：《' + r.title + '》 ' + r.bv)
+          } catch (e) {}
+        },
       })
       heart.start()
       ipcMain.handle('heart:status', () => {
@@ -1784,6 +1789,18 @@ app.whenReady().then(() => {
         return heart.tickNow(opts || {})
       })
       ipcMain.handle('heart:providers', () => (heart ? heart.providers() : []))
+      // 「刷一条视频」（2026-10-20）：点按钮才跑，冷却与互斥都在 heart 里判。
+      // 返回值只告诉页面成败；气泡和邮件由 onAction / onReport 推 control。
+      ipcMain.handle('bili:look', async () => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        try {
+          return await heart.biliLook()
+        } catch (e) {
+          bootLog('刷视频：异常 ' + ((e && e.stack) || e))
+          return { ok: false, reason: String((e && e.message) || e) }
+        }
+      })
+      ipcMain.handle('bili:status', () => (heart ? heart.biliStatus() : { ok: false, reason: 'no-heart' }))
       // 「扫描本地端点」按钮：只在这里探测端口；心跳推理本身永远不自动发现
       ipcMain.handle('heart:scan', () => (heart ? heart.scan() : { ok: false, results: [] }))
       // 「确认 API 连接」：真发一条 ping（也能让 llama-swap 把模型加载起来）
@@ -1794,15 +1811,18 @@ app.whenReady().then(() => {
         const text = String((req && req.text) || '').trim().slice(0, 1000)
         if (!text) return { ok: false, reason: 'empty' }
         const cfg = heart.config()
-        // 心跳台词不写进对话历史，但「接着刚才那句」的能力要保留：
-        // 把最近一条主动台词拼进 system，并明确告诉模型「无关就忽略、不要硬接」。
+        // 心跳台词不写进对话历史，但「接着刚才那句」的能力要保留。
+        // ⚠️ 旁白必须放在**最后一条 user 的末尾**，绝不能拼进 system：
+        //    前缀缓存是从头匹配的，system 一变整个前缀就废（实测 cache=0）。
+        //    放在 user 末尾时，system + 历史 + 这条 user 的前半段仍能命中。
+        //    历史里存的仍是原始 text（不带旁白），所以下次请求到 text 结尾的前缀一致。
         const note = heartMemo ? heartMemo.last() : null
-        let sys = CHAT_SYSTEM
+        let sideNote = ''
         if (note && note.say && note.at && Date.now() - note.at < 30 * 60 * 1000) {
-          sys += '\n（你刚才自己嘀咕过：「' + note.say.slice(0, 60) + '」。如果和主人现在说的无关，就忽略它，不要硬接。）'
+          sideNote = '\n\n（你刚才自己嘀咕过：「' + note.say.slice(0, 60) + '」。如果和主人现在说的无关，就忽略它，不要硬接。）'
         }
-        const messages = [{ role: 'system', content: sys }].concat(chatMemory.messages(), [
-          { role: 'user', content: text },
+        const messages = [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
+          { role: 'user', content: text + sideNote },
         ])
         // 聊天期间让心跳让路：llama-server 只有 -np 1 一个槽位，抢起来会「想好久」
         heart.hold()

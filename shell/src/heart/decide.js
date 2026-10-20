@@ -271,11 +271,13 @@ function isNightHour(hour) {
  * @param {object} state  {agentStatus, sleeping, lastSayAt, lastMotionAt, says[], hour}
  * @param {object} cfg    heart 配置
  * @param {number} now
+ * @param {object} [opts]  {forceSay:true} —— 手动「立即看一眼」时跳过 say-gap / say-budget
  */
-function arbitrate(action, state, cfg, now) {
+function arbitrate(action, state, cfg, now, opts) {
   const a = Object.assign({}, action)
   const s = state || {}
   const notes = []
+  const forceSay = !!(opts && opts.forceSay)
   const hour = Number.isFinite(s.hour) ? s.hour : new Date(now || Date.now()).getHours()
 
   // 只做动作不说话 = 主人看不出区别（用户原话）。所以「没台词」一律不发。
@@ -288,11 +290,19 @@ function arbitrate(action, state, cfg, now) {
   if (s.sleeping && !(a.priority === 'high' && a.act === 'remind')) return { ok: false, reason: 'sleeping' }
 
   if (a.say) {
-    const gap = Math.max(0, Number((cfg && cfg.sayMinGapSec) || 180)) * 1000
-    if (now - (Number(s.lastSayAt) || 0) < gap) return { ok: false, reason: 'say-gap' }
-    // 每小时上限可配（默认 15）；面板的「话痨」档会把它调高
-    const cap = Math.max(1, Number((cfg && cfg.maxSaysPerHour) || MAX_SAYS_PER_HOUR))
-    if (hourCount(s.says, now) >= cap) return { ok: false, reason: 'say-budget' }
+    if (forceSay) {
+      // 2026-10-20 用户要求：手动「立即看一眼」是主人的显式操作，不该被自动节流静默吃掉。
+      // 原来它只绕过 gate 的 busy/sleeping，走到这里照样被 say-gap 拦 —— 表现是
+      // 「点了一下，模型明明生成了，屏幕上什么都没有」，而且 motion/face 也被一起丢弃。
+      // 这里连每小时上限一起放开；busy / sleeping 仍在上面的分支里判，不受影响。
+      notes.push('force-say')
+    } else {
+      const gap = Math.max(0, Number((cfg && cfg.sayMinGapSec) || 180)) * 1000
+      if (now - (Number(s.lastSayAt) || 0) < gap) return { ok: false, reason: 'say-gap' }
+      // 每小时上限可配（默认 15）；面板的「话痨」档会把它调高
+      const cap = Math.max(1, Number((cfg && cfg.maxSaysPerHour) || MAX_SAYS_PER_HOUR))
+      if (hourCount(s.says, now) >= cap) return { ok: false, reason: 'say-budget' }
+    }
   }
 
   // 动作/表情是「锦上添花」：冷却中或深夜就剥掉，不必整条丢弃。

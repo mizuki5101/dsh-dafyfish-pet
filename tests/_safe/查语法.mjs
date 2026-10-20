@@ -50,9 +50,16 @@ const REQUIRED = [
   'shell/src/heart/memo.js',
   'shell/src/heart/mask.js',
   'shell/src/heart/server.js',
+  // 2026-10-20：刷视频（bili）—— 新增模块必须进清单，否则改名/误删照样全绿
+  'shell/src/heart/bili/index.js',
+  'shell/src/heart/bili/api.js',
+  'shell/src/heart/bili/budget.js',
+  'shell/src/heart/bili/frames.js',
+  'shell/src/heart/bili/memo.js',
   DATA_DIR + '/测试独立桌宠.mjs',
   DATA_DIR + '/测试心跳决策.mjs',
   DATA_DIR + '/测试心跳纯函数.mjs',
+  DATA_DIR + '/测试刷视频.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

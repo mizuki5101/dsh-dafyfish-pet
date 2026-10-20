@@ -116,6 +116,16 @@ console.log('\n【3】仲裁')
   ok('睡 + high/remind 例外', D.arbitrate(Object.assign({}, base, { act: 'remind', priority: 'high' }), Object.assign({}, idle, { sleeping: true }), cfg, NOW).ok === true)
   ok('刚说过（30s）→ say-gap', D.arbitrate(base, Object.assign({}, idle, { lastSayAt: NOW - 30000 }), cfg, NOW).reason === 'say-gap')
   ok('一小时说了 12 次 → say-budget', D.arbitrate(base, Object.assign({}, idle, { says: Array.from({ length: 12 }, (_, i) => NOW - i * 1000) }), cfg, NOW).reason === 'say-budget')
+
+  // 2026-10-20：手动「立即看一眼」要能把话放出去（否则点了一下屏幕上什么都没有）
+  const forcedGap = D.arbitrate(base, Object.assign({}, idle, { lastSayAt: NOW - 30000 }), cfg, NOW, { forceSay: true })
+  ok('forceSay 绕过 say-gap', forcedGap.ok === true && forcedGap.action.say === '主人加油', forcedGap)
+  ok('forceSay 留痕', forcedGap.notes.includes('force-say'))
+  ok('forceSay 绕过每小时上限',
+    D.arbitrate(base, Object.assign({}, idle, { says: Array.from({ length: 40 }, (_, i) => NOW - i * 1000) }), cfg, NOW, { forceSay: true }).ok === true)
+  ok('forceSay 不能绕过 busy', D.arbitrate(base, Object.assign({}, idle, { agentStatus: 'working' }), cfg, NOW, { forceSay: true }).reason === 'busy')
+  ok('forceSay 不能绕过 sleeping', D.arbitrate(base, Object.assign({}, idle, { sleeping: true }), cfg, NOW, { forceSay: true }).reason === 'sleeping')
+  ok('不带 forceSay 时 say-gap 照旧生效', D.arbitrate(base, Object.assign({}, idle, { lastSayAt: NOW - 30000 }), cfg, NOW, {}).reason === 'say-gap')
   ok('没台词 → silent（只做动作看不出来）', D.arbitrate({ say: '', motion: '点头', face: '' }, idle, cfg, NOW).reason === 'silent')
 
   const freshMotion = D.arbitrate(base, Object.assign({}, idle, { lastMotionAt: NOW - 5000 }), cfg, NOW)

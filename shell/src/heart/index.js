@@ -15,6 +15,9 @@ const vision = require('./vision')
 const gate = require('./gate')
 const { pickOpener } = require('./opener')
 const { MAX_ENTRIES: MEMO_MAX } = require('./memo')
+const biliModule = require('./bili')
+const biliFrames = require('./bili/frames')
+const { createStore: createBiliMemo } = require('./bili/memo')
 
 /** 判重要对照最近几句（喂给提示词的只有 3 句，判重可以多看几句） */
 const DUP_LOOKBACK = 6
@@ -169,7 +172,7 @@ function createHeart(opts) {
    * 看一眼 → 让模型判断 → 仲裁 → 交给主进程执行。
    * 只有这里会真正「花 GPU」；调用方负责先过 gate。
    */
-  async function think(cap, openerLine, forceIdle, ignoreBackoff) {
+  async function think(cap, openerLine, forceIdle, ignoreBackoff, forceSay) {
     const t = clock()
     // 手动「立即看一眼」/调试口不受失败退避限制；定时心跳才退避
     if (!ignoreBackoff && backoffUntil && t < backoffUntil) return { ok: false, reason: 'backoff' }
@@ -305,7 +308,7 @@ function createHeart(opts) {
       lastMotionAt,
       says,
       hour: now.getHours(),
-    }, cfg, t)
+    }, cfg, t, { forceSay: !!forceSay })
 
     if (!arb.ok) {
       lastSkip = 'arb:' + arb.reason
@@ -411,7 +414,7 @@ function createHeart(opts) {
         // 理论上 normalize 保证 provider 有值；这里只是防御
         return { ok: false, reason: 'no-model-config' }
       }
-      return think(cap, openerLine, debugIdle, force)
+      return think(cap, openerLine, debugIdle, force, !!(opts2 && opts2.forceSay))
     } finally {
       setSeal(false)
     }
@@ -436,7 +439,12 @@ function createHeart(opts) {
     // 注意：这里**不改** cfg.enabled —— 调试口只跳过 gate，不改变「用户开没开」这个事实。
     // 否则调一次 tick 之后 status.enabled 会变成 true，看起来像自己把自己打开了。
     // ignoreBusy：CDP 验收用，DSH 正在跑一轮时也走完整链路（否则永远看不到真气泡）。
-    return tickBody(true, { ignoreBusy: o2.ignoreBusy === true })
+    // forceSay：手动点「立即看一眼」时跳过 say-gap / 每小时上限 —— 那是主人的显式操作。
+    //   听觉触发（trigger=audio）**不享受**这条：麦克风一响就说会把嘴彻底放开。
+    return tickBody(true, {
+      ignoreBusy: o2.ignoreBusy === true,
+      forceSay: o2.trigger !== 'audio',
+    })
   }
 
   /**
@@ -543,12 +551,132 @@ function createHeart(opts) {
     }
   }
 
+  /* ——————————————————————————————————————————————————————————————
+   * 刷一条视频（2026-10-20，v2）
+   *   点按钮才刷；60 秒冷却；读视频全程 seal（页面不许冒别的气泡）。
+   *   只读 B 站公开接口，不发任何写请求 —— 不需要登录、不会影响主人的登录态。
+   * —————————————————————————————————————————————————————————————— */
+  let biliStore = null
+  let biliCooldownUntil = 0
+  let biliRunning = false
+  let lastBili = null
+
+  function biliMemo() {
+    if (biliStore) return biliStore
+    if (!o.biliMemoFile) return null
+    try {
+      biliStore = createBiliMemo({ file: o.biliMemoFile, max: cfg.bili.memoMax, ttlDays: cfg.bili.memoDays })
+    } catch (e) {
+      biliStore = null
+    }
+    return biliStore
+  }
+
+  function biliCooldownLeft() {
+    return Math.max(0, Math.ceil((biliCooldownUntil - clock()) / 1000))
+  }
+
+  function biliStatus() {
+    return {
+      ok: true,
+      enabled: cfg.bili.enabled,
+      cooldownLeft: biliCooldownLeft(),
+      running: biliRunning,
+      last: lastBili,
+      memo: biliStore ? biliStore.entries().length : 0,
+    }
+  }
+
+  /**
+   * 刷一条：取候选 → 粗筛 → 深看 → 气泡 + 邮件。
+   * 失败原因会原样返回（disabled / cooldown / running / list / detail / watch），
+   * 页面据此显示「冷却 42s」或一条错误气泡，不要静默返回。
+   */
+  async function biliLook() {
+    const t = clock()
+    if (!cfg.bili.enabled) return { ok: false, reason: 'disabled' }
+    if (biliRunning) return { ok: false, reason: 'running' }
+    const left = biliCooldownLeft()
+    if (left > 0) return { ok: false, reason: 'cooldown', retryInSec: left }
+
+    biliRunning = true
+    biliCooldownUntil = t + Math.max(1, cfg.bili.cooldownSec) * 1000
+    // 让定时心跳让路：不然两个请求抢同一个实例，显存和上下文互相拖
+    // （hold()/release() 是返回对象上的方法，这里直接用计数变量）
+    holds++
+    // 读视频期间禁止别的气泡（复用「读图静默」）。注意页面侧有 60s 兜底，
+    // 而一轮可能超过 60s —— 所以页面那边每 25s 续一次，见 pet.js 的 sealHeartbeat。
+    setSeal(true)
+    const stage = typeof o.onBiliStage === 'function' ? o.onBiliStage : null
+    try {
+      const chat = async (messages, op) => {
+        const r = await vision.infer(cfg, messages, {
+          schema: op && op.schema,
+          maxTokens: (op && op.maxTokens) || 400,
+          temperature: op && op.temperature,
+          timeoutMs: Math.max(cfg.model.timeoutMs, 120000),
+          enableThinking: cfg.model.enableThinking,
+        })
+        return r.ok ? { ok: true, text: r.text } : { ok: false, error: r.error }
+      }
+      const ff = await biliFrames.available()
+      log('刷视频：开始（ffmpeg=' + (ff ? 'on' : 'off') + '）')
+      const r = await biliModule.look({
+        chat,
+        grab: ff ? biliFrames.grab : null,
+        store: biliMemo(),
+        // 关键词检索优先：首页推荐会塞不感兴趣的东西（2026-10-20 用户反馈）
+        source: cfg.bili.source,
+        keywords: cfg.bili.keywords,
+        pickCount: 5,
+        maxFrames: cfg.bili.maxFrames,
+        onStage: (s, info) => {
+          try {
+            if (stage) stage(s, info)
+          } catch (e) {}
+        },
+      })
+      if (!r.ok) {
+        lastBili = { at: t, ok: false, stage: r.stage, error: r.error }
+        log('刷视频：失败于 ' + r.stage + ' —— ' + r.error)
+        return r
+      }
+      const it = r.item
+      lastBili = { at: t, ok: true, bvid: it.bvid, title: it.title, ms: it.ms, frames: it.frames, tokens: it.tokens }
+      log('刷视频：《' + it.title + '》 ' + it.frames + ' 帧 · 约 ' + it.tokens + ' token · ' + it.ms + 'ms')
+      // 气泡：和心跳同一条通道，所以排队/最少停留/force 语义都一致
+      if (onAction) {
+        try {
+          const action = {
+            see: 'browsing', topic: String(it.title || '').slice(0, 20), note: '',
+            say: it.say, act: 'speak', mood: '', motion: '', face: '', priority: 'normal',
+          }
+          const control = decide.toControl(action, Math.max(6000, it.say.length * 240))
+          onAction(control, action, { bili: it.bvid, ms: it.ms })
+        } catch (e) {}
+      }
+      // 邮件：详情落进面板，气泡消失后还能翻
+      if (typeof o.onReport === 'function') {
+        try {
+          o.onReport({ title: it.title, body: it.detail, bv: it.bvid, url: it.url, up: it.up, worth: it.worth, at: t })
+        } catch (e) {}
+      }
+      return { ok: true, item: it }
+    } finally {
+      setSeal(false)
+      holds = Math.max(0, holds - 1)
+      biliRunning = false
+    }
+  }
+
   return {
     start,
     stop,
     status,
     captureNow,
     tickNow,
+    biliLook,
+    biliStatus,
     providers,
     scan,
     probe,

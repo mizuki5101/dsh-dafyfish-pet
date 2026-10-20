@@ -39,6 +39,12 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     chat: (payload) => ipcRenderer.invoke('heart:chat', payload || {}),
     clearChat: () => ipcRenderer.invoke('heart:chat-clear'),
   },
+  // 刷一条视频（2026-10-20）：点按钮才跑，主进程负责取数/抽帧/推理。
+  // 结果不走这里返回 —— 气泡和邮件都由主进程推 control，页面只拿一个「成败」。
+  bili: {
+    look: () => ipcRenderer.invoke('bili:look'),
+    status: () => ipcRenderer.invoke('bili:status'),
+  },
 })
 
 // 拖动：页面里按下她 → 告诉主进程搬窗口（主进程只在鼠标确实压在她身上时才搬，
