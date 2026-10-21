@@ -56,10 +56,18 @@ const REQUIRED = [
   'shell/src/heart/bili/budget.js',
   'shell/src/heart/bili/frames.js',
   'shell/src/heart/bili/memo.js',
+  // 2026-10-21：做梦（dream）—— 同上，新增模块必须进清单
+  'shell/src/heart/dream/index.js',
+  'shell/src/heart/dream/toMd.js',
+  'shell/src/heart/dream/collect.js',
+  'shell/src/heart/dream/prompt.js',
+  'shell/src/heart/dream/store.js',
+  'shell/src/heart/dream/state.js',
   DATA_DIR + '/测试独立桌宠.mjs',
   DATA_DIR + '/测试心跳决策.mjs',
   DATA_DIR + '/测试心跳纯函数.mjs',
   DATA_DIR + '/测试刷视频.mjs',
+  DATA_DIR + '/测试做梦纯函数.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

@@ -119,10 +119,18 @@ function createChatMemory(opts) {
     return messages.slice()
   }
 
-  function add(role, text) {
+  /**
+   * @param {string} role 'user' | 'assistant'
+   * @param {string} text
+   * @param {number} [at] epoch 毫秒。2026-10-21 起每条消息都带时间戳 ——
+   *   「做梦」要按「上次醒来 → 这次睡着」的窗口取对话。旧文件里的条目没有 at，
+   *   做梦那边会当成「窗口外」跳过（无法判断，宁可不记）。
+   */
+  function add(role, text, at) {
     const t = String(text == null ? '' : text).trim()
     if (!t) return
-    messages.push({ role, content: t.slice(0, 2000) })
+    const when = Number(at) > 0 ? Math.round(Number(at)) : Date.now()
+    messages.push({ role, content: t.slice(0, 2000), at: when })
     trim()
     save()
   }

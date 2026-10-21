@@ -177,6 +177,16 @@ console.log('\n【4.5】保存白名单 sanitizeHeartPatch')
   ok('坏数字不进（maxFrames=x）', SET.sanitizeHeartPatch({ bili: { maxFrames: 'x' } }).bili === undefined)
   ok('原有字段照旧（intervalSec 取整）', SET.sanitizeHeartPatch({ intervalSec: '30.6' }).intervalSec === 31)
   ok('空 patch 不炸', JSON.stringify(SET.sanitizeHeartPatch(null)) === '{}')
+
+  // 做梦（2026-10-21）：这三条是「加设置项必带断言」的现场 ——
+  // 漏了白名单的症状是「保存返回 ok、界面刷新、值没变」。
+  const dr = SET.sanitizeHeartPatch({ dream: { enabled: true, cooldownSec: 900, dir: 'D:/日记' } })
+  ok('dream 三个字段都放行', dr.dream && dr.dream.enabled === true && dr.dream.cooldownSec === 900 && dr.dream.dir === 'D:/日记', dr.dream)
+  ok('dream.dir 空串是合法值（重置默认目录）', SET.sanitizeHeartPatch({ dream: { dir: '' } }).dream.dir === '')
+  ok('dream.cooldownSec 坏值不进', SET.sanitizeHeartPatch({ dream: { cooldownSec: 'x' } }).dream === undefined)
+  ok('dream 未知字段被丢', SET.sanitizeHeartPatch({ dream: { nope: 1 } }).dream === undefined)
+  ok('dream.cooldownSec 取整', SET.sanitizeHeartPatch({ dream: { cooldownSec: '1799.6' } }).dream.cooldownSec === 1800)
+  ok('心跳配置里 dream 默认关', C.normalize({}).dream.enabled === false)
 }
 
 console.log('\n【5】截图遮罩 mask')

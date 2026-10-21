@@ -115,6 +115,18 @@ function sanitizeHeartPatch(p) {
     }
     if (Object.keys(b).length) out.bili = b
   }
+  // 做梦（2026-10-21）：开关 + 冷却 + 日记目录
+  // ⚠️ 漏了这段的症状：面板显示保存成功、界面刷新了，值却没变
+  if (src.dream && typeof src.dream === 'object') {
+    const d = {}
+    if (typeof src.dream.enabled === 'boolean') d.enabled = src.dream.enabled
+    if (src.dream.cooldownSec !== undefined && Number.isFinite(Number(src.dream.cooldownSec))) {
+      d.cooldownSec = Math.round(Number(src.dream.cooldownSec))
+    }
+    // 空串是合法值：表示「回到默认目录」
+    if (typeof src.dream.dir === 'string') d.dir = src.dream.dir.trim().slice(0, 300)
+    if (Object.keys(d).length) out.dream = d
+  }
   return out
 }
 

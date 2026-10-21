@@ -154,7 +154,9 @@ async function chat(candidate, messages, opts) {
     model: candidate.model || 'default',
     messages,
     temperature: Number.isFinite(o.temperature) ? o.temperature : 0.2,
-    max_tokens: Math.max(16, Math.min(1024, Number(o.maxTokens) || 160)),
+    // 硬顶 2048：只有「做梦」会要这么多（写一篇 1200 字的日记）。
+    // 其它调用都只要 100~400，所以放宽上限不影响它们。
+    max_tokens: Math.max(16, Math.min(2048, Number(o.maxTokens) || 160)),
     stream: false,
   }
   if (o.schema) body.response_format = { type: 'json_schema', json_schema: { name: 'heart', strict: true, schema: o.schema } }

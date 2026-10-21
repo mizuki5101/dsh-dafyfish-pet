@@ -45,6 +45,16 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     look: () => ipcRenderer.invoke('bili:look'),
     status: () => ipcRenderer.invoke('bili:status'),
   },
+  // 做梦（2026-10-21）：页面只做三件事 —— 报「睡了/醒了」、读状态、按「下次睡着立即做梦」。
+  // 素材/推理/写文件全在主进程（和心跳一样，不让页面拿到模型地址）。
+  dream: {
+    note: (kind, at) => ipcRenderer.invoke('dream:note', { kind: String(kind || ''), at: Number(at) || 0 }),
+    status: () => ipcRenderer.invoke('dream:status'),
+    force: (on) => ipcRenderer.invoke('dream:force', { on: !!on }),
+    open: () => ipcRenderer.invoke('dream:open-dir'),
+    // 调试口：不管冷却立刻做一次梦（CDP 验收用，不进面板）
+    now: () => ipcRenderer.invoke('dream:now'),
+  },
 })
 
 // 拖动：页面里按下她 → 告诉主进程搬窗口（主进程只在鼠标确实压在她身上时才搬，

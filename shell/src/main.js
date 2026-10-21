@@ -1683,12 +1683,19 @@ app.whenReady().then(() => {
                 maxFrames: cfg.bili.maxFrames,
                 cooldownSec: cfg.bili.cooldownSec,
               },
+              // 做梦：配置存 settings.json 的 heart.dream，但由「做梦」页签渲染
+              dream: {
+                enabled: cfg.dream.enabled,
+                cooldownSec: cfg.dream.cooldownSec,
+                dir: cfg.dream.dir,
+              },
             }
           : null
         return {
           ok: true,
           config: pub,
           status: heart ? heart.status() : null,
+          dreamStatus: heart ? heart.dreamStatus() : null,
           model: modelServer ? modelServer.status() : null,
           defaultPrompt: promptModule.SYSTEM,
         }
@@ -1738,6 +1745,18 @@ app.whenReady().then(() => {
         },
         // 刷视频（2026-10-20）：记忆文件放在 userData，和心跳的 memo.json 同级
         biliMemoFile: path.join(app.getPath('userData'), 'bili-memo.json'),
+        // 做梦（2026-10-21）：日记默认目录 + 水位线文件；回应模式对话给做梦当素材
+        dreamDir: path.join(app.getPath('userData'), '肥鱼日记'),
+        dreamStateFile: path.join(app.getPath('userData'), 'dream-state.json'),
+        getChat: () => (chatMemory ? chatMemory.messages() : []),
+        // 做梦开始/结束 → 页面据此静默拒绝「刷视频 / 看一眼 / 回应模式」
+        onDreamState: (on) => {
+          if (!petServer) return
+          try {
+            petServer.push({ t: 'control', dreaming: !!on })
+            bootLog('做梦：' + (on ? '开始（本轮要发一次请求）' : '结束'))
+          } catch (e) {}
+        },
         // 进度（list/pick/detail/frames/watch）——页面可以拿它显示「正在看…」
         onBiliStage: (stage, info) => {
           if (!petServer) return
@@ -1801,6 +1820,55 @@ app.whenReady().then(() => {
         }
       })
       ipcMain.handle('bili:status', () => (heart ? heart.biliStatus() : { ok: false, reason: 'no-heart' }))
+      /* —— 做梦（2026-10-21）——
+       * 页面只负责「她睡了 / 醒了」和「下次睡着立即做梦」这三件事；
+       * 素材收集、模型请求、写日记全在主进程（baseUrl/apiKey 不进页面）。
+       * 注意 dreamSleep 是**不 await** 的长任务：睡着那一刻就返回，写完/失败只写日志。
+       */
+      ipcMain.handle('dream:note', (_e, req) => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        const kind = String((req && req.kind) || '')
+        const at = Number(req && req.at) > 0 ? Number(req.at) : Date.now()
+        if (kind === 'wake') {
+          heart.dreamWake(at)
+          return { ok: true, kind, at }
+        }
+        if (kind === 'sleep') {
+          heart.dreamSleep(at)
+          return { ok: true, kind, at }
+        }
+        return { ok: false, reason: 'bad-kind' }
+      })
+      ipcMain.handle('dream:status', () => (heart ? heart.dreamStatus() : { ok: false, reason: 'no-heart' }))
+      // 一次性绕过冷却（不是配置项，不写 settings.json）
+      ipcMain.handle('dream:force', (_e, req) => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        heart.dreamForceNext(!!(req && req.on))
+        return heart.dreamStatus()
+      })
+      ipcMain.handle('dream:open-dir', async () => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        const st = heart.dreamStatus()
+        const dir = String((st && st.dir) || '')
+        if (!dir) return { ok: false, reason: 'no-dir' }
+        try {
+          fs.mkdirSync(dir, { recursive: true })
+          const err = await shell.openPath(dir)
+          if (err) return { ok: false, reason: err }
+          return { ok: true, dir }
+        } catch (e) {
+          return { ok: false, reason: String((e && e.message) || e) }
+        }
+      })
+      // 调试口（不进面板）：不管冷却立刻做一次梦
+      ipcMain.handle('dream:now', async () => {
+        if (!heart) return { ok: false, reason: 'no-heart' }
+        try {
+          return await heart.dreamTest()
+        } catch (e) {
+          return { ok: false, reason: String((e && e.message) || e) }
+        }
+      })
       // 「扫描本地端点」按钮：只在这里探测端口；心跳推理本身永远不自动发现
       ipcMain.handle('heart:scan', () => (heart ? heart.scan() : { ok: false, results: [] }))
       // 「确认 API 连接」：真发一条 ping（也能让 llama-swap 把模型加载起来）
@@ -1808,6 +1876,8 @@ app.whenReady().then(() => {
       // 「回应模式」：对话按钮直接问聊天模型（不走 DSH），带最近 12 轮记忆
       ipcMain.handle('heart:chat', async (_e, req) => {
         if (!heart || !chatMemory) return { ok: false, reason: 'no-heart' }
+        // 做梦期间独占模型：静默拒绝（页面据此冒「等一下……本鲸才刚睡醒呢……」）
+        if (heart.dreaming()) return { ok: false, reason: 'dreaming' }
         const text = String((req && req.text) || '').trim().slice(0, 1000)
         if (!text) return { ok: false, reason: 'empty' }
         const cfg = heart.config()

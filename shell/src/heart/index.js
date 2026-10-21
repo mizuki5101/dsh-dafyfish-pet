@@ -18,6 +18,7 @@ const { MAX_ENTRIES: MEMO_MAX } = require('./memo')
 const biliModule = require('./bili')
 const biliFrames = require('./bili/frames')
 const { createStore: createBiliMemo } = require('./bili/memo')
+const { createDream } = require('./dream')
 
 /** 判重要对照最近几句（喂给提示词的只有 3 句，判重可以多看几句） */
 const DUP_LOOKBACK = 6
@@ -92,6 +93,48 @@ function createHeart(opts) {
   let lastSkip = ''
   let inferFails = 0
   let backoffUntil = 0
+
+  /* ——————————————————————————————————————————————————————————————
+   * 做梦（2026-10-21）：她睡着 → 回顾「上次醒来 → 现在」→ 写一篇日记。
+   * 与 cfg.enabled **无关**：心跳关着也能做梦（用户明确要求「不强制先开某个功能」），
+   *   只看 dream.enabled + 有没有可用的模型/API。
+   * 输出不冒气泡：只落进「肥鱼日记」；另外推一条 {dreaming:true/false} 给页面做互斥。
+   * ⚠️ 和 pet.js 的「梦话」（SLEEP_LINES，睡着时冒一句台词）不是一回事。
+   * —————————————————————————————————————————————————————————————— */
+  const dream = createDream({
+    dirDefault: o.dreamDir || '',
+    stateFile: o.dreamStateFile || '',
+    getCfg: () => cfg.dream,
+    getSays: () => (memo ? memo.entries() : []),
+    getChat: o.getChat,
+    // 刷视频/回应模式正在用模型时先别做梦（两边抢 -np 1 会都变慢）
+    isBusy: () => holds > 0 || biliRunning,
+    getBili: () => {
+      try {
+        const s = biliMemo()
+        return s ? s.entries() : []
+      } catch (e) {
+        return []
+      }
+    },
+    onState: (on) => {
+      try {
+        if (typeof o.onDreamState === 'function') o.onDreamState(!!on)
+      } catch (e) {}
+    },
+    // 和刷视频同一套出口：所有推理都走 vision.infer，端点解析交给它
+    chat: async (messages, op) => {
+      const r = await vision.infer(cfg, messages, {
+        schema: op && op.schema,
+        maxTokens: (op && op.maxTokens) || 2048,
+        temperature: op && op.temperature,
+        timeoutMs: (op && op.timeoutMs) || 180000,
+        enableThinking: cfg.model.enableThinking,
+      })
+      return r.ok ? { ok: true, text: r.text } : { ok: false, error: r.error }
+    },
+    log,
+  })
 
   function reload() {
     try {
@@ -354,6 +397,12 @@ function createHeart(opts) {
       lastReason = 'chat-hold'
       return { ok: false, reason: 'chat-hold' }
     }
+    // 做梦独占模型：定时心跳让路（否则「她刚被叫醒、心跳正好到点」时两个请求
+    // 会挤在 -np 1 的槽位上互相拖，心跳那边还会 20 秒超时）
+    if (dream.running()) {
+      lastReason = 'dreaming'
+      return { ok: false, reason: 'dreaming' }
+    }
     const t = clock()
     const decision = force
       ? { ok: true, reason: 'forced' }
@@ -429,6 +478,8 @@ function createHeart(opts) {
   async function tickNow(opts) {
     const o2 = opts || {}
     if (busy) return { ok: false, reason: 'busy' }
+    // 做梦期间独占模型（页面已先拦过，这里是兜底）：静默拒绝，不排队不补
+    if (dream.running()) return { ok: false, reason: 'dreaming' }
     // 听觉触发的「立即看一眼」：主进程复核开关（页面只管发，不决定要不要看）
     if (o2.trigger === 'audio') {
       reload()
@@ -548,6 +599,8 @@ function createHeart(opts) {
       endpoint: lastEndpoint,
       lastInferError,
       running: !!timer,
+      /** 做梦进行中（面板/互斥用） */
+      dreaming: dream.running(),
     }
   }
 
@@ -594,6 +647,9 @@ function createHeart(opts) {
    */
   async function biliLook() {
     const t = clock()
+    // ⚠️ 必须在 biliCooldownUntil 置位**之前**判：做梦被拒不能消耗刷视频的冷却
+    //    （用户明确要求「按钮不进入冷却，因为实际上没有生效」）
+    if (dream.running()) return { ok: false, reason: 'dreaming' }
     if (!cfg.bili.enabled) return { ok: false, reason: 'disabled' }
     if (biliRunning) return { ok: false, reason: 'running' }
     const left = biliCooldownLeft()
@@ -682,6 +738,18 @@ function createHeart(opts) {
     probe,
     reload,
     config: () => cfg,
+    /* —— 做梦（2026-10-21）—— */
+    /** 页面报「她醒了」→ 记水位线（落盘，外壳重启后「上次醒来」还在） */
+    dreamWake: (at) => dream.noteWake(at),
+    /** 页面报「她睡着了」→ 触发一场梦（不 await，失败只写日志） */
+    dreamSleep: (at) => dream.noteSleep(at),
+    dreamStatus: () => dream.status(),
+    /** 「下次睡着时立即做梦」：一次性绕过冷却（传 undefined = 读取当前值） */
+    dreamForceNext: (on) => dream.forceNext(on),
+    /** 调试口：不管冷却立刻做一次（CDP 用，不进面板） */
+    dreamTest: () => dream.testOnce(),
+    /** 做梦进行中？（刷视频/看一眼/回应模式据此静默拒绝） */
+    dreaming: () => dream.running(),
     /** 回应模式占用模型期间，让心跳让路（成对调用） */
     hold: () => {
       holds++

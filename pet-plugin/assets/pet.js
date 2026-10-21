@@ -6338,6 +6338,58 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return window.dshpetBridge && window.dshpetBridge.heart ? window.dshpetBridge.heart : null
   }
 
+  /* ==== 做梦（2026-10-21）====
+   * 两件事，别混：
+   *   ① 「做梦」= 她睡着时外壳发一次模型请求，回顾「上次醒来→现在」，写进「肥鱼日记」。
+   *      输出**不冒气泡**，这里只负责 报睡眠/唤醒、显示状态、以及在它跑的时候拦住别的请求。
+   *   ② 下面的 DREAM_REJECT_LINE 是「做梦未完成时被要求刷视频/看一眼/回应模式」的拒绝台词。
+   *
+   * 为什么页面也要拦一道：外壳那边虽然会返回 {reason:'dreaming'}，但页面已经先冒了
+   * 「等我刷一条…」/「…（她在想）」这种东西，再被拒就会留在屏幕上。先拦就不闪。
+   */
+  const DREAM_REJECT_LINE = '等一下……本鲸才刚睡醒呢……'
+  let dreamState = { on: false, since: 0 }
+  let dreamSaidAt = 0
+
+  function dreamBridge() {
+    return window.dshpetBridge && window.dshpetBridge.dream ? window.dshpetBridge.dream : null
+  }
+
+  function dreamBusy() {
+    return !!(dreamState && dreamState.on)
+  }
+
+  function setDreamState(on) {
+    const was = !!dreamState.on
+    dreamState = { on: !!on, since: performance.now() }
+    motion.debug.dream = { on: !!on, at: Math.round(performance.now()), was: was }
+  }
+
+  /** 报给外壳（外壳自己也会判 asleep，这里只是让窗口边界准一点） */
+  function reportDream(kind, at) {
+    const d = dreamBridge()
+    if (!d || typeof d.note !== 'function') return
+    try {
+      const p = d.note(kind, at || Date.now())
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    } catch (e) {}
+  }
+
+  /** 冒一次拒绝台词（3 秒内不重复，防止连点刷满队列） */
+  function dreamSay() {
+    const now = Date.now()
+    if (now - dreamSaidAt < 3000) return
+    dreamSaidAt = now
+    try { ui.bubble.show(DREAM_REJECT_LINE, { name: 'DS 鲸鱼娘', ttl: 4600 }) } catch (e) {}
+  }
+
+  /** 做梦中就拒绝并返回 true（调用方直接 return，不进冷却、不排队、不补） */
+  function dreamReject() {
+    if (!dreamBusy()) return false
+    dreamSay()
+    return true
+  }
+
   function applyChatMode(mode) {
     chatMode = mode === 'pet' ? 'pet' : 'dsh'
     try {
@@ -6409,6 +6461,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           u.bubble.show('回应模式只在桌面外壳里可用（浏览器版没有本地模型）。', { name: 'DS 鲸鱼娘', sticky: true })
           return
         }
+        // 她正在做梦：静默拒绝（不显示「她在想」、不排队、不补）
+        if (dreamReject()) return
         send.disabled = true
         try {
           u.bubble.show('…（她在想）', { name: 'DS 鲸鱼娘', busy: true, sticky: true })
@@ -6494,6 +6548,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ['action', '动作'],
       ['script', '小戏'],
       ['heart', '心跳'],
+      ['dream', '做梦'],
       ['setting', '设置'],
     ]
     u.menu.focused = 'face'
@@ -6546,6 +6601,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         try { u.bubble.show('刷视频要在桌面壳里用（网页版没有这个能力）', { name: 'DS 鲸鱼娘', ttl: 6000 }) } catch (e) {}
         return
       }
+      // 她正在做梦：冒一句「等一下…」然后什么都不做（不进冷却、不排队）——
+      // 因为实际上没有生效，按用户要求「按钮不进入冷却」。
+      if (dreamReject()) return
       if (biliBusy || Date.now() < biliUntil) return
       biliBusy = true
       paintBili()
@@ -6557,6 +6615,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       biliBusy = false
       if (r && r.ok) {
         armBili(60)
+      } else if (r && r.reason === 'dreaming') {
+        // 外壳兜底拒的（页面还没收到 dreaming 事件）：补一句台词，但不进冷却、不冒错误
+        dreamSay()
       } else if (r && r.reason === 'cooldown') {
         armBili(Number(r.retryInSec) || 60)
       } else {
@@ -7077,6 +7138,31 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
    *   · 每次改完都重新拉一次配置，而不是本地猜 —— 避免界面和磁盘不一致；
    *   · 浏览器版没有 dshpetBridge，显示一句人话就退出。
    */
+  /**
+   * 通用滑块（range）：拖动只更新右边数字，**松手才保存**（change）——
+   * 每动一格就发一次 IPC 会把设置写爆。
+   * 提到 renderHeartPane 外面：做梦页也要用同一个观感。
+   */
+  function mkRange(label, value, min, max, step, fmt, onChange) {
+    const l = $('label', 'dshp-label')
+    l.append($('span', null, label))
+    const r = document.createElement('input')
+    r.type = 'range'
+    r.min = String(min)
+    r.max = String(max)
+    r.step = String(step)
+    r.value = String(value)
+    const out = $('span', null, fmt(Number(r.value)))
+    out.style.minWidth = '46px'
+    out.style.textAlign = 'right'
+    r.addEventListener('input', () => {
+      out.textContent = fmt(Number(r.value))
+    })
+    r.addEventListener('change', () => onChange(Number(r.value)))
+    l.append(r, out)
+    return l
+  }
+
   function renderHeartPane(box) {
     const HB = window.dshpetBridge && window.dshpetBridge.heart ? window.dshpetBridge.heart : null
     if (!HB || typeof HB.settings !== 'function') {
@@ -7165,27 +7251,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       box.append(presetRow)
 
       // —— 两个滑块：判定/看屏间隔、最短说话间隔 ——
-      const mkSlider = (label, value, min, max, step, fmt, onChange) => {
-        const l = $('label', 'dshp-label')
-        l.append($('span', null, label))
-        const r = document.createElement('input')
-        r.type = 'range'
-        r.min = String(min)
-        r.max = String(max)
-        r.step = String(step)
-        r.value = String(value)
-        const out = $('span', null, fmt(Number(r.value)))
-        out.style.minWidth = '46px'
-        out.style.textAlign = 'right'
-        r.addEventListener('input', () => {
-          out.textContent = fmt(Number(r.value))
-        })
-        r.addEventListener('change', () => onChange(Number(r.value)))
-        l.append(r, out)
-        return l
-      }
+      // 滑块工厂提到外面了（mkRange）：做梦页也要用，两处各写一份会走样。
       box.append(
-        mkSlider('看屏/说话间隔', cfg.intervalSec || 60, 15, 600, 15, (v) => v + 's', (v) => {
+        mkRange('看屏/说话间隔', cfg.intervalSec || 60, 15, 600, 15, (v) => v + 's', (v) => {
           const cap = Math.min(600, Math.max(1, Math.ceil(3600 / Math.max(15, v))))
           save({ intervalSec: v, lookMinGapSec: v, sayMinGapSec: v, maxLooksPerHour: cap, maxSaysPerHour: cap })
         }),
@@ -7239,7 +7307,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       box.append(
         tasteRow,
         $('div', 'dshp-hint', '每次刷视频随机挑一个去搜。留空就退回首页推荐（推荐流会塞不感兴趣的东西）。'),
-        mkSlider('抽帧数', bcfg.maxFrames || 3, 3, 10, 1, (v) => v + ' 帧', (v) => {
+        mkRange('抽帧数', bcfg.maxFrames || 3, 3, 10, 1, (v) => v + ' 帧', (v) => {
           save({ bili: { maxFrames: v } })
         }),
         $('div', 'dshp-hint', '帧越多看得越细、也越慢：3 帧约 9 秒，10 帧约 20 秒。超过 40 分钟的视频最多用 3 帧。'),
@@ -7304,6 +7372,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         refresh()
       })
       btnTick.addEventListener('click', async () => {
+        // 做梦期间独占模型：冒一句拒绝，既不进队列也不补（按钮本来就没有冷却）
+        if (dreamReject()) return
         resLine.textContent = '看一眼…（约 2 秒）'
         let r = null
         try {
@@ -7311,6 +7381,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         } catch (e) {
           r = { ok: false, reason: String((e && e.message) || e) }
         }
+        if (r && r.reason === 'dreaming') { dreamSay(); return }
         if (r && r.ok) resLine.textContent = '她说：' + ((r.action && r.action.say) || '（只做了动作）')
         else resLine.textContent = '这次不说：' + ((r && r.reason) || '未知')
       })
@@ -7477,6 +7548,164 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     })
   }
 
+  /**
+   * 「做梦」页签（2026-10-21）。
+   *
+   * 这里只放**做梦自己的参数**：开关 / 冷却 / 日记目录 / 下次立即做梦 / 状态。
+   * 心跳页不重复出现这些控件 —— 同一个配置两处能改，早晚会不一致。
+   *
+   * 「日记风格」现在是占位：以后要做成「追加到提示词里的一段话」，所以先占个位置。
+   */
+  function renderDreamPane(box) {
+    const D = dreamBridge()
+    if (!D || typeof D.status !== 'function') {
+      box.append($('div', 'dshp-hint', '「做梦」只在桌面外壳里可用（浏览器版没有主进程，写不了日记）。'))
+      return
+    }
+    const HB = heartBridge()
+    const tip = $('div', 'dshp-hint', '读取中…')
+    box.append(tip)
+
+    const refresh = () => renderPane('dream')
+    const save = async (patch) => {
+      if (!HB || typeof HB.save !== 'function') {
+        tip.textContent = '外壳版本太旧：重启一下桌宠再试'
+        return
+      }
+      tip.textContent = '保存中…'
+      let r = null
+      try {
+        r = await HB.save(patch)
+      } catch (e) {
+        r = { ok: false, reason: String((e && e.message) || e) }
+      }
+      if (!r || !r.ok) {
+        tip.textContent = '保存失败：' + ((r && r.reason) || '未知')
+        return
+      }
+      refresh()
+    }
+
+    D.status().then((st) => {
+      if (ui.menu.focused !== 'dream') return
+      box.textContent = ''
+      const d = st && st.ok ? st : {}
+      const enabled = d.enabled === true
+      const coolSec = Number(d.cooldownSec) || 1800
+
+      // —— 状态行（她现在在不在做梦 / 冷却 / 上次结果）——
+      const statusOf = (x) => {
+        const bits = []
+        if (x.running) bits.push('正在做梦…')
+        else if (Number(x.cooldownLeft) > 0) bits.push('冷却还剩 ' + Math.ceil(Number(x.cooldownLeft) / 60) + ' 分钟')
+        else bits.push('冷却已好，下次睡着就会写')
+        if (x.lastResult === 'written') {
+          bits.push('上次写了日记' + (x.lastDiaryDate ? '（' + x.lastDiaryDate + '）' : '') +
+            (Number(x.todayCount) > 0 ? '，今天第 ' + x.todayCount + ' 段' : ''))
+        } else if (x.lastResult === 'empty') bits.push('上次没什么值得记的事')
+        else if (x.lastResult === 'error') bits.push('上次失败：' + (x.lastError || '未知'))
+        return bits.join(' · ')
+      }
+      const statusLine = $('div', 'dshp-hint dshp-now', statusOf(d))
+      box.append(statusLine)
+
+      // —— 开关 ——
+      const sw = $('button', 'dshp-chip' + (enabled ? ' dshp-on' : ''), enabled ? '已启用' : '已关闭')
+      sw.addEventListener('click', () => save({ dream: { enabled: !enabled } }))
+      const row0 = $('div', 'dshp-row')
+      row0.append($('span', null, '做梦'), sw)
+      box.append(
+        row0,
+        $('div', 'dshp-hint', enabled
+          ? '开：她每次睡着，会把「上次醒来之后」的事回顾一遍，写成一篇日记。'
+          : '关：她睡着就是睡觉，不写日记、不发请求。'),
+        // 用户明确要求写在面板上：不强制先开别的功能，但必须配好模型
+        $('div', 'dshp-hint', '⚠️ 仅在配置了模型 / API 时有效（不用开心跳，也不用开刷视频）。'),
+      )
+
+      // —— 冷却 ——
+      box.append(
+        mkRange('做梦冷却', Math.round(coolSec / 60), 5, 180, 5, (v) => v + ' 分钟', (v) => {
+          save({ dream: { cooldownSec: v * 60 } })
+        }),
+        $('div', 'dshp-hint', '起睡就计时：一次梦发出去就开始冷却，模型回「没值得记的」也算一次。'),
+      )
+
+      // —— 日记目录 ——
+      const dirRow = $('div', 'dshp-label')
+      dirRow.append($('span', null, '日记目录'))
+      const dirIn = document.createElement('input')
+      dirIn.type = 'text'
+      const isCustom = !!d.dir && !!d.dirDefault && d.dir !== d.dirDefault
+      dirIn.value = isCustom ? d.dir : ''
+      dirIn.placeholder = d.dirDefault || '（默认目录）'
+      dirIn.style.cssText =
+        'flex:1;min-width:0;font-size:12px;padding:4px 6px;border-radius:6px;' +
+        'border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit'
+      const openBtn = $('button', 'dshp-btn', '打开文件夹')
+      openBtn.title = '在资源管理器里打开日记目录'
+      openBtn.addEventListener('click', async () => {
+        let r = null
+        try {
+          r = await D.open()
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        if (!r || !r.ok) tip.textContent = '打不开：' + ((r && r.reason) || '未知')
+        else tip.textContent = ''
+      })
+      const applyDir = () => save({ dream: { dir: dirIn.value.trim() } })
+      dirIn.addEventListener('change', applyDir)
+      dirIn.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault()
+          applyDir()
+        }
+      })
+      dirRow.append(dirIn, openBtn)
+      box.append(dirRow, $('div', 'dshp-hint', '留空 = 默认目录；每天一个 .md 文件，同一天睡几次都追加进同一个。'))
+
+      // —— 下次睡着时立即做梦（一次性绕过冷却，多按不叠加）——
+      const forceRow = $('div', 'dshp-row')
+      const label = (on) => (on ? '✓ 已就绪 · 下次睡着立刻做梦（再按取消）' : '下次睡着时立即做梦')
+      const forceBtn = $('button', 'dshp-btn', label(d.forceNext === true))
+      forceBtn.disabled = !enabled
+      forceBtn.title = enabled
+        ? '只绕过「做梦冷却」这一次；按几次都只有一次效果'
+        : '先打开上面的开关'
+      if (enabled && d.forceNext === true) forceBtn.style.borderColor = 'rgba(124,92,255,.9)'
+      forceBtn.addEventListener('click', async () => {
+        if (!enabled) return
+        const on = d.forceNext !== true
+        let r = null
+        try {
+          r = await D.force(on)
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        if (!r || r.ok === false) {
+          tip.textContent = '操作失败：' + ((r && r.reason) || '未知')
+          return
+        }
+        // 就地更新，不整页重画：设置页一重画滚动位置就弹回顶部
+        d.forceNext = on
+        forceBtn.textContent = label(on)
+        forceBtn.style.borderColor = on ? 'rgba(124,92,255,.9)' : ''
+        tip.textContent = on
+          ? '已就绪：她下次睡着时会跳过冷却立刻做梦（只用一次）。'
+          : ''
+        statusLine.textContent = statusOf(d)
+      })
+      forceRow.append(forceBtn)
+      box.append(forceRow)
+
+      // —— 日记风格（占位，暂未实现）——
+      box.append(
+        $('div', 'dshp-hint', '日记风格：（以后加）写日记的语气 / 篇幅 / 要不要碎碎念，会写进给模型的提示词。'),
+      )
+    })
+  }
+
   function renderPane(id) {
     const panes = ui.menu.panes
     // 心跳页更高（见 CSS .dshp-menu.dshp-heart），其它页回到 300px 小卡片
@@ -7486,6 +7715,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     panes.appendChild($('div', 'dshp-hint dshp-now', menuStatusLine()))
     if (id === 'heart') {
       renderHeartPane(panes)
+      return
+    }
+    if (id === 'dream') {
+      renderDreamPane(panes)
       return
     }
     if (id === 'face' || id === 'mouth') {
@@ -8357,6 +8590,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   /** 外部（用户菜单，或 agent 自己调 /dsh-pet/control）驱动的表演。 */
   function handleControl(m) {
+    // 做梦进行中（外壳推的）：页面据此把「刷视频 / 看一眼 / 回应模式」先拦下来。
+    // 只改状态，不冒气泡、不碰动作。
+    if (m.dreaming !== undefined) setDreamState(!!m.dreaming)
     // 读图静默开关：心跳在「采集 → 模型出结果」期间推 seal，这期间不许冒别的气泡。
     // 只影响气泡排队，不碰表情/动作/道具。
     if (m.seal !== undefined) {
@@ -8939,6 +9175,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     try { ui.bubble.show(SLEEP_ONSET_LINE, { name: 'DS 鲸鱼娘', ttl: 3600 }) } catch (e) {}
     motion.debug.sleep = { startedAt: Math.round(now), why: idle.sleepWhy, face: rig.face }
     syncSleepDebugUI()
+    // 报给外壳：「我睡着了」→ 外壳按「上次醒来 → 现在」的窗口做一场梦（默认关）
+    // 用 Date.now() 而不是 performance.now()：日记按真实日期分文件、按真实时段排序
+    reportDream('sleep', Date.now())
     return true
   }
 
@@ -8996,6 +9235,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }, faceMs + 80)
     }
     syncSleepDebugUI()
+    // 报给外壳：这是「上次醒来」的水位线 —— 下一次做梦的窗口从这一刻开始
+    reportDream('wake', Date.now())
     return true
   }
 
@@ -10051,8 +10292,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
 
     /** 诊断：睡眠状态（@sleep-state 快照 + 当前睡脸 / 待机幅度 / 最近唤醒） */
-    sleepState: () => ({
-      asleep: idle.sleep !== 0,
+    sleepState: () => ({      asleep: idle.sleep !== 0,
       why: idle.sleepWhy || null,
       asleepMs: idle.sleep ? Math.round(performance.now() - idle.sleepAt) : 0,
       engine: (idle.sleepSt && typeof DSHPetSleep !== 'undefined') ? DSHPetSleep.snapshot(idle.sleepSt, performance.now()) : null,
@@ -10062,6 +10302,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       lastWake: motion.debug.sleepWake || null,
       lastShy: motion.debug.sleepShy || null,
       last: (motion.debug.sleep && motion.debug.sleep.last) || null
+    }),
+    /** 诊断：做梦状态（外壳正在写日记 → 页面会拦住刷视频/看一眼/回应模式） */
+    dreamState: () => ({
+      on: dreamBusy(),
+      sinceMs: dreamState && dreamState.since ? Math.round(performance.now() - dreamState.since) : 0,
+      rejectLine: DREAM_REJECT_LINE,
+      last: motion.debug.dream || null
     }),
     /** 诊断/测试：立刻入睡（不用等 3 分钟） */
     sleepNow: () => beginSleep('debug'),

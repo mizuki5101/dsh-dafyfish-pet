@@ -64,6 +64,14 @@ const DEFAULTS = {
   },
   /** 提示词覆盖（空 = 用 prompt.js 里的默认 SYSTEM） */
   prompt: '',
+  /**
+   * 「做梦」（2026-10-21）：她睡着时回顾「上次醒来 → 这次睡着」的素材，写一篇日记。
+   * 默认**关闭**，且不要求先开心跳/刷视频；但必须有可用的模型/API（面板里写明）。
+   * cooldownSec 默认 30 分钟：主人忙时（无互动、鼠标乱划）她会反复醒了又睡，
+   *   没有冷却就会一直发这种无用请求。
+   * dir 留空 = %APPDATA%/DS-WhaleGirl-Pet/肥鱼日记（面板里可改）。
+   */
+  dream: { enabled: false, cooldownSec: 1800, dir: '' },
   /** 「一键启动」用的本地引擎配置（空路径 = 需要用户在面板里填） */
   modelServer: { exe: '', model: '', mmproj: '', extraArgs: '' },
 }
@@ -153,6 +161,12 @@ function normalize(raw) {
       keepDays: num(mem.keepDays, DEFAULTS.memory.keepDays, 1, 365),
     },
     prompt: str(src.prompt, '').slice(0, 4000),
+    dream: {
+      enabled: bool((src.dream || {}).enabled, DEFAULTS.dream.enabled),
+      // 5 分钟 ~ 3 小时：短了没意义（她一小时也睡不着两次），长了等于关掉
+      cooldownSec: num((src.dream || {}).cooldownSec, DEFAULTS.dream.cooldownSec, 300, 10800),
+      dir: str((src.dream || {}).dir, '').trim().slice(0, 300),
+    },
     modelServer: {
       exe: str(ms.exe, '').trim(),
       model: str(ms.model, '').trim(),
