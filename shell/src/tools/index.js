@@ -12,6 +12,8 @@
 // 功能面板也该能用。
 
 const { ipcMain } = require('electron')
+const fs = require('node:fs')
+const path = require('node:path')
 const keys = require('../native/keys')
 const { createSelect } = require('./select')
 const { createTranslate } = require('./translate')
@@ -39,6 +41,21 @@ function createTools(options = {}) {
   let currentId = 0
   let currentKind = ''
   let lastError = ''
+
+  /**
+   * 外壳构建时间（= app.asar 的 mtime）。
+   * 用途：面板上显示一行"外壳构建：…"，一眼看出**是不是在跑新代码**。
+   * 2026-10-22 吃过亏：修在 shell 侧（select.js），博士只刷新页面/切开关不会生效，
+   * 于是"改了没效果"排查了两轮。
+   */
+  const shellBuiltAt = (() => {
+    try {
+      const p = path.join(process.resourcesPath || '', 'app.asar')
+      return new Date(fs.statSync(p).mtimeMs).toISOString()
+    } catch (e) {
+      return ''
+    }
+  })()
 
   function pushEvent(obj) {
     try {
@@ -97,6 +114,8 @@ function createTools(options = {}) {
     // 「落点是不是压在我们真正的 UI 上」由 main.js 的 hitJS 结果给（lastHit === 'panel'）。
     // 不能拿窗口矩形判：主窗可以铺满主屏，那时恒为真（2026-10-22 的哑火就是它）。
     isOverOwnUi: typeof options.isOverOwnUi === 'function' ? options.isOverOwnUi : () => false,
+    // 拖她/点她不算选字（否则每拖一下都会往前台应用发一次 Ctrl+C）
+    isOverPet: typeof options.isOverPet === 'function' ? options.isOverPet : () => false,
     onText: (info) => {
       report('选中 ' + info.chars + ' 字（' + (info.app || '?') + '）')
       pinShow({ kind: 'tr', text: info.text, app: info.app, chars: info.chars, truncated: info.truncated })
@@ -154,6 +173,7 @@ function createTools(options = {}) {
       translate: Object.assign({}, t, { api: { baseUrl: t.api && t.api.baseUrl, model: t.api && t.api.model, apiKeySet: !!(t.api && t.api.apiKey) } }),
       vision: v,
       native: { ok: keys.available(), reason: keys.unavailableReason() },
+      shell: { builtAt: shellBuiltAt, pid: process.pid },
       model: { configured: !!m.baseUrl, baseUrl: m.baseUrl || '', model: m.model || '' },
       select: select.status(),
       shot: shot.status(),

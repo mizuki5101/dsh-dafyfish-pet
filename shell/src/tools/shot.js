@@ -121,8 +121,10 @@ function createShot(options = {}) {
       try {
         // 遮罩窗是复用的：先把上一轮的 done/框复位，否则第二次框选会毫无反应
         w.webContents.send('shot:reset')
-        w.show()
-        w.focus()
+        // ⚠️ 用 showInactive，**不主动抢焦点**：这个遮罩只是给用户看/画框的，
+        // 没有任何理由让自己变成前台窗口（2026-10-22：怀疑抢焦点会干扰别的截图工具）。
+        // 用户按下第一下框选时窗口自然激活，Esc 从那时起有效；右键也能取消。
+        w.showInactive()
         w.moveTop()
       } catch (e) {}
       onOpenChange(true)
@@ -136,6 +138,7 @@ function createShot(options = {}) {
   function cancel(reason) {
     lastRect = null
     hideOverlay()
+    destroyOverlay()
     report('取消：' + (reason || 'unknown'))
     return { ok: true }
   }
@@ -148,6 +151,10 @@ function createShot(options = {}) {
   async function hideThenCapture(region) {
     const bounds = ovWin && !ovWin.isDestroyed() ? ovWin.getContentBounds() : null
     hideOverlay()
+    // 用完即销毁：不在后台留一个隐藏的全屏置顶窗口。
+    // 隐藏窗口本身不该影响别的程序，但它会一直占着一个 always-on-top 的 HWND，
+    // 2026-10-22 排查「笔记本 F10 截图键保存失败」时决定不留这个变量。
+    destroyOverlay()
     await sleep(HIDE_SETTLE_MS)
     const abs = {
       x: Math.round((bounds ? bounds.x : 0) + region.x),

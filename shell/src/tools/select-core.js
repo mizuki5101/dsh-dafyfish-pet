@@ -39,9 +39,17 @@ function createState() {
     selfAtDown: false,
     /** down 落在气泡/面板之外 —— 若最后是单击（没拖动）就代表"取消选中" */
     pendingClear: false,
+    /** 按下时光标是不是十字（框选工具的特征） */
+    crossAtDown: false,
+    /** 按在她身上（拖她/点她）→ 不算选字 */
+    overPetAtDown: false,
+    /** 按在我们真正的 UI 上（面板/气泡）→ 不算选字 */
+    overUiAtDown: false,
     pin: { visible: false, shownAt: 0, holdUntil: 0 },
     lastText: '',
     lastAt: 0,
+    /** 最近一次松手时**为什么这么判**（上屏到面板，排查用） */
+    lastDecision: null,
   }
 }
 
@@ -167,6 +175,9 @@ function step(state, obs, cfg) {
       s.app = (obs && obs.app) || null
       // 前台是我们自己（在她自己的面板里选字）→ 后面不抓，否则会给我们自己发 Ctrl+C
       s.selfAtDown = !!(obs && obs.app && obs.app.self)
+      s.crossAtDown = !!(obs && obs.cursor === 'cross')
+      s.overPetAtDown = !!(obs && obs.overPet)
+      s.overUiAtDown = !!(obs && obs.overOwnUi)
     } else if (s.mouse === 'down') {
       const dx = Math.abs(pt.x - s.start.x)
       const dy = Math.abs(pt.y - s.start.y)
@@ -184,10 +195,25 @@ function step(state, obs, cfg) {
   const windowMoved = isWindowDrag(s.rect0, obs && obs.rect)
   const appName = s.app && s.app.ok ? s.app.name : ''
   const appOk = !!(s.app && s.app.ok) && !isSkippedApp(appName, c.skipApps)
+  const o = (obs && obs.overlay) || {}
+  const capture = isCaptureOverlay({
+    crossCursor: s.crossAtDown || !!(obs && obs.cursor === 'cross'),
+    topmost: !!o.topmost,
+    popup: !!o.popup,
+  })
 
-  if (dragged && !windowMoved && appOk && !s.selfAtDown) {
-    emit = { type: 'grab', app: appName, expectSeq: s.seq0, ms: heldMs }
-    s.pendingClear = false
+  // ⚠️ 这里**不再看**「前台是不是我们自己的进程」：
+  // 我们的窗是置顶+穿透的，可能只是"恰好是前台"（实际点击给的是别的程序）。
+  // 真正该问的是"光标是不是压在我们的 UI / 她身上"——那个由 hitJS 精确给出（overOwnUi/overPet）。
+  // 2026-10-22 真机就是因为前者，划词一次都不触发（面板显示 应用=ds-whalegirl-pet.exe）。
+  if (dragged && !windowMoved && appOk && !s.overPetAtDown && !s.overUiAtDown) {
+    if (capture) {
+      // 这是在框选/截图，不是在选字：**绝对不要把 Ctrl+C 发过去**（会按到它的"复制"）
+      emit = { type: 'skip', reason: 'capture-tool', cursor: (obs && obs.cursor) || '', topmost: !!o.topmost }
+    } else {
+      emit = { type: 'grab', app: appName, expectSeq: s.seq0, ms: heldMs }
+      s.pendingClear = false
+    }
   } else if (s.pendingClear) {
     emit = { type: 'clear', reason: 'selection-cleared' }
     s.pendingClear = false
@@ -195,10 +221,25 @@ function step(state, obs, cfg) {
   }
 
   s.mouse = 'up'
+  // 把这次判定的全部依据留在 state 上：面板直接显示，出问题不用猜也不用翻日志
+  s.lastDecision = {
+    ms: heldMs,
+    cursor: (obs && obs.cursor) || '',
+    topmost: !!o.topmost,
+    popup: !!o.popup,
+    app: appName,
+    self: !!s.selfAtDown,
+    pet: !!s.overPetAtDown,
+    capture: !!capture,
+    acted: emit ? emit.type : 'none',
+  }
   s.start = null
   s.rect0 = null
   s.app = null
   s.selfAtDown = false
+  s.crossAtDown = false
+  s.overPetAtDown = false
+  s.overUiAtDown = false
   return { state: s, emit }
 }
 
@@ -231,6 +272,43 @@ function shouldAcceptText(state, text, now) {
   return true
 }
 
+/**
+ * 这一拖是「选字」还是「框选 / 截图」？
+ *
+ * 为什么会误判：划词要靠"发一次 Ctrl+C 再读剪贴板"来拿文本。
+ * 而笔记本的 F10 截图键、各种截图工具是"框好图 → 等你点保存/复制"，
+ * 我们在松手那一瞬间发的 Ctrl+C 正好按到它自己的「复制」——
+ * 表现就是「还没点截获，图就被复制了，而且没落盘」（2026-10-22 真机）。
+ *
+ * 两个信号，任一命中就放弃：
+ *   ① 光标是十字（框选工具的标配；选字用的是 I 形/箭头）
+ *   ② 前台窗口是置顶弹窗（全屏框选层的标准形态）
+ */
+function isCaptureOverlay(o) {
+  const x = o && typeof o === 'object' ? o : {}
+  if (x.crossCursor) return true
+  return !!(x.topmost && x.popup)
+}
+
+/**
+ * 该不该把剪贴板恢复成「我们动手之前」的样子？
+ *
+ * 默认是"该"（我们借剪贴板拿文本，用完要还回去）。但有三种情况**绝对不能动**：
+ *   1) 剪贴板里有图 —— 笔记本的 F10 截图键 / 各种截图工具是"截完放剪贴板"，
+ *      我们一恢复就把刚截的图覆盖掉了（症状：能截但保存不出东西 / 粘贴出来是旧文本）；
+ *   2) 序列号又变了 —— 别人（或我们自己以外的东西）刚写过；
+ *   3) 当前文本已经不是我们刚拿到的那段 —— 同上。
+ *
+ * 宁可把剪贴板留在"我们复制的那段文字"上，也不要去覆盖别人刚写的东西。
+ */
+function shouldRestoreClipboard(o) {
+  const x = o && typeof o === 'object' ? o : {}
+  if (x.hasImage) return false
+  if (x.seqChanged) return false
+  if (typeof x.currentText !== 'string') return false
+  return x.currentText === String(x.capturedText == null ? '' : x.capturedText)
+}
+
 function rememberText(state, text, now) {
   const s = clone(state)
   s.lastText = String(text || '')
@@ -249,6 +327,8 @@ module.exports = {
   holdPin,
   shouldAcceptText,
   rememberText,
+  shouldRestoreClipboard,
+  isCaptureOverlay,
   cleanText,
   looksLikeFileList,
   isSkippedApp,

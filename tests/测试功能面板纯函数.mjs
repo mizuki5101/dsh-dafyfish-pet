@@ -147,15 +147,26 @@ console.log('\n【3】reduce 状态机：什么动作才算拖选')
   s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app: selfApp, seq: 5, now: 1000, overOwnUi: true }, cfg).state
   s = sc.step(s, { down: true, pt: { x: 130, y: 100 }, rect, app: selfApp, seq: 5, now: 1200, overOwnUi: true }, cfg).state
   r = sc.step(s, { down: false, pt: { x: 130, y: 100 }, rect, app: selfApp, seq: 5, now: 1300, overOwnUi: true }, cfg)
-  ok('前台是我们自己时拖选不抓（否则会给自己发 Ctrl+C）', r.emit === null, r.emit)
+  ok('光标在我们 UI 上时不抓', r.emit === null, r.emit)
 
-  // ⭐ 回归锁（2026-10-22 哑火事故）：主窗铺满主屏时「落点在我们窗内」恒为真，
-  //    当时拿它当"在自己窗口里"的判据 → 所有拖选都不抓。判据必须只认**进程身份**。
+  // ⭐ 回归锁（2026-10-22 真机）：桌宠窗置顶+穿透，可能"恰好是前台"。
+  //    这时前台进程会显示成 ds-whalegirl-pet.exe，但光标其实在别的程序上 ——
+  //    以前用 app.self 当判据 → 划词一次都不触发。现在只看"光标是不是在我们 UI 上"。
+  const selfApp2 = { ok: true, name: 'ds-whalegirl-pet', self: true }
   s = base()
-  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: true }, cfg).state
-  s = sc.step(s, { down: true, pt: { x: 120, y: 100 }, rect, app, seq: 5, now: 1200, overOwnUi: true }, cfg).state
-  r = sc.step(s, { down: false, pt: { x: 120, y: 100 }, rect, app, seq: 5, now: 1300, overOwnUi: true }, cfg)
-  ok('落点在我们窗内（铺满屏）也必须能抓', r.emit && r.emit.type === 'grab', r.emit)
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app: selfApp2, seq: 5, now: 1000, overOwnUi: false, overPet: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 100 }, rect, app: selfApp2, seq: 5, now: 1200, overOwnUi: false, overPet: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 140, y: 100 }, rect, app: selfApp2, seq: 5, now: 1300, overOwnUi: false, overPet: false, cursor: 'ibeam', overlay: {} }, cfg)
+  ok('前台是我们自己但光标不在我们 UI 上 → 照样抓', r.emit && r.emit.type === 'grab', r.emit)
+
+  // ⭐ 回归锁（2026-10-22 哑火事故）：主窗铺满主屏，光标永远"落在窗口矩形内"。
+  //    判据必须是「光标是否压在我们**真正的 UI** 上」（overOwnUi 由 hitJS 给），
+  //    不能是"在不在窗口矩形内"，也不能是"前台进程是不是我们"。
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 120, y: 100 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 120, y: 100 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg)
+  ok('光标在窗口范围内但不在我们 UI 上 → 必须能抓', r.emit && r.emit.type === 'grab', r.emit)
 }
 
 // ————————————————————————————————————————————————————————————
@@ -389,6 +400,12 @@ console.log('\n【8】主进程里的出口字段（防"存了但读不到"）')
   ok('makeBubble 有 pinHold 早退', /if \(pinHold\) return/.test(pet))
   ok('hitJS 认得 .dshp-pin', pet.includes('.dshp-pin'))
   ok('页面有 pin 事件分支', /case 'pin':/.test(pet))
+  ok('功能面板有「框一块屏幕」按钮（不依赖系统截图键）', pet.includes('框一块屏幕'))
+  ok('面板显示外壳构建时间（确认是否在跑新代码）', /外壳构建：/.test(pet))
+
+  const toolsSrc = fs.readFileSync(path.join(ROOT, 'shell/src/tools/index.js'), 'utf8')
+  ok('tools 状态里带 shell.builtAt', /shell: \{ builtAt/.test(toolsSrc))
+  ok('遮罩用 showInactive（不抢焦点）', /showInactive\(\)/.test(fs.readFileSync(path.join(ROOT, 'shell/src/tools/shot.js'), 'utf8')))
 }
 
 // ————————————————————————————————————————————————————————————
@@ -433,6 +450,134 @@ console.log('\n【9】日志脱敏（密钥不许进 boot.log）')
   const mainSrc = fs.readFileSync(path.join(ROOT, 'shell/src/main.js'), 'utf8')
   ok('heart:save 的日志走 redactForLog', /设置已保存 ' \+ JSON\.stringify\(redactForLog\(clean\)\)/.test(mainSrc))
   ok('不再有裸 JSON.stringify(clean) 进日志', !/设置已保存 ' \+ JSON\.stringify\(clean\)/.test(mainSrc))
+}
+
+// ————————————————————————————————————————————————————————————
+console.log('\n【10】剪贴板「该不该还回去」（别覆盖截图键截的图）')
+{
+  const f = sc.shouldRestoreClipboard
+  ok('导出存在', typeof f === 'function')
+
+  // 正常：剪贴板还停在我们抄到的那段文字上
+  ok('还能还是最好的', f({ currentText: 'hello', capturedText: 'hello', hasImage: false, seqChanged: false }) === true)
+  // ① 有图 → 绝对不动（笔记本 F10 截图键 / 截图工具是"截完放剪贴板"）
+  ok('剪贴板里有图 → 不还', f({ currentText: '', capturedText: 'hello', hasImage: true, seqChanged: false }) === false)
+  // ② 序列号变了 → 别人写过
+  ok('序列号变了 → 不还', f({ currentText: 'hello', capturedText: 'hello', hasImage: false, seqChanged: true }) === false)
+  // ③ 文本已经变了 → 别人写过
+  ok('文本变了 → 不还', f({ currentText: 'world', capturedText: 'hello', hasImage: false, seqChanged: false }) === false)
+  ok('清空成空串也算变了', f({ currentText: '', capturedText: 'hello', hasImage: false, seqChanged: false }) === false)
+  // 边界
+  ok('缺参不崩', f(null) === false)
+  ok('非字符串 currentText → 不还', f({ currentText: null, capturedText: 'x' }) === false)
+  ok('两边都空 → 可以还（写回去等于没变）', f({ currentText: '', capturedText: '', hasImage: false, seqChanged: false }) === true)
+
+  // 闸门：select.js 必须真的用这个判断，并且失败路径也要还
+  const selSrc = fs.readFileSync(path.join(ROOT, 'shell/src/tools/select.js'), 'utf8')
+  ok('select.js 用了 shouldRestoreClipboard', /core\.shouldRestoreClipboard\(/.test(selSrc))
+  ok('恢复写在 finally 里（中途 return 也不把脏剪贴板留下）', /finally \{[\s\S]{0,200}restoreClipboard\(snap/.test(selSrc))
+}
+
+// ————————————————————————————————————————————————————————————
+console.log('\n【11】认得出「框选/截图」→ 绝不发 Ctrl+C')
+{
+  const f = sc.isCaptureOverlay
+  ok('导出存在', typeof f === 'function')
+  ok('十字光标 → 是框选', f({ crossCursor: true }) === true)
+  ok('置顶弹窗 → 是框选', f({ topmost: true, popup: true }) === true)
+  ok('只是弹窗（不置顶）→ 不是', f({ popup: true, topmost: false }) === false)
+  ok('只是置顶（不是弹窗）→ 不是', f({ topmost: true, popup: false }) === false)
+  ok('普通窗口 → 不是', f({}) === false)
+  ok('缺参不崩', f(null) === false)
+
+  // 端到端：十字光标下拖一大段，必须 emit skip 而不是 grab
+  const cfg = { dragPx: 8, skipApps: [] }
+  const app = { ok: true, name: 'chrome' }
+  const rect = { left: 0, top: 0, right: 1000, bottom: 800 }
+  const base = () => sc.createState()
+
+  let s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg).state
+  let r = sc.step(s, { down: false, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg)
+  ok('十字框选 → skip（不发 Ctrl+C）', r.emit && r.emit.type === 'skip', r.emit)
+  ok('skip 带上光标类型便于排查', r.emit && r.emit.cursor === 'cross')
+  ok('skip 后光标标记复位', r.state.crossAtDown === false)
+
+  // 按下是十字、松手变回箭头 → 仍然要跳过（松手时工具可能已经切回箭头）
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'cross', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'arrow', overlay: {} }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'arrow', overlay: {} }, cfg)
+  ok('按下时是十字就够（松手变箭头也跳过）', r.emit && r.emit.type === 'skip', r.emit)
+
+  // 正常选字：I 形光标 + 普通窗口 → 必须照旧 grab
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg)
+  ok('I 形光标选字照旧 grab（不能误伤）', r.emit && r.emit.type === 'grab', r.emit)
+
+  // 箭头光标选字也要能抓（很多网页/PDF 是箭头）
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'arrow', overlay: { popup: true, topmost: false } }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'arrow', overlay: { popup: true, topmost: false } }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'arrow', overlay: { popup: true, topmost: false } }, cfg)
+  ok('箭头 + 普通弹窗也照旧 grab', r.emit && r.emit.type === 'grab', r.emit)
+
+  // 拖她本人（落点在她身上）→ 不算选字，也不能往前台应用发 Ctrl+C
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, overPet: true, cursor: 'arrow', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 160, y: 140 }, rect, app, seq: 5, now: 1200, overOwnUi: false, overPet: true, cursor: 'arrow', overlay: {} }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 160, y: 140 }, rect, app, seq: 5, now: 1300, overOwnUi: false, overPet: true, cursor: 'arrow', overlay: {} }, cfg)
+  ok('拖她本人不抓', r.emit === null, r.emit)
+  ok('拖完之后 overPet 标记复位', r.state.overPetAtDown === false)
+
+  // 闸门：select.js 必须把光标/窗口形态喂进去
+  const selSrc = fs.readFileSync(path.join(ROOT, 'shell/src/tools/select.js'), 'utf8')
+  ok('select.js 取了 cursorKind', /keys\.cursorKind\(\)/.test(selSrc))
+  ok('select.js 取了 windowFlags', /keys\.windowFlags\(/.test(selSrc))
+  // ⭐ 认"你在操作哪个程序"必须用 WindowFromPoint，不能用 GetForegroundWindow
+  //    （我们的置顶穿透窗可能是前台窗口 → 会被认成自己 → 一次都不抓）
+  ok('select.js 用 targetWindow 认窗口', /keys\.targetWindow\(\)/.test(selSrc))
+  ok('select.js 不再用 foreground() 认窗口', !/keys\.foreground\(\)/.test(selSrc))
+  ok('select.js 不再用 foregroundProcess()', !/keys\.foregroundProcess\(\)/.test(selSrc))
+  ok('skip 有日志', /像是框选\/截图/.test(selSrc))
+  // 复制键先用 Ctrl+Insert，再退 Ctrl+C（截图工具几乎只绑后者）
+  ok('先试 Ctrl+Insert', /sendCopy\('insert'\)/.test(selSrc))
+  ok('没反应才退 Ctrl+C', /sendCopy\('c'\)/.test(selSrc))
+  const keysSrc = fs.readFileSync(path.join(ROOT, 'shell/src/native/keys.js'), 'utf8')
+  ok('keys 里定义了 VK_INSERT', /VK_INSERT = 0x2d/.test(keysSrc))
+  // 签名必须写字面量 'POINT'：拼 koffi 的类型对象会抛 "Cannot convert object to primitive value"
+  ok("WindowFromPoint 签名用字面量 POINT", /WindowFromPoint\(POINT pt\)'/.test(keysSrc))
+  ok('keys 导出 targetWindow', /targetWindow,/.test(keysSrc))
+}
+
+// ————————————————————————————————————————————————————————————
+console.log('\n【12】最近一次松手的判据要留在 state 上（面板直接显示）')
+{
+  const cfg = { dragPx: 8, skipApps: [] }
+  const app = { ok: true, name: 'chrome' }
+  const rect = { left: 0, top: 0, right: 1000, bottom: 800 }
+  let s = sc.createState()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg).state
+  let r = sc.step(s, { down: false, pt: { x: 140, y: 100 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'ibeam', overlay: {} }, cfg)
+  const d = r.state.lastDecision
+  ok('记录存在', !!d)
+  ok('记录了按住时长', d && d.ms === 300, d && d.ms)
+  ok('记录了光标', d && d.cursor === 'ibeam')
+  ok('记录了动作', d && d.acted === 'grab', d && d.acted)
+  ok('记录了应用名', d && d.app === 'chrome')
+
+  // 框选时 acted 应该是 skip
+  let s2 = sc.createState()
+  s2 = sc.step(s2, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg).state
+  s2 = sc.step(s2, { down: true, pt: { x: 200, y: 200 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg).state
+  r = sc.step(s2, { down: false, pt: { x: 200, y: 200 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'cross', overlay: { topmost: true, popup: true } }, cfg)
+  ok('框选时 acted=skip', r.state.lastDecision && r.state.lastDecision.acted === 'skip')
+  ok('框选时 capture=true', r.state.lastDecision && r.state.lastDecision.capture === true)
+  ok('框选时记下 topmost/popup', r.state.lastDecision && r.state.lastDecision.topmost && r.state.lastDecision.popup)
 }
 
 // ————————————————————————————————————————————————————————————

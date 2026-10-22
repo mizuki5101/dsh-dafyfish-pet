@@ -16,13 +16,26 @@ const keys = require('../native/keys')
 const core = require('./select-core')
 
 const TICK_MS = 30
-/** 松手后等目标应用把选区提交完再发 Ctrl+C */
+/** 松手后等目标应用把选区提交完再发复制键 */
 const COPY_DELAY_MS = 50
-/** 等剪贴板序列号变化的上限 */
-const COPY_WAIT_MS = 500
+/** 等 Ctrl+Insert 生效的上限（不支持的应用会一直没反应，所以要短一点） */
+const COPY_INSERT_WAIT_MS = 250
+/** 等 Ctrl+C 生效的上限 */
+const COPY_WAIT_MS = 400
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms))
+}
+
+/** 等剪贴板序列号变化（变了 = 复制成功），超时返回原值 */
+async function waitSeq(pre, ms) {
+  const t0 = Date.now()
+  while (Date.now() - t0 < ms) {
+    await sleep(15)
+    const s = keys.clipSeq()
+    if (s !== pre) return s
+  }
+  return pre
 }
 
 /**
@@ -48,6 +61,8 @@ function createSelect(options = {}) {
   const onClear = typeof options.onClear === 'function' ? options.onClear : () => {}
   /** 落点是不是压在我们真正的 UI 上（由主进程的 hitJS 结果给，不能拿窗口矩形猜） */
   const isOverOwnUi = typeof options.isOverOwnUi === 'function' ? options.isOverOwnUi : () => false
+  /** 落点是不是压在她身上（拖她 / 点她都不该当成"选字"） */
+  const isOverPet = typeof options.isOverPet === 'function' ? options.isOverPet : () => false
   const report = (m) => {
     try {
       log('[select] ' + m)
@@ -61,6 +76,13 @@ function createSelect(options = {}) {
   let state = core.createState()
   let lastError = ''
   let grabs = 0
+  /** 诊断用：上一次拖选的前台程序名 + 有没有因为"别人改写了剪贴板"而放弃恢复 */
+  let lastApp = ''
+  let restoreSkipped = 0
+  /** 被判定成"框选/截图"而跳过的次数（识别到就不发 Ctrl+C） */
+  let skips = 0
+  /** 上一次成功拿到文本用的是哪个复制键：'insert' | 'c' | '-' */
+  let lastCopyKey = '-'
 
   function snapshotClipboard() {
     try {
@@ -76,10 +98,33 @@ function createSelect(options = {}) {
     }
   }
 
-  function restoreClipboard(snap, seqAfterOurs) {
+  /**
+   * 把剪贴板还回去。但**只在"它还停在我们刚才拿到的那段文字上"时才还** ——
+   * 详见 select-core 的 shouldRestoreClipboard：笔记本 F10 截图键 / 截图工具是
+   * "截完放剪贴板"，我们一恢复就把图覆盖了（症状：截了但保存不出东西）。
+   */
+  function restoreClipboard(snap, seqAfterOurs, capturedText) {
     if (!snap) return
-    // 用户在等我们的这一小会儿里自己复制了东西 → 别覆盖他
-    if (keys.clipSeq() !== seqAfterOurs) return
+    let currentText = ''
+    let hasImage = false
+    try {
+      currentText = clipboard.readText()
+      const img = clipboard.readImage()
+      hasImage = !!(img && typeof img.isEmpty === 'function' && !img.isEmpty())
+    } catch (e) {
+      return
+    }
+    const ok = core.shouldRestoreClipboard({
+      hasImage,
+      seqChanged: keys.clipSeq() !== seqAfterOurs,
+      currentText,
+      capturedText,
+    })
+    if (!ok) {
+      restoreSkipped++
+      report('剪贴板已被别人改写（截图工具？）→ 放弃恢复，不覆盖')
+      return
+    }
     try {
       const payload = {}
       if (snap.text) payload.text = snap.text
@@ -99,22 +144,33 @@ function createSelect(options = {}) {
     // ⚠️ fg / rect / seq 必须**每帧都取**，不能只在按下时取：
     // 松手那一帧 down 已经是 false，而「拖窗口」判定正好要用那一刻的前台窗口矩形。
     // （2026-10-22 踩过：只在 down 时取 → 松手拿到 null → 拖标题栏被当成选字。）
-    const fg = keys.foreground()
-    const rawApp = down ? keys.foregroundProcess() : null
+    // ⚠️ 用 WindowFromPoint 找"真正接收这一击"的窗口，而不是 GetForegroundWindow：
+    // 我们自己的置顶穿透窗可能是前台窗口，会把"你正在操作的 App"认成我们自己（2026-10-22）。
+    const t = keys.targetWindow()
+    const hwnd = t ? t.root || t.hwnd : null
+    const rawApp = down && hwnd ? keys.processOf(hwnd) : null
     const app = rawApp ? Object.assign({}, rawApp, { self: isSelfProcess(rawApp) }) : null
+    // ① 光标形状 ② 目标窗口是不是置顶弹窗 —— 两条合起来识别"框选/截图工具"
+    const cursor = keys.cursorKind()
+    const flags = hwnd ? keys.windowFlags(hwnd) : null
     let overOwnUi = false
+    let overPet = false
     try {
       overOwnUi = !!isOverOwnUi()
+      overPet = !!isOverPet()
     } catch (e) {}
     return {
       down,
       pt: { x: p.x, y: p.y },
-      rect: fg ? keys.windowRect(fg) : null,
+      rect: hwnd ? keys.windowRect(hwnd) : null,
       // 进程名要 OpenProcess + 查路径，比较贵，只在按下时取
       app,
       seq: keys.clipSeq(),
       now: Date.now(),
       overOwnUi,
+      overPet,
+      cursor,
+      overlay: { topmost: !!(flags && flags.topmost), popup: !!(flags && flags.popup) },
       cfg,
     }
   }
@@ -122,6 +178,11 @@ function createSelect(options = {}) {
   async function grab(info) {
     if (grabbing) return
     grabbing = true
+    // 这三个要在 finally 里用：借了剪贴板就一定要还（除非别人已经改写过）
+    let snap = null
+    let seqNow = 0
+    let captured = ''
+    let copyKey = '-'
     try {
       const cfg = ((getCfg().tools || {}).translate || {})
       // 拖文件/资源管理器里 Ctrl+C 写的是 CF_HDROP，readText 只会拿到空或路径
@@ -130,24 +191,24 @@ function createSelect(options = {}) {
         return
       }
       const preSeq = keys.clipSeq()
-      let seqNow = preSeq
-      let snap = null
+      seqNow = preSeq
       const needCopy = info.expectSeq === preSeq || info.expectSeq === 0 || preSeq === 0
       if (needCopy) {
         snap = cfg.restoreClipboard === false ? null : snapshotClipboard()
         await sleep(COPY_DELAY_MS)
-        if (!keys.sendCopy()) {
-          report('模拟 Ctrl+C 被拒（可能用户按着 Ctrl 或缺少权限）')
-          return
+        // ① 先试 Ctrl+Insert：截图工具几乎都绑 Ctrl+C，极少绑 Ctrl+Insert
+        if (keys.sendCopy('insert')) {
+          seqNow = await waitSeq(preSeq, COPY_INSERT_WAIT_MS)
+          if (seqNow !== preSeq) copyKey = 'insert'
         }
-        const t0 = Date.now()
-        while (Date.now() - t0 < COPY_WAIT_MS) {
-          await sleep(15)
-          const s = keys.clipSeq()
-          if (s !== preSeq) {
-            seqNow = s
-            break
+        // ② 没反应再退 Ctrl+C（老应用/某些编辑器只认它）
+        if (seqNow === preSeq) {
+          if (!keys.sendCopy('c')) {
+            report('模拟复制键被拒（可能用户按着 Ctrl 或缺少权限）')
+            return
           }
+          copyKey = 'c'
+          seqNow = await waitSeq(preSeq, COPY_WAIT_MS)
         }
         if (seqNow === preSeq) {
           // 没变化：要么没有可复制的内容，要么目标窗口是管理员权限（UIPI 拦住了注入）
@@ -156,15 +217,14 @@ function createSelect(options = {}) {
           return
         }
       }
-      let raw = ''
       try {
-        raw = clipboard.readText()
+        captured = clipboard.readText()
       } catch (e) {
         return
       }
-      const r = core.cleanText(raw, cfg)
+      const r = core.cleanText(captured, cfg)
       if (!r.ok) {
-        report('丢弃：' + r.reason + '（' + String(raw).length + ' 字）')
+        report('丢弃：' + r.reason + '（' + String(captured).length + ' 字）')
         if (r.reason !== 'empty') lastError = ''
         return
       }
@@ -175,12 +235,15 @@ function createSelect(options = {}) {
       state = core.rememberText(state, r.text, Date.now())
       grabs++
       lastError = ''
-      // 先把文本交出去（气泡要尽快出来），再恢复剪贴板
+      lastApp = String(info.app || '')
+      lastCopyKey = copyKey
+      // 先把文本交出去（气泡要尽快出来），再在 finally 里还剪贴板
       try {
         onText({ text: r.text, chars: r.chars, truncated: r.truncated, app: info.app || '' })
       } catch (e) {}
-      if (snap) restoreClipboard(snap, seqNow)
     } finally {
+      // 无论成功失败都尝试还 —— 以前中途 return 会把"我们复制的那段"留在剪贴板上
+      if (snap) restoreClipboard(snap, seqNow, captured)
       grabbing = false
     }
   }
@@ -195,6 +258,14 @@ function createSelect(options = {}) {
       try {
         onClear(r.emit.reason)
       } catch (e) {}
+      return
+    }
+    if (r.emit.type === 'skip') {
+      // 框选/截图：不发 Ctrl+C（否则会按到截图工具自己的「复制」）
+      skips++
+      report(
+        '跳过：像是框选/截图（光标=' + (r.emit.cursor || '?') + '，置顶弹窗=' + r.emit.topmost + '）',
+      )
       return
     }
     if (r.emit.type === 'grab') {
@@ -254,6 +325,11 @@ function createSelect(options = {}) {
       reason: keys.unavailableReason(),
       grabs,
       lastError,
+      lastApp,
+      restoreSkipped,
+      skips,
+      lastCopyKey,
+      lastDecision: state.lastDecision,
       pin: { visible: state.pin.visible },
     }
   }

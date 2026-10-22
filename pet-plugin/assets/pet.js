@@ -5054,11 +5054,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const vsToggle = $('button', 'dshp-btn', '关')
     vsToggle.title = '开启后：Shift + 右击她，框一块屏幕让她看'
     vsToggleRow.append($('span', 'dshp-grow', '总开关'), vsToggle)
-    const vsNote = $('div', 'dshp-note', '用法：Shift + 右击她 → 在屏幕上拖出一个框 → 松手。\n用的是心跳里配的那个能看图的模型。')
+    const vsNote = $('div', 'dshp-note', '用法：Shift + 右击她，或者点下面这个按钮 → 在屏幕上拖出一个框 → 松手。\n用的是心跳里配的那个能看图的模型。')
+    // 「框一块屏幕」：完全不依赖 Shift+右击、也不碰系统截图键（2026-10-22 加）
+    const vsShotBtn = $('button', 'dshp-btn', '✂ 框一块屏幕')
+    vsShotBtn.title = '直接进入框选（不用 Shift+右击，也不用系统截图键）'
+    const vsShotRow = $('div', 'dshp-row')
+    vsShotRow.append($('span', 'dshp-grow'), vsShotBtn)
     const vsStatus = $('div', 'dshp-status', '')
-    toolsVision.append(vsToggleRow, vsNote, vsStatus)
+    toolsVision.append(vsToggleRow, vsShotRow, vsNote, vsStatus)
 
-    toolsPanel.append(toolsQuick, toolsXlate, toolsVision)
+    // 面板底部：外壳构建时间 —— 用来确认"我现在跑的是不是新代码"
+    const toolsBuilt = $('div', 'dshp-note', '')
+    toolsPanel.append(toolsQuick, toolsXlate, toolsVision, toolsBuilt)
     addCloseButton(toolsPanel)
 
     // ——— 特殊气泡：划词翻译 / 识图的展示层（最高优先级，不走 makeBubble 队列）———
@@ -5095,6 +5102,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         xlStatus,
         vsToggle,
         vsStatus,
+        vsShot: vsShotBtn,
+        built: toolsBuilt,
         openDsh: openDshBtn,
       },
       // 特殊气泡（划词翻译 / 识图）：不走 makeBubble，优先级最高
@@ -6884,6 +6893,28 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       )
     } else bits.push('划词：已关闭')
     if (sel.grabs) bits.push('本次已触发 ' + sel.grabs + ' 次')
+    if (sel.lastApp) bits.push('上次拖选：' + sel.lastApp + '（复制键 ' + (sel.lastCopyKey || '?') + '）')
+    // 最近一次松手的完整判据 —— 出问题时这一行就能定位，不用猜
+    const d = sel.lastDecision
+    if (d) {
+      const act =
+        d.acted === 'grab'
+          ? '发了复制键（' + (sel.lastCopyKey || '?') + '）'
+          : d.acted === 'skip'
+            ? '跳过：判为框选/截图'
+            : d.acted === 'clear'
+              ? '只收气泡'
+              : '没动作（没够拖动阈值）'
+      bits.push(
+        '上次松手 ' + d.ms + 'ms · 光标=' + (d.cursor || '?') +
+          ' · 置顶弹窗=' + (d.topmost ? 1 : 0) + '/' + (d.popup ? 1 : 0) +
+          ' · 应用=' + (d.app || '?') +
+          (d.pet ? ' · 压在她身上' : '') +
+          ' → ' + act,
+      )
+    }
+    if (sel.restoreSkipped) bits.push('有 ' + sel.restoreSkipped + ' 次剪贴板被别人占用 → 已跳过恢复（不会覆盖截图键截的图）')
+    if (sel.skips) bits.push('有 ' + sel.skips + ' 次判定为框选/截图 → 没有发 Ctrl+C')
     if (sel.lastError) bits.push('上次：' + sel.lastError)
     if (st.lastError) bits.push('翻译失败：' + st.lastError)
     t.xlStatus.textContent = bits.join('\n')
@@ -6896,6 +6927,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         : '识图：已开启，但还没配能看图的模型'
       : '识图：已关闭'
     t.vsToggle.title = model.configured ? 'Shift + 右击她，框一块屏幕让她看' : '先在「心跳」页配一个能看图的模型'
+
+    // 外壳构建时间：如果这一行比你刚装的 asar 还旧，说明**外壳没重启**
+    const built = st.shell && st.shell.builtAt
+    t.built.textContent = built
+      ? '外壳构建：' + new Date(built).toLocaleString('zh-CN') + '（pid ' + (st.shell.pid || '?') + '）'
+      : '外壳构建：未知'
+    t.vsShot.disabled = !model.configured
   }
 
   async function saveTools(patch, okText) {
@@ -6974,6 +7012,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     t.vsToggle.addEventListener('click', () => {
       const on = !(toolsState.cfg && toolsState.cfg.vision && toolsState.cfg.vision.enabled)
       saveTools({ vision: { enabled: on } }, on ? '识图开了：Shift + 右击她，框一块屏幕' : '识图关掉了')
+    })
+    // 直接框选：不依赖 Shift+右击，也不碰系统截图键
+    t.vsShot.addEventListener('click', async () => {
+      const tb = toolsBridge()
+      if (!tb) return
+      closePanels()
+      let r = null
+      try {
+        r = await tb.shot()
+      } catch (e) {
+        r = { ok: false, hint: String((e && e.message) || e) }
+      }
+      if (r && !r.ok && r.hint) {
+        ui.bubble.show(String(r.hint), { name: 'DS 鲸鱼娘', ttl: 5000 })
+      }
     })
   }
 

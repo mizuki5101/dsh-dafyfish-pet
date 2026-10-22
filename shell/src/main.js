@@ -2057,6 +2057,8 @@ app.whenReady().then(() => {
         // ⚠️ 不能用 win.getBounds() 代替 —— fullscreenPrimary=true 时它铺满全屏，
         //    「在窗内」恒为真，划词会整条哑火（2026-10-22 真踩）。
         isOverOwnUi: () => lastHit === 'panel',
+        // 拖她/点她不该被当成"选了字" —— 否则每拖一下都会往前台应用发一次 Ctrl+C
+        isOverPet: () => lastHit === 'model',
         push: (obj) => {
           if (petServer) petServer.push(obj)
         },
