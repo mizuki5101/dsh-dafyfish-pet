@@ -55,6 +55,19 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     // 调试口：不管冷却立刻做一次梦（CDP 验收用，不进面板）
     now: () => ipcRenderer.invoke('dream:now'),
   },
+  // 功能面板（2026-10-22）：划词翻译 / 识图。
+  // 配置仍然走 heart.settings / heart.save（存在 settings.json 的 heart.tools 段），
+  // 这里只补心跳没有的三件事：翻译请求、框选截图、气泡按住通知。
+  // ⚠️ 翻译在主进程做：apiKey 不进页面，页面只拿 apiKeySet 布尔。
+  tools: {
+    status: () => ipcRenderer.invoke('tools:status'),
+    translate: (payload) => ipcRenderer.invoke('tools:translate', payload || {}),
+    selftest: (what) => ipcRenderer.invoke('tools:selftest', { what: String(what || 'free') }),
+    // 单窗口模式下的「Shift+右击」（双窗口由主进程的 hit:contextmenu 直接分流）
+    shot: () => ipcRenderer.invoke('tools:shot'),
+    // 鼠标按在特殊气泡上 → 主进程这段时间内不把 click 当成「取消选中」
+    pinHold: () => ipcRenderer.send('pin:hold'),
+  },
 })
 
 // 拖动：页面里按下她 → 告诉主进程搬窗口（主进程只在鼠标确实压在她身上时才搬，

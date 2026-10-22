@@ -22,6 +22,9 @@ const { exec } = require('node:child_process')
 const { createPetServer } = require('./petserver')
 const { createAudioMeter } = require('./audio')
 const { createHitGuard } = require('./hit/guard')
+// 原生键位（Shift 兜底判定）：识图是「Shift+右击她」，而命中窗是 WS_NOACTIVATE，
+// 它收不到键盘消息 → 渲染进程的 e.shiftKey 在某些情况下不可信，用真实的物理键状态兜底。
+const nativeKeys = require('./native/keys')
 // 多模态心跳（P0：采集 + 截图指纹；默认关闭）按需 require —— 见 app.whenReady 里的注释。
 
 // 宿主地址在启动时「发现」出来，不再写死 —— 与 macOS 版保持一致：
@@ -45,6 +48,21 @@ let modelServer = null
 let heartSettingsPayload = null
 /** 「回应模式」的聊天记忆（持久化到 userData/heart/chat.json） */
 let chatMemory = null
+/** 功能面板（划词翻译 / 识图）；在 app.whenReady 里装配，独立于心跳 */
+let tools = null
+
+/**
+ * 识图遮罩窗是不是开着。
+ * 遮罩是 screen-saver 级的全屏窗：90ms 轮询 / 2s 安全网 / 命中窗任何一个还在动，
+ * 都会把主窗或命中窗抬到遮罩上面 —— 表现就是「遮罩一闪就没了」。
+ */
+function shotOpenNow() {
+  try {
+    return !!(tools && tools.shotOpen && tools.shotOpen())
+  } catch (e) {
+    return false
+  }
+}
 
 /**
  * 面板提交的补丁：**只接受白名单字段**。
@@ -273,7 +291,7 @@ async function petMaskRects() {
           if (b && b.w > 1 && b.h > 1) out.push(b)
         }
       } catch (e) {}
-      const sels = ['.dshp-bubble', '.dshp-dock', '.dshp-menu', '.dshp-panel', '.dshp-hud']
+      const sels = ['.dshp-bubble', '.dshp-dock', '.dshp-menu', '.dshp-panel', '.dshp-hud', '.dshp-pin', '.dshp-tools']
       for (const sel of sels) {
         let els = []
         try { els = document.querySelectorAll(sel) } catch (e) { continue }
@@ -363,7 +381,7 @@ const hitJS = (x, y) => `(function(){try{
   // 只把“真正可点的控件/面板”算 UI。dock 容器、气泡容器本身不算 ——
   // 否则鼠标只是从她身上/尾巴附近划过，也会进 UI 模式（setIgnoreMouseEvents(false)），
   // 透明窗会掉 WS_EX_LAYERED，出现灰边 + 尾巴被裁 + 一闪一闪。
-  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-composer,.dshp-tuning,.dshp-tuning-mask,.dshp-tab,.dshp-tab-btn,.dshp-btn,.dshp-bubble button,.dshp-bubble input,.dshp-bubble textarea'));
+  var ui=!!(el&&el.closest&&el.closest('.dshp-panel,.dshp-menu,.dshp-hud,.dshp-composer,.dshp-tuning,.dshp-tuning-mask,.dshp-tab,.dshp-tab-btn,.dshp-btn,.dshp-bubble button,.dshp-bubble input,.dshp-bubble textarea,.dshp-pin,.dshp-tools'));
   if(ui) return 'panel';
   if(window.DSHPet&&DSHPet.hitTest&&DSHPet.hitTest(${x},${y})) return 'model';
   return 'none';
@@ -472,6 +490,8 @@ let imeHolding = false
 let imeHoldTimer = null
 
 function raiseTopmost(toggle) {
+  // 识图遮罩开着：别把主窗/命中窗抬到遮罩上面（遮罩是全屏 screen-saver 级）
+  if (shotOpenNow()) return
   // 输入中不要抬回来，否则 IME 候选窗又被盖住
   if (imeHolding && !toggle) return
   try {
@@ -496,7 +516,14 @@ function syncHitWindow() {
   // 一旦把鼠标判成「不在 UI 上」就会重新 showInactive + topmost，把 IME 候选窗盖住。
   // 所以「输入中」直接强制隐藏，失焦后再恢复。
   const visible = !!(
-    !imeHolding && win && !win.isDestroyed() && win.isVisible() && !collapsed && !uiMode && hitRect
+    !imeHolding &&
+    !shotOpenNow() &&
+    win &&
+    !win.isDestroyed() &&
+    win.isVisible() &&
+    !collapsed &&
+    !uiMode &&
+    hitRect
   )
   if (!visible) {
     sendHitVisibility(false)
@@ -781,6 +808,24 @@ ipcMain.on('hit:drag-end', (_e, endPoint) => {
 
 ipcMain.on('hit:contextmenu', (_e, p) => {
   if (!dualEnabled() || uiMode) return
+  // Shift+右击 = 识图（2026-10-22）。
+  // 这里**不注入右键**：页面对这个右键的唯一反应是开钱包 HUD，而 Shift 的语义是
+  // 「开一块全屏遮罩」——遮罩是主进程的窗口，页面无事可做。
+  // 兜底用 nativeKeys.shiftDown()：命中窗是 WS_EX_NOACTIVATE，键盘消息可能收不到，
+  // 渲染进程上报的 e.shiftKey 在某些场景（远程桌面/输入法粘键）会是 false。
+  const shift = !!(p && p.shift) || nativeKeys.shiftDown()
+  if (shift && tools) {
+    const r = tools.startShot()
+    if (r && r.ok) return
+    if (r && r.reason === 'busy') return
+    // 识图关着 / 没配模型：给一句提示，不再开钱包（用户明确按了 Shift，就是想识图）
+    if (petServer) {
+      try {
+        petServer.push({ t: 'control', say: (r && r.hint) || '识图现在用不了…', bubbleMs: 4000 })
+      } catch (e) {}
+    }
+    return
+  }
   const pt = hitToRender(p)
   if (!pt) return
   injectMouse('mouseDown', pt, 'right', 1)
@@ -820,6 +865,7 @@ ipcMain.on('hit:cancel', () => {
 
 async function poll() {
   if (!win || win.isDestroyed() || !win.isVisible()) return
+  if (shotOpenNow()) return // 识图遮罩自己吃鼠标，别在这儿来回切 UI 模式
   if (pageDragging) return // 页面内拖动时别抢 UI 模式/别 hide 命中窗
   const p = screen.getCursorScreenPoint()
   const b = win.getBounds()
@@ -924,6 +970,8 @@ function createMain() {
       if (uiMode) leaveUiMode(true)
       queryHitBounds()
     }
+    // 页面刷新后主进程的 pin 状态必须复位：否则 pinHold 会永久挂着，她再也不冒气泡
+    if (tools) tools.resetPin()
     win.webContents.executeJavaScript('window.DSHPet && DSHPet.setLowPower && DSHPet.setLowPower(' + lowPower + ')').catch(() => {})
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 1200)
     setTimeout(() => win.webContents.executeJavaScript('window.DSHPet && DSHPet.setHidden && DSHPet.setHidden(false)').catch(() => {}), 3000)
@@ -1105,6 +1153,7 @@ function createMain() {
   // 2 秒一次的安全网：窗口被系统/Aero Snap 放大到比屏幕还大时复位；
   // 顺便把 render/hit 两个窗口重新抬到 topmost，避免任务栏插在它们中间。
   topmostTimer = setInterval(() => {
+    if (shotOpenNow()) return // 遮罩期间别复位/别抬顶，否则遮罩会被盖住
     if (!win || win.isDestroyed() || !win.isVisible()) return
     try {
       if (readFullscreenPrimary()) {
@@ -1636,7 +1685,7 @@ app.whenReady().then(() => {
     // 也只是「没有心跳」，不能把主窗口一起搞死。
     try {
       const { createHeart } = require('./heart')
-      const { patchHeart, sanitizeHeartPatch } = require('./heart/settings')
+      const { patchHeart, sanitizeHeartPatch, redactForLog } = require('./heart/settings')
       const { createModelServer } = require('./heart/server')
       const promptModule = require('./heart/prompt')
       const vision = require('./heart/vision')
@@ -1688,6 +1737,29 @@ app.whenReady().then(() => {
                 enabled: cfg.dream.enabled,
                 cooldownSec: cfg.dream.cooldownSec,
                 dir: cfg.dream.dir,
+              },
+              // 功能面板（划词翻译 / 识图）：apiKey 绝不回传页面，只给布尔
+              tools: {
+                translate: {
+                  enabled: cfg.tools.translate.enabled,
+                  engine: cfg.tools.translate.engine,
+                  to: cfg.tools.translate.to,
+                  maxChars: cfg.tools.translate.maxChars,
+                  dragPx: cfg.tools.translate.dragPx,
+                  restoreClipboard: cfg.tools.translate.restoreClipboard,
+                  skipApps: cfg.tools.translate.skipApps,
+                  api: {
+                    baseUrl: cfg.tools.translate.api.baseUrl,
+                    model: cfg.tools.translate.api.model,
+                    apiKeySet: !!cfg.tools.translate.api.apiKey,
+                  },
+                },
+                vision: {
+                  enabled: cfg.tools.vision.enabled,
+                  minSize: cfg.tools.vision.minSize,
+                  maxTokens: cfg.tools.vision.maxTokens,
+                  prompt: cfg.tools.vision.prompt,
+                },
               },
             }
           : null
@@ -1932,7 +2004,11 @@ app.whenReady().then(() => {
           }
           // 注意：**不**在保存 baseUrl 时自动停本地模型。
           // 有人同时用云端 API + 本地模型（llama-swap 自己会换模型），自动停会打断那边。
-          bootLog('心跳：设置已保存 ' + JSON.stringify(clean))
+          // ⚠️ 必须脱敏：clean 里有 model.apiKey / tools.translate.api.apiKey，
+          // 原样 dump 等于在 boot.log 里留一份明文副本（2026-10-22 修的）。
+          bootLog('心跳：设置已保存 ' + JSON.stringify(redactForLog(clean)))
+          // 划词翻译的开关也在 settings.json 的 heart 段里 → 保存后让 tools 重新对齐
+          if (tools) tools.sync()
           return heartSettingsPayload()
         } catch (e) {
           return { ok: false, reason: String((e && e.message) || e), config: null }
@@ -1968,6 +2044,39 @@ app.whenReady().then(() => {
     } catch (e) {
       bootLog('心跳初始化失败（不影响桌宠）: ' + ((e && e.stack) || e))
     }
+    // —— 功能面板（划词翻译 / 识图）——
+    // 刻意放在心跳的 try 块**外面**：识图只依赖 desktopCapturer，不依赖 heart；
+    // heart 挂了（模块没打进 asar / 语法错）功能面板也该能用。
+    try {
+      const { createTools } = require('./tools')
+      nativeKeys.setLog(bootLog)
+      tools = createTools({
+        log: bootLog,
+        getHeart: () => heart,
+        // 划词用：光标的落点是不是压在我们真正的 UI 上（复用 90ms 轮询的判定结果）。
+        // ⚠️ 不能用 win.getBounds() 代替 —— fullscreenPrimary=true 时它铺满全屏，
+        //    「在窗内」恒为真，划词会整条哑火（2026-10-22 真踩）。
+        isOverOwnUi: () => lastHit === 'panel',
+        push: (obj) => {
+          if (petServer) petServer.push(obj)
+        },
+        getCfg: () => {
+          if (heart) return heart.config()
+          // heart 没起（极少见）：用同一套纯函数归一化 settings.json 里的 heart 段，
+          // 这样功能面板至少能读到开关，而不是全空
+          try {
+            const { normalize } = require('./heart/config')
+            const all = readSettings() || {}
+            return normalize(all.heart)
+          } catch (e) {
+            return null
+          }
+        },
+      })
+      tools.sync()
+    } catch (e) {
+      bootLog('功能面板初始化失败（不影响桌宠）: ' + ((e && e.stack) || e))
+    }
     screen.on('display-metrics-changed', () => applyFullscreenPrimaryBounds(true))
     screen.on('display-added', () => applyFullscreenPrimaryBounds(true))
     screen.on('display-removed', () => applyFullscreenPrimaryBounds(true))
@@ -1999,6 +2108,7 @@ app.on('before-quit', () => {
   clearInterval(topmostTimer)
   clearInterval(dragTimer)
   destroyHitWindow()
+  if (tools) tools.destroy()
   if (heart) heart.stop()
   if (modelServer) modelServer.stop()
   if (audioMeter) audioMeter.stop()

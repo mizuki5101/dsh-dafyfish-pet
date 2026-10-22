@@ -68,4 +68,32 @@ function maskImage(buf, width, height, rects, value) {
   return { rects: out, pixels }
 }
 
-module.exports = { toImageRect, fillRect, maskImage }
+/**
+ * 从 BGRA 大图里裁一块出来（2026-10-22，「识图」的区域截图用）。
+ *
+ * 为什么不用 nativeImage.crop：capture.js 里的位图是 `img.toBitmap()` 拿到的裸 BGRA 缓冲，
+ * 裁剪后再 `createFromBitmap` 比"转成 nativeImage → crop → toJPEG"少一次拷贝，
+ * 而且这段是纯函数，DPR 1 / 1.5 / 2 的换算能在 node 里直接断言。
+ *
+ * 返回 { buf, w, h } 或 null（rect 无效 / 完全在图外）。
+ */
+function cropBitmap(buf, width, height, rect) {
+  if (!buf || !width || !height || !rect) return null
+  const x0 = Math.max(0, Math.floor(Number(rect.x)))
+  const y0 = Math.max(0, Math.floor(Number(rect.y)))
+  const x1 = Math.min(width, Math.floor(Number(rect.x) + Number(rect.w)))
+  const y1 = Math.min(height, Math.floor(Number(rect.y) + Number(rect.h)))
+  const w = x1 - x0
+  const h = y1 - y0
+  if (!(w > 0) || !(h > 0)) return null
+  const out = Buffer.allocUnsafe(w * h * 4)
+  const srcStride = width * 4
+  const dstStride = w * 4
+  for (let y = 0; y < h; y++) {
+    const from = (y0 + y) * srcStride + x0 * 4
+    buf.copy(out, y * dstStride, from, from + dstStride)
+  }
+  return { buf: out, w, h }
+}
+
+module.exports = { toImageRect, fillRect, maskImage, cropBitmap }

@@ -72,7 +72,7 @@ async function listModels(baseUrl, opts) {
  * 严格匹配：手动填了模型名，就必须在 /v1/models 里**精确出现**。
  *
  * 为什么不做「像就行」的回退：2026-10-18 的事故就是回退到「第一个带 vision 的模型」，
- * 把用户读文献的 bonsai2-27B 当成桌宠模型拉起来、还收到了完整提示词。
+ * 结果把一个不相干的视觉模型当成了桌宠模型拉起来、连完整提示词一起发了过去。
  * 现在只认精确匹配；不匹配就报错，让用户去改配置。
  *
  * @returns {{ok:true, model:string, models:string[]}|{ok:false, error:string, wanted?:string, models:string[]}}

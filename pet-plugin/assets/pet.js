@@ -850,6 +850,58 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 @media (prefers-color-scheme:dark){
   .dshp-hud-tag.dshp-peak{background:rgba(255,86,110,.2);color:#ff8a9c;border-color:rgba(255,138,156,.4)}
   .dshp-hud-tag.dshp-valley{background:rgba(52,211,153,.18);color:#6ee7b7;border-color:rgba(110,231,183,.4)}}
+/* ——— 功能面板（2026-10-22）：dock 上的「🧩 功能」 ———
+   三段：快捷入口（原 ↗ 的打开 DSH）/ 划词翻译 / 识图。复用 .dshp-panel 基类，
+   所以 hitJS 的 UI 选择器天然认得它（不用另加选择器）。 */
+.dshp-tools{width:min(calc(360px * var(--dshp-ps)),90vw)}
+.dshp-tools .dshp-sec{margin-top:calc(10px * var(--dshp-ps));
+  border-top:1px solid var(--dshp-line);padding-top:calc(8px * var(--dshp-ps))}
+.dshp-tools .dshp-sec:first-of-type{border-top:none;padding-top:0;margin-top:0}
+.dshp-tools .dshp-sec h4{margin:0 0 calc(5px * var(--dshp-ps));font-size:calc(11px * var(--dshp-ps));
+  opacity:.58;letter-spacing:.3px;font-weight:600}
+.dshp-tools input[type=text],.dshp-tools input[type=password],.dshp-tools select{
+  flex:1;min-width:0;box-sizing:border-box;font:inherit;font-size:calc(11.5px * var(--dshp-ps));
+  color:inherit;background:transparent;border:1px solid var(--dshp-line);
+  border-radius:calc(8px * var(--dshp-ps));
+  padding:calc(4px * var(--dshp-ps)) calc(7px * var(--dshp-ps));outline:none}
+.dshp-tools input[type=text]:focus,.dshp-tools input[type=password]:focus,.dshp-tools select:focus{border-color:var(--dshp-accent)}
+.dshp-tools select{appearance:auto}
+.dshp-tools .dshp-kv{display:flex;gap:6px;align-items:center;margin-top:calc(5px * var(--dshp-ps))}
+.dshp-tools .dshp-k{width:calc(58px * var(--dshp-ps));flex:none;opacity:.6;
+  font-size:calc(11px * var(--dshp-ps));white-space:nowrap}
+.dshp-tools .dshp-note{opacity:.5;font-size:calc(10.5px * var(--dshp-ps));
+  line-height:1.5;margin-top:calc(5px * var(--dshp-ps));white-space:pre-wrap}
+.dshp-tools .dshp-status{font-size:calc(10.5px * var(--dshp-ps));opacity:.62;
+  margin-top:calc(5px * var(--dshp-ps));line-height:1.5;white-space:pre-wrap;
+  font-variant-numeric:tabular-nums}
+
+/* ——— 特殊气泡 pin（2026-10-22）：划词翻译 / 识图的展示层 ———
+   和右击的钱包 HUD 同一套皮肤 + 同一个发光动画（直接复用 dshp-hud-flash 的关键帧），
+   但它是独立一层：要能放按钮、要能被 makeBubble 整体让路（pinHold）、锚在她头顶。
+   ⚠️ 刻意不加 backdrop-filter —— 它比 HUD 更大，透明窗里采样出的灰边会更明显。 */
+.dshp-pin{position:fixed;left:0;top:0;z-index:12;pointer-events:auto;
+  width:min(calc(320px * var(--dshp-ps)),80vw);
+  background:var(--dshp-bg);color:var(--dshp-fg);
+  border:1px solid var(--dshp-line);border-radius:calc(var(--dshp-radius) * var(--dshp-ps));
+  padding:calc(11px * var(--dshp-ps)) calc(13px * var(--dshp-ps)) calc(9px * var(--dshp-ps));
+  box-shadow:0 20px 54px rgba(10,14,30,.34);
+  opacity:0;visibility:hidden;transform:translateY(6px);
+  transition:opacity .18s ease,transform .18s ease;
+  font-size:calc(12px * var(--dshp-ps));line-height:1.6}
+.dshp-pin.dshp-on{opacity:1;visibility:visible;transform:translateY(0)}
+.dshp-pin.dshp-flash{animation:dshp-hud-flash 1.15s ease-out 2}
+.dshp-pin-head{font-size:calc(10.5px * var(--dshp-ps));opacity:.55;letter-spacing:.3px;margin-bottom:3px}
+.dshp-pin-body{max-height:26vh;overflow:auto;overscroll-behavior:contain;
+  white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.dshp-pin-body.dshp-pending{opacity:.55;font-style:italic}
+.dshp-pin-foot{margin-top:4px;font-size:calc(10px * var(--dshp-ps));opacity:.5;white-space:pre-wrap}
+.dshp-pin-btns{display:flex;gap:6px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+.dshp-pin-btns button{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
+  border-radius:calc(8px * var(--dshp-ps));padding:calc(4px * var(--dshp-ps)) calc(10px * var(--dshp-ps));
+  font:inherit;font-size:calc(11.5px * var(--dshp-ps));cursor:pointer;transition:transform .1s ease}
+.dshp-pin-btns button:hover:not(:disabled){transform:translateY(-1px)}
+.dshp-pin-btns button:disabled{opacity:.45;cursor:default;transform:none}
+.dshp-pin-btns button.dshp-primary{background:var(--dshp-accent);border-color:transparent;color:#fff;font-weight:700}
 .dshp-tab{position:fixed;right:16px;bottom:16px;z-index:2147483002;pointer-events:auto;cursor:pointer;
   border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
   border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;
@@ -3503,6 +3555,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       await buildModel()
       wireInteractions()
       connectSSE()
+      // 功能面板的开关状态要先读一次：单窗口模式下的 Shift+右击要靠 toolsState 判断开没开
+      try { refreshToolsPane() } catch (e) {}
       startLoops()
       syncAudioMeter() // 默认开；关掉时不启 PowerShell 轮询
       log(
@@ -3810,6 +3864,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
+   * 特殊气泡（划词翻译 / 识图）：和普通气泡同一个锚点（她头顶，放不下就翻到下方），
+   * 只是它自己带按钮、优先级最高（它显示期间普通气泡会被 pinMute 收掉并禁言）。
+   * 不锚到选区：拿不到别的程序的选区矩形，而且主窗可能离选区很远。
+   */
+  let pinAnchor = null
+  function placePin() {
+    const el = ui && ui.pin && ui.pin.el
+    if (!el || !el.classList.contains('dshp-on')) return
+    const at = placeViewportAnchored(el, { gap: 12, prefer: 'above' })
+    if (!at) return
+    if (pinAnchor && pinAnchor.left === at.left && pinAnchor.top === at.top) return
+    pinAnchor = { left: at.left, top: at.top }
+    el.style.left = at.left + 'px'
+    el.style.top = at.top + 'px'
+  }
+
+  /**
    * 工具栏：锚在她**可见部分**下方居中，四边都夹进屏幕内。
    * 她下半身出屏时会被夹进屏幕、并翻到她的**上方**，始终点得到。
    */
@@ -3891,8 +3962,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     // placePanel 只在面板"已显示"时才动手，而气泡出现的路径根本不经过 clampPanels。
     placePanel(ui && ui.menu && ui.menu.el)
     placePanel(ui && ui.composer && ui.composer.el)
+    placePanel(ui && ui.tools && ui.tools.el)
     placePanel(ui && ui.hud && ui.hud.el)
     placeBubble()
+    placePin()
     placeDock()
   }
 
@@ -4846,16 +4919,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const menuBtn = $('button', 'dshp-btn', '⋯')
     const hideBtn = $('button', 'dshp-btn', '–')
     hideBtn.title = '收起（桌面版会缩成贴边小球）'
-    const openBtn = $('button', 'dshp-btn dshp-icon', '↗')
-    openBtn.title = '打开 DeepSeek Harness 界面'
+    // 功能面板（2026-10-22）：原来是「↗ 打开 DSH 界面」，现在收进面板里，
+    // 这个位置让给「🧩 功能」（划词翻译 / 识图 / 打开 DSH 都在里面）。
+    const toolsBtn = $('button', 'dshp-btn', '🧩 功能')
+    toolsBtn.title = '功能面板：划词翻译 / 识图 / 打开 DSH 界面'
     // data-act：事件按名字绑，不再用 children[0..3] 的下标（插一个按钮就全错位）
     talkBtn.dataset.act = 'talk'
     biliBtn.dataset.act = 'bili'
     mailBtn.dataset.act = 'mail'
     menuBtn.dataset.act = 'menu'
     hideBtn.dataset.act = 'hide'
-    openBtn.dataset.act = 'open'
-    dock.append(talkBtn, biliBtn, mailBtn, menuBtn, hideBtn, openBtn)
+    toolsBtn.dataset.act = 'tools'
+    dock.append(talkBtn, biliBtn, mailBtn, menuBtn, hideBtn, toolsBtn)
 
     const composer = $('div', 'dshp-panel dshp-composer')
     const ta = $('textarea')
@@ -4915,7 +4990,86 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     )
     addCloseButton(hud, () => closeHud())
 
-    root.append(stage, bubbleEl, dock, composer, menu, mail, hud)
+    // ——— 功能面板（2026-10-22）：划词翻译 / 识图 / 打开 DSH ———
+    // 用 .dshp-panel 基类（placePanel/closePanels/hitJS 都认得），只有宽度和内边距自己给。
+    const toolsPanel = $('div', 'dshp-panel dshp-tools')
+    const toolsQuick = $('div', 'dshp-sec')
+    toolsQuick.append($('h4', null, '快捷入口'))
+    const openDshBtn = $('button', 'dshp-btn', '↗ 打开 DeepSeek Harness 界面')
+    openDshBtn.title = '在浏览器里打开 DSH（原来 dock 上的 ↗ 就是它）'
+    toolsQuick.append(openDshBtn)
+    const toolsQuickNote = $('div', 'dshp-note', 'DSH 没开的时候点它，她会告诉你一声。')
+    toolsQuick.append(toolsQuickNote)
+
+    const toolsXlate = $('div', 'dshp-sec')
+    toolsXlate.append($('h4', null, '划词翻译'))
+    const xlToggleRow = $('div', 'dshp-row')
+    const xlToggle = $('button', 'dshp-btn', '关')
+    xlToggle.title = '开启后：在任何程序里按住左键拖选一段文字，她头顶就会冒出译文气泡'
+    xlToggleRow.append($('span', 'dshp-grow', '总开关'), xlToggle)
+    // 引擎三选一：用 chip 而不是原生 <select>。
+    // 原生下拉在「透明 + 不激活 + 置顶」的窗口里会弹一下就被系统收掉（2026-10-22 实测：
+    // 按住左键能看见选项，一松就没了，于是永远切不到 API 档）。chip 是纯 DOM，稳。
+    const xlEngineRow = $('div', 'dshp-row')
+    xlEngineRow.append($('span', 'dshp-k', '引擎'))
+    const xlEngineChips = {}
+    for (const [v, label] of [
+      ['free', '免费引擎'],
+      ['api', '自定义 API'],
+      ['local', '本地模型'],
+    ]) {
+      const b = $('button', 'dshp-chip', label)
+      b.dataset.engine = v
+      xlEngineChips[v] = b
+      xlEngineRow.append(b)
+    }
+    const xlApiBase = $('input')
+    xlApiBase.type = 'text'
+    xlApiBase.placeholder = 'https://…/v1'
+    const xlApiBaseRow = $('div', 'dshp-kv')
+    xlApiBaseRow.append($('span', 'dshp-k', 'API 地址'), xlApiBase)
+    const xlApiModel = $('input')
+    xlApiModel.type = 'text'
+    xlApiModel.placeholder = 'deepseek-chat'
+    const xlApiModelRow = $('div', 'dshp-kv')
+    xlApiModelRow.append($('span', 'dshp-k', '模型名'), xlApiModel)
+    const xlApiKey = $('input')
+    xlApiKey.type = 'password'
+    xlApiKey.placeholder = '留空 = 保持原来的（只存在本机）'
+    const xlApiKeyRow = $('div', 'dshp-kv')
+    xlApiKeyRow.append($('span', 'dshp-k', 'API Key'), xlApiKey)
+    // 这三个字段**任何时候都能填**（先填好再切引擎是常见顺序），只在这里说明当前会不会生效
+    const xlApiHint = $('div', 'dshp-note', '')
+    const xlBtnRow = $('div', 'dshp-row')
+    const xlSaveBtn = $('button', 'dshp-btn dshp-primary', '保存')
+    const xlTestBtn = $('button', 'dshp-btn', '测试引擎')
+    xlBtnRow.append($('span', 'dshp-grow'), xlTestBtn, xlSaveBtn)
+    const xlNote = $('div', 'dshp-note', '只认「按住左键拖选」；双击选词、终端窗口里不会触发（终端里 Ctrl+C 会打断命令）。')
+    const xlStatus = $('div', 'dshp-status', '')
+    toolsXlate.append(xlToggleRow, xlEngineRow, xlApiBaseRow, xlApiModelRow, xlApiKeyRow, xlApiHint, xlBtnRow, xlNote, xlStatus)
+
+    const toolsVision = $('div', 'dshp-sec')
+    toolsVision.append($('h4', null, '识图（实验性）'))
+    const vsToggleRow = $('div', 'dshp-row')
+    const vsToggle = $('button', 'dshp-btn', '关')
+    vsToggle.title = '开启后：Shift + 右击她，框一块屏幕让她看'
+    vsToggleRow.append($('span', 'dshp-grow', '总开关'), vsToggle)
+    const vsNote = $('div', 'dshp-note', '用法：Shift + 右击她 → 在屏幕上拖出一个框 → 松手。\n用的是心跳里配的那个能看图的模型。')
+    const vsStatus = $('div', 'dshp-status', '')
+    toolsVision.append(vsToggleRow, vsNote, vsStatus)
+
+    toolsPanel.append(toolsQuick, toolsXlate, toolsVision)
+    addCloseButton(toolsPanel)
+
+    // ——— 特殊气泡：划词翻译 / 识图的展示层（最高优先级，不走 makeBubble 队列）———
+    const pinEl = $('div', 'dshp-pin')
+    const pinHead = $('div', 'dshp-pin-head', '')
+    const pinBody = $('div', 'dshp-pin-body', '')
+    const pinFoot = $('div', 'dshp-pin-foot', '')
+    const pinBtns = $('div', 'dshp-pin-btns')
+    pinEl.append(pinHead, pinBody, pinFoot, pinBtns)
+
+    root.append(stage, bubbleEl, dock, composer, menu, mail, toolsPanel, hud, pinEl)
     document.body.append(root, tab)
 
     const u = {
@@ -4927,6 +5081,34 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       menu: { el: menu, tabs, panes, focused: null },
       mail: { el: mail, list: mailList, btn: mailBtn },
       biliBtn,
+      // 功能面板（2026-10-22）：划词翻译 / 识图
+      tools: {
+        el: toolsPanel,
+        xlToggle,
+        xlEngineChips,
+        xlApiHint,
+        xlApiBase,
+        xlApiModel,
+        xlApiKey,
+        xlSave: xlSaveBtn,
+        xlTest: xlTestBtn,
+        xlStatus,
+        vsToggle,
+        vsStatus,
+        openDsh: openDshBtn,
+      },
+      // 特殊气泡（划词翻译 / 识图）：不走 makeBubble，优先级最高
+      pin: {
+        el: pinEl,
+        head: pinHead,
+        body: pinBody,
+        foot: pinFoot,
+        btns: pinBtns,
+        kind: '',
+        phase: 'idle',
+        id: 0,
+        source: '',
+      },
       hud: {
         el: hud,
         badge: hudDot,
@@ -4944,6 +5126,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
     bindComposer(u)
     bindMenu(u)
+    bindTools(u)
     // 这里不能调 setHidden()——此刻 ui 还没赋值（ui = buildUI() 才刚返回），
     // setHidden 里读 ui.root 会直接抛异常，表现为「隐藏过一次之后，
     // 以后每次打开都起不来」。所以就地写类名。
@@ -4960,6 +5143,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     let buffer = ''
     // 工作气泡占用中 → 互动气泡让位（见下面 show 里的优先级守卫）
     let workHold = false
+    /**
+     * 特殊气泡（划词翻译 / 识图）占用中（2026-10-22）。
+     * 用户口径：「这两个气泡优先级最高，不会被其他气泡顶掉」——
+     * 所以这里不是"排队让位"，而是**无条件丢弃**：force / busy / 流式 / 心跳全部返回，
+     * 连队都不入（否则关掉 pin 的瞬间会有一堆旧台词诈尸）。
+     */
+    let pinHold = false
 
     // —— 2026-10-19：最少停留 + 排队 + 读图期间静默 ——
     // 原来 show() 直接覆盖：上一句还没看完就被下一句顶掉，看起来像刷屏。
@@ -5041,6 +5231,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     function drain() {
       drainTimer = null
+      if (pinHold) return // 特殊气泡还挂着：排队的台词不许在它关掉前突然冒出来
       if (sealed || !queue.length) return
       if (el.classList.contains('dshp-on')) {
         const age = Date.now() - shownAt
@@ -5063,6 +5254,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       el,
       show(text, opts) {
         opts = opts || {}
+        // ⚠️ 必须是第一行：特殊气泡（划词翻译 / 识图）挂着的时候，
+        // force / busy / 流式 / 心跳**全部**让路，而且不排队（见 pinHold 的注释）。
+        if (pinHold) return
         // 手动操作用 force：面板里点的表情/动作要立刻落地 —— 清掉积压、打断当前气泡、
         // 也不让 workHold 挡（用户主动点的东西优先于屏幕上还挂着的旧内容）。
         if (opts.force) {
@@ -5185,6 +5379,29 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       },
       get visible() {
         return el.classList.contains('dshp-on')
+      },
+      /**
+       * 特殊气泡（划词翻译 / 识图）的"全场让路"开关（2026-10-22）。
+       * on=true：清空队列、停掉 drain、把当前正在显示的工作气泡收掉，之后所有 show 直接丢弃。
+       * on=false：恢复放行（排队的也丢了，不补）。
+       * ⚠️ 调用方必须在 finally 里关掉它 —— 忘了关 = 她从此再也不冒任何气泡。
+       */
+      pinMute(on) {
+        pinHold = !!on
+        if (pinHold) {
+          queue.length = 0
+          clearReplyWait()
+          if (drainTimer) {
+            clearTimeout(drainTimer)
+            drainTimer = null
+          }
+          api.hide()
+        } else {
+          scheduleDrain(0)
+        }
+      },
+      get pinHeld() {
+        return pinHold
       },
     }
     return api
@@ -5393,8 +5610,12 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         idle.lastInputAt = performance.now()
         if (e.button !== 0) return
         // 详细面板是模态：它盖在她身上时，点击/拖滑杆不能再被「拖她」的 capture 吃掉
-        // （否则滑块拖不动、按钮点不动，面板关不掉 —— 2026-10-17 实测 bug）
+        // （否则滑块拖不动、按钮点不动、面板关不掉 —— 2026-10-17 实测 bug）
         if (ui.tuning) return
+        // 2026-10-22 同型问题：特殊气泡 / 功能面板也是 UI。
+        // ⚠️ 这个监听是**捕获阶段**（addEventListener 的第三个参数是 true），
+        //    所以元素自己挂的 stopPropagation 拦不住它 —— 必须在这里判一次。
+        if (e.target && e.target.closest && e.target.closest('.dshp-pin,.dshp-tools')) return
         if (!hitTest(e.clientX, e.clientY)) return
         // 点在鲸鱼娘身上：吃掉这次点击，别让下面的 DSH 界面也响应
         e.stopPropagation()
@@ -5467,6 +5688,23 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         if (!hitTest(e.clientX, e.clientY)) return
         e.preventDefault()
         e.stopPropagation()
+        // Shift + 右击 = 识图（2026-10-22）。
+        // 双窗口模式下这个右键是主进程注入进来的（那边会先看 shift，命中就直接开遮罩），
+        // 走到这里的是**单窗口**模式：右键是真事件，e.shiftKey 由浏览器自己算，可靠。
+        if (e.shiftKey) {
+          const tcfg = toolsState.cfg || {}
+          const tb = toolsBridge()
+          if (!(tcfg.vision && tcfg.vision.enabled)) {
+            ui.bubble.show('识图是关着的，先在「🧩 功能」里打开～', { name: 'DS 鲸鱼娘', ttl: 4500 })
+            return
+          }
+          if (!tb) {
+            ui.bubble.show('识图要在桌面壳里用', { name: 'DS 鲸鱼娘', ttl: 4500 })
+            return
+          }
+          tb.shot().catch(() => {})
+          return
+        }
         // （设置还在工具栏的 ⋯ 里，没有丢）
         if (hud.open) closeHud()
         else openHud({ flash: true, refresh: true })
@@ -5536,9 +5774,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.tab.addEventListener('click', () => setHidden(false))
 
     // 面板内点击不要穿透到下面的界面
-    for (const el of [ui.composer.el, ui.menu.el, ui.hud.el, ui.dock]) {
+    // （pin 也必须在这里：特殊气泡压在她身上时，点气泡会被"拖她"的捕获吃掉）
+    for (const el of [ui.composer.el, ui.menu.el, ui.hud.el, ui.tools.el, ui.pin.el, ui.dock]) {
       el.addEventListener('pointerdown', (e) => e.stopPropagation())
     }
+    // 按住气泡 = 别把这次点击当成「取消了别的程序的选区」把气泡自己关掉
+    ui.pin.el.addEventListener('pointerdown', () => {
+      const tb = toolsBridge()
+      if (tb) {
+        try { tb.pinHold() } catch (e) {}
+      }
+    })
 
     ui.hud.el.addEventListener('pointerenter', () => {
       hud.hover = true
@@ -6326,6 +6572,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.composer.el.classList.remove('dshp-on')
     ui.menu.el.classList.remove('dshp-on')
     try { ui.mail.el.classList.remove('dshp-on') } catch (e) {}
+    try { ui.tools.el.classList.remove('dshp-on') } catch (e) {}
     ui.root.classList.remove('dshp-open')
   }
 
@@ -6517,6 +6764,360 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     refreshChatMode()
   }
 
+  /**
+   * 打开 DeepSeek Harness 界面。
+   * 原来是 dock 上的「↗」，2026-10-22 收进功能面板 —— 逻辑一行没变，只是多了个调用方。
+   */
+  function openDshLink() {
+    if (shell.on) shell.post('open-dsh')
+    else window.open(BASE.replace(/\/dsh-pet$/, '') + '/', '_blank')
+  }
+
+  /** 打开功能面板（和 openMenu 同一套：互斥、夹屏、收气泡） */
+  function openTools() {
+    closeHud()
+    ui.root.classList.add('dshp-open')
+    ui.menu.el.classList.remove('dshp-on')
+    ui.composer.el.classList.remove('dshp-on')
+    ui.mail.el.classList.remove('dshp-on')
+    ui.tools.el.classList.add('dshp-on')
+    try { ui.bubble.hide() } catch (e) {}
+    clampPanels()
+    requestAnimationFrame(() => clampPanels())
+    refreshToolsPane()
+  }
+
+  /* ==== 功能面板（2026-10-22）：划词翻译 / 识图 ====
+   *
+   * 分工（别搞混）：
+   *   - 配置读写走现成的 heart.settings / heart.save（存在 settings.json 的 heart.tools 段，
+   *     和 bili/dream 一样，五道关一个都不少）；
+   *   - 真正的"检测拖选 / 模拟复制 / 截图 / 翻译"全在主进程（koffi + clipboard 只有主进程有）；
+   *   - 页面只做两件事：画面板、把主进程推来的 pin 事件画成气泡。
+   */
+  const XL_ENGINE_LABELS = {
+    free: '免费引擎（腾讯）',
+    api: '自定义 API（OpenAI 兼容）',
+    local: '本地模型（心跳那个端点）',
+  }
+
+  function toolsBridge() {
+    return window.dshpetBridge && window.dshpetBridge.tools ? window.dshpetBridge.tools : null
+  }
+
+  /** 最近一次读到的状态：{ st: tools.status(), cfg: payload.config.tools } */
+  let toolsState = { st: null, cfg: null }
+  /** 正在保存：防止连点 */
+  let toolsSaving = false
+
+  async function refreshToolsPane() {
+    const hb = heartBridge()
+    const tb = toolsBridge()
+    let st = null
+    let cfg = null
+    try {
+      if (tb) st = await tb.status()
+    } catch (e) {}
+    try {
+      if (hb) {
+        const p = await hb.settings()
+        cfg = p && p.config ? p.config.tools : null
+      }
+    } catch (e) {}
+    toolsState = { st, cfg }
+    // paint 里会碰一堆 DOM：任何一处抛异常都不该变成未处理的 rejection（页面刷新时最容易）
+    try {
+      paintToolsPane()
+    } catch (e) {}
+  }
+
+  function paintToggle(btn, on) {
+    if (!btn) return
+    btn.textContent = on ? '开' : '关'
+    btn.classList.toggle('dshp-primary', !!on)
+  }
+
+  function paintToolsPane() {
+    const u = ui
+    if (!u || !u.tools) return
+    const cfg = toolsState.cfg || {}
+    const tl = cfg.translate || {}
+    const vs = cfg.vision || {}
+    const st = toolsState.st || {}
+    const native = st.native || {}
+    const t = u.tools
+    const engine = tl.engine || 'free'
+    // 原生组件缺失 = 划词整条不可用（识图不受影响）
+    const noNative = native.ok === false
+
+    paintToggle(t.xlToggle, !!tl.enabled)
+    t.xlToggle.disabled = noNative
+    t.xlToggle.title = noNative
+      ? '划词翻译需要原生组件（Koffi），这个安装缺了它'
+      : '开启后：在任何程序里按住左键拖选一段文字，她头顶就会冒出译文气泡'
+
+    for (const [v, b] of Object.entries(t.xlEngineChips || {})) b.classList.toggle('dshp-on', v === engine)
+    t.xlApiBase.value = (tl.api && tl.api.baseUrl) || ''
+    t.xlApiModel.value = (tl.api && tl.api.model) || ''
+    t.xlApiKey.value = ''
+    t.xlApiKey.placeholder = tl.api && tl.api.apiKeySet ? '已设置（留空 = 不改）' : 'sk-…（只存在本机）'
+    // ⚠️ 这三个字段**永远可编辑**：以前按引擎 disable 它们，用户看到的就是"点不开"，
+    //    而当时引擎又切不过去（select 弹不出来），于是彻底没法配。
+    t.xlApiHint.textContent =
+      engine === 'api'
+        ? '这三项只有「自定义 API」引擎会用；地址末尾的 /v1 会自动补。'
+        : engine === 'local'
+          ? '本地模型复用心跳页配的那个端点（这里填了也不会用）。'
+          : '当前是免费引擎，这三项填了也不会用（切到「自定义 API」才生效）。'
+    t.xlSave.disabled = toolsSaving
+    t.xlTest.disabled = toolsSaving
+
+    const sel = st.select || {}
+    const bits = []
+    if (noNative) bits.push('⚠️ 缺原生组件（Koffi）：划词翻译用不了（' + (native.reason || 'unknown') + '）')
+    else if (tl.enabled) {
+      bits.push(
+        '划词：已开启 · ' +
+          (XL_ENGINE_LABELS[engine] || engine) +
+          ' · 轮询' +
+          (sel.running ? (sel.paused ? '暂停中' : '跑着') : '**没起来**'),
+      )
+    } else bits.push('划词：已关闭')
+    if (sel.grabs) bits.push('本次已触发 ' + sel.grabs + ' 次')
+    if (sel.lastError) bits.push('上次：' + sel.lastError)
+    if (st.lastError) bits.push('翻译失败：' + st.lastError)
+    t.xlStatus.textContent = bits.join('\n')
+
+    paintToggle(t.vsToggle, !!vs.enabled)
+    const model = st.model || {}
+    t.vsStatus.textContent = vs.enabled
+      ? model.configured
+        ? '识图：已开启 · 模型 ' + (model.model || model.baseUrl)
+        : '识图：已开启，但还没配能看图的模型'
+      : '识图：已关闭'
+    t.vsToggle.title = model.configured ? 'Shift + 右击她，框一块屏幕让她看' : '先在「心跳」页配一个能看图的模型'
+  }
+
+  async function saveTools(patch, okText) {
+    const hb = heartBridge()
+    if (!hb) {
+      ui.bubble.show('这一项要在桌面壳里用（浏览器版没有划词/识图）', { name: 'DS 鲸鱼娘', ttl: 4000 })
+      return false
+    }
+    if (toolsSaving) return false
+    toolsSaving = true
+    if (ui.tools) ui.tools.xlSave.disabled = true
+    let ok = false
+    try {
+      const p = await hb.save({ tools: patch })
+      ok = !!(p && p.ok)
+      if (p && p.config) toolsState.cfg = p.config.tools
+      paintToolsPane()
+      if (!ok) {
+        ui.bubble.show('保存失败：' + ((p && p.reason) || '未知原因'), { name: 'DS 鲸鱼娘', ttl: 6000 })
+      } else if (okText) {
+        ui.bubble.show(okText, { name: 'DS 鲸鱼娘', ttl: 3000 })
+      }
+    } catch (e) {
+      ui.bubble.show('保存失败：' + ((e && e.message) || e), { name: 'DS 鲸鱼娘', ttl: 6000 })
+    } finally {
+      toolsSaving = false
+      if (ui.tools) ui.tools.xlSave.disabled = false
+      refreshToolsPane()
+    }
+    return ok
+  }
+
+  /** 当前生效的引擎（以磁盘上的配置为准，不再从控件读值） */
+  function currentEngine() {
+    const tl = (toolsState.cfg && toolsState.cfg.translate) || {}
+    return tl.engine || 'free'
+  }
+
+  function bindTools(u) {
+    const t = u.tools
+    if (!t) return
+    t.openDsh.addEventListener('click', () => {
+      try { openDshLink() } catch (e) {}
+      closePanels()
+    })
+    t.xlToggle.addEventListener('click', () => {
+      const on = !(toolsState.cfg && toolsState.cfg.translate && toolsState.cfg.translate.enabled)
+      saveTools({ translate: { enabled: on } }, on ? '好，划词翻译开了～拖选一段字试试' : '划词翻译关掉了')
+    })
+    // 引擎：chip 点击即保存（没有 <select> 的弹层问题）
+    for (const [v, b] of Object.entries(t.xlEngineChips || {})) {
+      b.addEventListener('click', () => {
+        if (currentEngine() === v) return
+        saveTools({ translate: { engine: v } }, '翻译引擎换成「' + (XL_ENGINE_LABELS[v] || v) + '」')
+      })
+    }
+    t.xlSave.addEventListener('click', async () => {
+      const api = { baseUrl: t.xlApiBase.value.trim(), model: t.xlApiModel.value.trim() }
+      const key = t.xlApiKey.value.trim()
+      if (key) api.apiKey = key
+      await saveTools({ translate: { api } }, '翻译设置存好了')
+    })
+    t.xlTest.addEventListener('click', async () => {
+      const tb = toolsBridge()
+      if (!tb) return
+      const engine = currentEngine()
+      t.xlStatus.textContent = '测试中…'
+      let r = null
+      try {
+        r = await tb.selftest(engine === 'free' ? 'free' : 'model')
+      } catch (e) {
+        r = { ok: false, hint: String((e && e.message) || e) }
+      }
+      t.xlStatus.textContent = r && r.ok ? '✅ ' + (r.detail || '通') : '❌ ' + ((r && r.hint) || '失败')
+    })
+    t.vsToggle.addEventListener('click', () => {
+      const on = !(toolsState.cfg && toolsState.cfg.vision && toolsState.cfg.vision.enabled)
+      saveTools({ vision: { enabled: on } }, on ? '识图开了：Shift + 右击她，框一块屏幕' : '识图关掉了')
+    })
+  }
+
+  /* ==== 特殊气泡（划词翻译 / 识图）：优先级最高，不走 makeBubble ==== */
+  const PIN_KIND_HEAD = { tr: '划词翻译', shot: '看图 · 框选' }
+
+  function pinButton(label, cls, onClick) {
+    const b = $('button', cls || null, label)
+    b.addEventListener('click', (e) => {
+      e.stopPropagation()
+      try { onClick() } catch (err) {}
+    })
+    return b
+  }
+
+  function paintPinButtons() {
+    const p = ui.pin
+    if (!p) return
+    p.btns.textContent = ''
+    if (p.kind === 'shot') {
+      // 识图只要一个「关闭」（用户口径）
+      p.btns.append(pinButton('关闭', 'dshp-primary', () => pinClose('user')))
+      return
+    }
+    const loading = p.phase === 'loading'
+    const modeBtn = pinButton('关闭翻译模式', null, () => disableTranslateMode())
+    modeBtn.disabled = loading
+    if (p.phase === 'done') {
+      // 翻译完了：「翻译」已经没意义，换成「关闭」
+      p.btns.append(modeBtn, pinButton('关闭', 'dshp-primary', () => pinClose('user')))
+      return
+    }
+    const cancelBtn = pinButton('取消', null, () => pinClose('user'))
+    cancelBtn.disabled = loading
+    const trBtn = pinButton('翻译', 'dshp-primary', () => doTranslate())
+    trBtn.disabled = p.phase !== 'source'
+    p.btns.append(modeBtn, cancelBtn, trBtn)
+  }
+
+  function pinShow(m) {
+    const p = ui.pin
+    if (!p) return
+    const id = Number(m && m.id) || 0
+    const kind = m && m.kind === 'shot' ? 'shot' : 'tr'
+    // 新气泡覆盖旧气泡（含两种 kind 互换）：内容直接换，重放一次闪光
+    p.id = id
+    p.kind = kind
+    p.phase = m && m.pending ? 'loading' : 'source'
+    p.source = String((m && m.text) || '')
+    p.head.textContent = String((m && m.head) || PIN_KIND_HEAD[kind] || '')
+    p.body.textContent = p.phase === 'loading' ? '……（她在看）' : p.source
+    p.body.classList.toggle('dshp-pending', p.phase === 'loading')
+    const foot = []
+    if (m && m.app) foot.push(m.app)
+    if (m && m.chars) foot.push(m.chars + ' 字')
+    if (m && m.truncated) foot.push('已截断')
+    p.foot.textContent = foot.join(' · ')
+    paintPinButtons()
+    p.el.classList.add('dshp-on')
+    // 重放呼吸光：移除 → 强制重排 → 再加（和 openHud 的 flash 一个手法）
+    p.el.classList.remove('dshp-flash')
+    void p.el.offsetWidth
+    p.el.classList.add('dshp-flash')
+    pinAnchor = null
+    try { placePin() } catch (e) {}
+    // 全场让路：普通气泡（含 force/busy/流式/心跳）一律丢弃
+    try { ui.bubble.pinMute(true) } catch (e) {}
+  }
+
+  function pinUpdate(m) {
+    const p = ui.pin
+    if (!p || !p.id) return
+    if (Number(m && m.id) !== p.id) return // 过期回包（已经被新选区覆盖）
+    if (m.text !== undefined) {
+      p.source = String(m.text || '')
+      p.body.textContent = p.source || '（没看到什么）'
+      p.body.classList.remove('dshp-pending')
+      p.phase = 'source'
+      paintPinButtons()
+    }
+    if (m.foot !== undefined) p.foot.textContent = String(m.foot || '')
+    if (m.head !== undefined && m.head) p.head.textContent = String(m.head)
+    pinAnchor = null
+    try { placePin() } catch (e) {}
+  }
+
+  function pinClose(reason) {
+    const p = ui.pin
+    if (!p) return
+    p.el.classList.remove('dshp-on', 'dshp-flash')
+    p.id = 0
+    p.kind = ''
+    p.phase = 'idle'
+    p.source = ''
+    p.btns.textContent = ''
+    pinAnchor = null
+    // ⚠️ 必须无条件解禁：漏了这一步她从此再也不冒任何气泡（静默故障）
+    try { ui.bubble.pinMute(false) } catch (e) {}
+  }
+
+  function pinState() {
+    const p = ui.pin
+    return p ? { id: p.id, kind: p.kind, phase: p.phase, visible: p.el.classList.contains('dshp-on'), hold: ui.bubble.pinHeld } : null
+  }
+
+  /** 「关闭翻译模式」：写盘关开关 + 收气泡（主进程收到 heart:save 后会停轮询） */
+  async function disableTranslateMode() {
+    pinClose('mode-off')
+    await saveTools({ translate: { enabled: false } }, '划词翻译关掉了')
+  }
+
+  /** 「翻译」：主进程翻，回来的 id 对不上就丢掉（防"译文盖掉别人刚选的新原文"） */
+  async function doTranslate() {
+    const p = ui.pin
+    const tb = toolsBridge()
+    if (!p || !p.id) return
+    if (!tb) return
+    if (!p.source.trim()) return
+    const id = p.id
+    p.phase = 'loading'
+    p.foot.textContent = '翻译中…'
+    paintPinButtons()
+    let r = null
+    try {
+      r = await tb.translate({ id, text: p.source })
+    } catch (e) {
+      r = { ok: false, hint: String((e && e.message) || e) }
+    }
+    if (ui.pin.id !== id) return // 期间换了新选区 → 这条结果作废
+    if (r && r.ok) {
+      ui.pin.body.textContent = r.text
+      ui.pin.body.classList.remove('dshp-pending')
+      ui.pin.phase = 'done'
+      ui.pin.foot.textContent = (XL_ENGINE_LABELS[r.engine] || r.engine || '') + ' · ' + (r.chars || ui.pin.source.length) + ' 字 · ' + (r.ms || 0) + 'ms'
+      paintPinButtons()
+      pinAnchor = null
+      try { placePin() } catch (e) {}
+    } else {
+      ui.pin.phase = 'source'
+      ui.pin.foot.textContent = (r && (r.hint || r.reason)) || '翻译失败'
+      paintPinButtons()
+    }
+  }
+
   function openMenu(which) {
     closeHud() // 菜单和 HUD 不同时占屏幕
     ui.root.classList.add('dshp-open')
@@ -6650,9 +7251,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         setHidden(true)
       },
       // 桌面壳里交给原生用默认浏览器打开，浏览器版直接新开一个标签页
-      open: () => {
-        if (shell.on) shell.post('open-dsh')
-        else window.open(BASE.replace(/\/dsh-pet$/, '') + '/', '_blank')
+      openDsh: openDshLink,
+      // 功能面板（2026-10-22）：划词翻译 / 识图 / 打开 DSH 都在这
+      tools: () => {
+        if (u.tools.el.classList.contains('dshp-on')) { closePanels(); return }
+        openTools()
       },
       mail: () => {
         if (u.mail.el.classList.contains('dshp-on')) { closePanels(); return }
@@ -7494,13 +8097,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           if (Number.isFinite(n) && n > 0 && n < 65536) save({ model: { port: Math.round(n) } })
         }, { type: 'number', placeholder: '19411' }),
         mkInput('引擎 exe', sv.exe, (v) => save({ modelServer: { exe: v } }), {
-          placeholder: 'D:\\llama\\bin\\llama-server.exe',
+          placeholder: 'D:\\models\\llama-server.exe',
         }),
         mkInput('模型 gguf', sv.model, (v) => save({ modelServer: { model: v } }), {
-          placeholder: 'D:\\llama\\weights\\MiniCPM-V-4_7-1B-Q8_0.gguf',
+          placeholder: 'D:\\models\\MiniCPM-V-4_7-1B-Q8_0.gguf',
         }),
         mkInput('视觉投影', sv.mmproj, (v) => save({ modelServer: { mmproj: v } }), {
-          placeholder: 'D:\\llama\\weights\\mmproj-model-f16.gguf',
+          placeholder: 'D:\\models\\mmproj-model-f16.gguf',
         }),
         $('div', 'dshp-hint', '填完路径点「启动模型」；它会在 ' + (mm.port || 19411) + ' 端口起 llama-server。'),
         $('div', 'dshp-hint', '本地端点只在你点「扫描」时探测；心跳不会在后台自动发现，避免误用别的服务。'),
@@ -7508,7 +8111,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         mkInput('API 地址', mm.baseUrl, (v) => save({ model: { baseUrl: v } }), { placeholder: 'https://api.example.com/v1' }),
         mkInput('模型名', mm.model, (v) => save({ model: { model: v } }), { placeholder: 'qwen3.5-9b / gpt-4o-mini' }),
         mkInput('API Key', '', (v) => save({ model: { apiKey: v } }), { type: 'password', placeholder: mm.apiKeySet ? '已设置（清空并保存=删除）' : 'sk-...' }),
-        $('div', 'dshp-hint', '想聊得更自然：换更大的视觉模型（实测 Qwen3.5-9B 会直接接屏幕上的梗，显存约 6.6GB）；1B 更省显存，但话更像「播报」。'),
+        $('div', 'dshp-hint', '想聊得更自然：换更大的视觉模型（更能接住屏幕上的真实内容，显存占用也更高）；小模型更省显存，但话更像「播报」。'),
       )
 
       // —— 提示词 ——
@@ -8575,6 +9178,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
       case 'control':
         handleControl(m)
+        break
+
+      // 功能面板（2026-10-22）：划词翻译 / 识图的特殊气泡。
+      // 单独一个事件类型而不是塞进 control —— handleControl 已经背着
+      // seal/dreaming/report/props 一堆旁路字段，再加会更难读。
+      case 'pin':
+        if (m.action === 'show') pinShow(m)
+        else if (m.action === 'update') pinUpdate(m)
+        else if (m.action === 'close') pinClose(m.reason)
         break
     }
   }
@@ -10159,6 +10771,45 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     },
     /** 诊断：页面拿到的 boot（独立化以后外壳会注入 local / upstream / seed） */
     boot: () => window.__DSH_PET_BOOT__ || null,
+    /* —— 功能面板 / 特殊气泡（2026-10-22，CDP 验收用）—— */
+    /** 打开功能面板（等价点 dock 的「🧩 功能」） */
+    openTools: () => {
+      try {
+        openTools()
+        return true
+      } catch (e) {
+        return false
+      }
+    },
+    /** 直接弹一条特殊气泡：{ kind:'tr'|'shot', text, id?, head?, app?, chars? } */
+    pinShow: (info) => {
+      try {
+        pinShow(Object.assign({ id: Date.now() % 2147483000, kind: 'tr', text: '' }, info || {}))
+        return pinState()
+      } catch (e) {
+        return null
+      }
+    },
+    pinUpdate: (patch) => {
+      try {
+        pinUpdate(Object.assign({ id: ui.pin.id }, patch || {}))
+        return pinState()
+      } catch (e) {
+        return null
+      }
+    },
+    pinClose: (reason) => {
+      try {
+        pinClose(reason || 'debug')
+        return pinState()
+      } catch (e) {
+        return null
+      }
+    },
+    /** 诊断：pin 的当前状态 + 普通气泡是否被禁言（排查"她为什么不说话"） */
+    pinState: () => pinState(),
+    /** 诊断：刷新功能面板的配置显示 */
+    toolsRefresh: () => refreshToolsPane().then(() => toolsState),
     /** 诊断：与 DSH 的连接状态（独立外壳里由本地服务告诉我们） */
     linkState: () => ({ known: link.known, online: link.online, port: link.port, status: agent.status }),
     /** 诊断：她现在说话的语气（疑问 / 感叹 / 平常）以及它会怎么写脸 */

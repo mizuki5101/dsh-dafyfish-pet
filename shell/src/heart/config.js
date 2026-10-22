@@ -72,11 +72,49 @@ const DEFAULTS = {
    * dir 留空 = %APPDATA%/DS-WhaleGirl-Pet/肥鱼日记（面板里可改）。
    */
   dream: { enabled: false, cooldownSec: 1800, dir: '' },
+  /**
+   * 「功能面板」里的两个工具（2026-10-22）。都挂在 heart 段下 —— 和 bili / dream 一样，
+   * 这里其实是「需要模型/需要配置的功能」的集合，不是纯粹的"心跳"。
+   *
+   * translate：划词翻译。默认**关闭**（要用 koffi 轮询全局左键 + 模拟 Ctrl+C，没配好会白跑）。
+   *   engine：'free'  = 腾讯 Transmart 网页接口（默认，免 key、国内直连）
+   *           'api'   = 用户自己填的 OpenAI 兼容端点（独立配置，不复用 heart.model）
+   *           'local' = 直接用 heart.model 那个本地端点
+   *   skipApps：这些进程里**不检测**——终端里模拟 Ctrl+C 会打断正在跑的命令，
+   *             风险远大于收益；code.exe 内置终端同理。
+   * vision：识图（实验性）。Shift+右击她 → 框一块屏幕 → 让模型描述。
+   */
+  tools: {
+    translate: {
+      enabled: false,
+      engine: 'free',
+      to: 'zh-Hans',
+      maxChars: 4000,
+      dragPx: 8,
+      restoreClipboard: true,
+      skipApps: [
+        'windowsterminal.exe',
+        'conhost.exe',
+        'cmd.exe',
+        'powershell.exe',
+        'pwsh.exe',
+        'mintty.exe',
+        'wezterm-gui.exe',
+        'alacritty.exe',
+        'conemu64.exe',
+        'code.exe',
+      ],
+      api: { baseUrl: '', model: '', apiKey: '' },
+    },
+    vision: { enabled: false, minSize: 24, maxTokens: 300, prompt: '' },
+  },
   /** 「一键启动」用的本地引擎配置（空路径 = 需要用户在面板里填） */
   modelServer: { exe: '', model: '', mmproj: '', extraArgs: '' },
 }
 
 const PROVIDERS = ['auto', 'separate', 'ollama', 'openai']
+/** 翻译引擎白名单（面板里三选一；非法值一律回落默认的免费引擎） */
+const ENGINES = ['free', 'api', 'local']
 
 function num(v, def, min, max) {
   const n = Number(v)
@@ -101,6 +139,10 @@ function normalize(raw) {
   const esc = src.escalate && typeof src.escalate === 'object' ? src.escalate : {}
   const mem = src.memory && typeof src.memory === 'object' ? src.memory : {}
   const ms = src.modelServer && typeof src.modelServer === 'object' ? src.modelServer : {}
+  const tsrc = src.tools && typeof src.tools === 'object' ? src.tools : {}
+  const tl = tsrc.translate && typeof tsrc.translate === 'object' ? tsrc.translate : {}
+  const tlApi = tl.api && typeof tl.api === 'object' ? tl.api : {}
+  const vi = tsrc.vision && typeof tsrc.vision === 'object' ? tsrc.vision : {}
   return {
     enabled: src.enabled === true,
     // 2026-10-18 起：看屏间隔与说话间隔统一 15~600s（面板只有一个滑块）。
@@ -167,6 +209,36 @@ function normalize(raw) {
       cooldownSec: num((src.dream || {}).cooldownSec, DEFAULTS.dream.cooldownSec, 300, 10800),
       dir: str((src.dream || {}).dir, '').trim().slice(0, 300),
     },
+    // 划词翻译 / 识图：字段一多就容易「面板保存了但值没变」，
+    // 白名单在 settings.js 的 sanitizeHeartPatch，两边必须同步（测试【6】有交叉锁）。
+    tools: {
+      translate: {
+        enabled: bool(tl.enabled, DEFAULTS.tools.translate.enabled),
+        engine: ENGINES.includes(tl.engine) ? tl.engine : DEFAULTS.tools.translate.engine,
+        to: str(tl.to, DEFAULTS.tools.translate.to).trim().slice(0, 20) || DEFAULTS.tools.translate.to,
+        maxChars: num(tl.maxChars, DEFAULTS.tools.translate.maxChars, 100, 20000),
+        dragPx: num(tl.dragPx, DEFAULTS.tools.translate.dragPx, 4, 40),
+        restoreClipboard: bool(tl.restoreClipboard, DEFAULTS.tools.translate.restoreClipboard),
+        skipApps: Array.isArray(tl.skipApps)
+          ? tl.skipApps
+              .filter((x) => typeof x === 'string' && x.trim())
+              .map((x) => x.trim().toLowerCase())
+              .slice(0, 20)
+          : DEFAULTS.tools.translate.skipApps.slice(),
+        api: {
+          baseUrl: str(tlApi.baseUrl, '').trim().slice(0, 300),
+          model: str(tlApi.model, '').trim().slice(0, 200),
+          apiKey: str(tlApi.apiKey, '').slice(0, 500),
+        },
+      },
+      vision: {
+        enabled: bool(vi.enabled, DEFAULTS.tools.vision.enabled),
+        // 小于 24 DIP 的框基本是误触（4×4 的噪点丢给模型纯浪费）
+        minSize: num(vi.minSize, DEFAULTS.tools.vision.minSize, 24, 400),
+        maxTokens: num(vi.maxTokens, DEFAULTS.tools.vision.maxTokens, 64, 1024),
+        prompt: str(vi.prompt, '').slice(0, 2000),
+      },
+    },
     modelServer: {
       exe: str(ms.exe, '').trim(),
       model: str(ms.model, '').trim(),
@@ -188,4 +260,4 @@ function describe(cfg) {
   )
 }
 
-module.exports = { DEFAULTS, PROVIDERS, normalize, describe }
+module.exports = { DEFAULTS, PROVIDERS, ENGINES, normalize, describe }

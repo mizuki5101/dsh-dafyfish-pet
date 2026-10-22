@@ -63,11 +63,22 @@ const REQUIRED = [
   'shell/src/heart/dream/prompt.js',
   'shell/src/heart/dream/store.js',
   'shell/src/heart/dream/state.js',
+  // 2026-10-22：功能面板 / 划词翻译 / 识图 —— 新增模块必须进清单
+  'shell/src/native/keys.js',
+  'shell/src/tools/index.js',
+  'shell/src/tools/select.js',
+  'shell/src/tools/select-core.js',
+  'shell/src/tools/translate.js',
+  'shell/src/tools/translate-core.js',
+  'shell/src/tools/shot.js',
+  'shell/src/tools/overlay.js',
+  'shell/src/tools/preload-overlay.js',
   DATA_DIR + '/测试独立桌宠.mjs',
   DATA_DIR + '/测试心跳决策.mjs',
   DATA_DIR + '/测试心跳纯函数.mjs',
   DATA_DIR + '/测试刷视频.mjs',
   DATA_DIR + '/测试做梦纯函数.mjs',
+  DATA_DIR + '/测试功能面板纯函数.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

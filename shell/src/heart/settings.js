@@ -127,7 +127,77 @@ function sanitizeHeartPatch(p) {
     if (typeof src.dream.dir === 'string') d.dir = src.dream.dir.trim().slice(0, 300)
     if (Object.keys(d).length) out.dream = d
   }
+  // 划词翻译 / 识图（2026-10-22）。
+  // ⚠️ 漏了这段 = 又一次「保存成功、界面刷新、值没变」；空串/空数组都要放行
+  //    （清空 apiKey、清空 skipApps 都是合法操作，normalize 会补回默认值或保持为空）。
+  if (src.tools && typeof src.tools === 'object') {
+    const t = {}
+    const st = src.tools.translate
+    if (st && typeof st === 'object') {
+      const x = {}
+      if (typeof st.enabled === 'boolean') x.enabled = st.enabled
+      if (typeof st.engine === 'string') x.engine = st.engine
+      if (typeof st.to === 'string') x.to = st.to.trim().slice(0, 20)
+      for (const k of ['maxChars', 'dragPx']) {
+        if (st[k] !== undefined && Number.isFinite(Number(st[k]))) x[k] = Math.round(Number(st[k]))
+      }
+      if (typeof st.restoreClipboard === 'boolean') x.restoreClipboard = st.restoreClipboard
+      if (Array.isArray(st.skipApps)) {
+        x.skipApps = st.skipApps
+          .filter((v) => typeof v === 'string' && v.trim())
+          .map((v) => v.trim().slice(0, 80))
+          .slice(0, 20)
+      }
+      if (st.api && typeof st.api === 'object') {
+        const a = {}
+        if (typeof st.api.baseUrl === 'string') a.baseUrl = st.api.baseUrl.trim().slice(0, 300)
+        if (typeof st.api.model === 'string') a.model = st.api.model.trim().slice(0, 200)
+        if (typeof st.api.apiKey === 'string') a.apiKey = st.api.apiKey.slice(0, 500)
+        if (Object.keys(a).length) x.api = a
+      }
+      if (Object.keys(x).length) t.translate = x
+    }
+    const sv = src.tools.vision
+    if (sv && typeof sv === 'object') {
+      const v = {}
+      if (typeof sv.enabled === 'boolean') v.enabled = sv.enabled
+      for (const k of ['minSize', 'maxTokens']) {
+        if (sv[k] !== undefined && Number.isFinite(Number(sv[k]))) v[k] = Math.round(Number(sv[k]))
+      }
+      if (typeof sv.prompt === 'string') v.prompt = sv.prompt.slice(0, 2000)
+      if (Object.keys(v).length) t.vision = v
+    }
+    if (Object.keys(t).length) out.tools = t
+  }
   return out
 }
 
-module.exports = { readJson, writeJson, deepMerge, patchHeart, sanitizeHeartPatch }
+/**
+ * 打日志专用：把任何密钥字段换成 '***'，其余原样（纯函数，可单测）。
+ *
+ * 为什么需要：`heart:save` 以前直接 `JSON.stringify(clean)` 写进 boot.log，
+ * 而 clean 里有 `model.apiKey`（还有 2026-10-22 新加的 tools.translate.api.apiKey）
+ * —— 等于在 %APPDATA% 里留一份明文副本。
+ *
+ * 规则：键名像密钥（apiKey / secret / token / password / credential）且值是**非空字符串**
+ * 才替换；布尔（apiKeySet）和空串保持原样，否则日志会看不出"到底设没设"。
+ * 数组/对象递归处理，不认识的类型原样返回。
+ */
+const SECRET_KEY_RE = /(apikey|api_key|secret|token|password|passwd|credential)/i
+
+function redactForLog(input, depth) {
+  const d = Number(depth) || 0
+  if (d > 6) return '[deep]'
+  if (input == null) return input
+  if (Array.isArray(input)) return input.map((x) => redactForLog(x, d + 1))
+  if (typeof input !== 'object') return input
+  const out = {}
+  for (const k of Object.keys(input)) {
+    const v = input[k]
+    if (SECRET_KEY_RE.test(k) && typeof v === 'string' && v) out[k] = '***'
+    else out[k] = redactForLog(v, d + 1)
+  }
+  return out
+}
+
+module.exports = { readJson, writeJson, deepMerge, patchHeart, sanitizeHeartPatch, redactForLog }

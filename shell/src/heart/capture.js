@@ -11,7 +11,7 @@
 
 const { desktopCapturer, screen, nativeImage } = require('electron')
 const { dHash, meanLuma, looksBlack } = require('./hash')
-const { toImageRect, maskImage } = require('./mask')
+const { toImageRect, maskImage, cropBitmap } = require('./mask')
 
 async function captureScreen(opts) {
   const o = opts || {}
@@ -19,6 +19,8 @@ async function captureScreen(opts) {
   const quality = Math.max(40, Math.min(95, Number(o.quality) || 72))
   const wantImage = o.includeImage === true
   const pad = Number.isFinite(Number(o.maskPad)) ? Math.max(0, Math.min(64, Number(o.maskPad))) : 6
+  // 区域截图（2026-10-22 识图）：只想看框里那一块
+  const region = o.region && Number(o.region.w) > 0 && Number(o.region.h) > 0 ? o.region : null
   const t0 = Date.now()
 
   let display = null
@@ -29,9 +31,13 @@ async function captureScreen(opts) {
   }
   const size = display.size || { width: 1280, height: 720 }
   const dpr = Number(display.scaleFactor) || 1
-  const scale = Math.min(1, maxEdge / Math.max(size.width * dpr, size.height * dpr))
-  const reqW = Math.max(64, Math.round(size.width * dpr * scale))
-  const reqH = Math.max(64, Math.round(size.height * dpr * scale))
+  // region 模式**不缩**：目标只有几百像素，再按 maxEdge 压一遍就只剩几十像素，字全糊了。
+  // 代价是一次全屏 BGRA（4K 约 33MB），一次性操作可接受；夹 3840 防 5K 屏。
+  const scale = region ? 1 : Math.min(1, maxEdge / Math.max(size.width * dpr, size.height * dpr))
+  const rawW = Math.round(size.width * dpr * scale)
+  const rawH = Math.round(size.height * dpr * scale)
+  const reqW = Math.max(64, region ? Math.min(3840, rawW) : rawW)
+  const reqH = Math.max(64, region ? Math.min(3840, rawH) : rawH)
 
   let sources = []
   try {
@@ -61,11 +67,12 @@ async function captureScreen(opts) {
   }
 
   // —— 遮罩：屏幕 DIP 矩形 → 图像像素，涂成中性灰 ——
+  // region 模式**跳过遮罩**：用户框住的可能就是她自己，涂灰会把主体抹掉。
   let masked = { rects: [], pixels: 0 }
   let maskCount = 0
   try {
     const rects = []
-    for (const r of Array.isArray(o.maskRects) ? o.maskRects : []) {
+    for (const r of region ? [] : Array.isArray(o.maskRects) ? o.maskRects : []) {
       const ir = toImageRect(r, display.bounds || { x: 0, y: 0, width: size.width, height: size.height }, dim.width, dim.height, pad)
       if (ir) rects.push(ir)
     }
@@ -78,12 +85,34 @@ async function captureScreen(opts) {
     return { ok: false, reason: 'mask-failed', error: String((e && e.message) || e), ms: Date.now() - t0 }
   }
 
-  const hash = dHash(bmp, dim.width, dim.height)
-  const luma = meanLuma(bmp, dim.width, dim.height)
+  // —— 区域裁剪（识图）——
+  let crop = null
+  if (region) {
+    const ir = toImageRect(
+      region,
+      display.bounds || { x: 0, y: 0, width: size.width, height: size.height },
+      dim.width,
+      dim.height,
+      0,
+    )
+    crop = ir ? cropBitmap(bmp, dim.width, dim.height, ir) : null
+    if (!crop) return { ok: false, reason: 'region-empty', ms: Date.now() - t0 }
+  }
+
+  const pxBuf = crop ? crop.buf : bmp
+  const pxW = crop ? crop.w : dim.width
+  const pxH = crop ? crop.h : dim.height
+
+  const hash = dHash(pxBuf, pxW, pxH)
+  const luma = meanLuma(pxBuf, pxW, pxH)
 
   let jpeg = null
   try {
-    if (maskCount) {
+    if (crop) {
+      // 区域截图给高画质：整屏压到 72 还能看字，几百像素的小图必须 92
+      const ni = nativeImage.createFromBitmap(crop.buf, { width: crop.w, height: crop.h })
+      jpeg = ni.toJPEG(Math.max(quality, 92))
+    } else if (maskCount) {
       const ni = nativeImage.createFromBitmap(bmp, { width: dim.width, height: dim.height })
       jpeg = ni.toJPEG(quality)
     } else {
@@ -95,8 +124,8 @@ async function captureScreen(opts) {
 
   const out = {
     ok: true,
-    width: dim.width,
-    height: dim.height,
+    width: pxW,
+    height: pxH,
     bytes: jpeg.length,
     hash,
     luma: Math.round(luma * 10) / 10,
@@ -105,6 +134,7 @@ async function captureScreen(opts) {
     dpr,
     masks: maskCount,
     maskedPixels: masked.pixels,
+    cropped: !!crop,
     ms: Date.now() - t0,
   }
   if (wantImage) out.jpeg = jpeg.toString('base64')

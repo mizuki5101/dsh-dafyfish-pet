@@ -97,7 +97,9 @@ window.addEventListener('blur', cancel)
 window.addEventListener('contextmenu', (e) => {
   e.preventDefault()
   window.__hitStats.contextmenu++
-  if (!down) window.hitAPI.contextMenu({ x: e.clientX, y: e.clientY, sx: e.screenX, sy: e.screenY })
+  // shift：识图是「Shift+右击她」。主进程还会用真实物理键状态兜底 ——
+  // 命中窗是 WS_EX_NOACTIVATE，键盘消息可能收不到，这里的 shiftKey 不一定准。
+  if (!down) window.hitAPI.contextMenu({ x: e.clientX, y: e.clientY, sx: e.screenX, sy: e.screenY, shift: !!e.shiftKey })
 })
 area.addEventListener('pointerleave', () => {
   if (!down) window.hitAPI.leave()
