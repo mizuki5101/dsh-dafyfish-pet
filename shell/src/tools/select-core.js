@@ -198,6 +198,7 @@ function step(state, obs, cfg) {
   const o = (obs && obs.overlay) || {}
   const capture = isCaptureOverlay({
     crossCursor: s.crossAtDown || !!(obs && obs.cursor === 'cross'),
+    windowCapture: !!o.windowCapture,
     topmost: !!o.topmost,
     popup: !!o.popup,
   })
@@ -227,6 +228,7 @@ function step(state, obs, cfg) {
     cursor: (obs && obs.cursor) || '',
     topmost: !!o.topmost,
     popup: !!o.popup,
+    windowCapture: !!o.windowCapture,
     app: appName,
     self: !!s.selfAtDown,
     pet: !!s.overPetAtDown,
@@ -282,11 +284,16 @@ function shouldAcceptText(state, text, now) {
  *
  * 两个信号，任一命中就放弃：
  *   ① 光标是十字（框选工具的标配；选字用的是 I 形/箭头）
- *   ② 前台窗口是置顶弹窗（全屏框选层的标准形态）
+ *   ② 光标下面那个窗口是置顶弹窗（全屏框选层的标准形态）
+ *   ③ **前台窗口**是置顶弹窗 —— 这条最关键：我们发出去的复制键是给「有焦点的窗口」的，
+ *      而"光标下面的窗口"可能是被截的那个程序（比如 WorkBuddy）。两者不是一回事。
+ *      2026-10-22 真机：框 WorkBuddy 那块时，光标下面是 workbuddy.exe（不是置顶弹窗），
+ *      但键落到了截图工具的框选层上 → 被复制。所以必须把前台窗口也判一遍。
  */
 function isCaptureOverlay(o) {
   const x = o && typeof o === 'object' ? o : {}
   if (x.crossCursor) return true
+  if (x.windowCapture) return true
   return !!(x.topmost && x.popup)
 }
 

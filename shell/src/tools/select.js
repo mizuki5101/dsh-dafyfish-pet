@@ -150,9 +150,18 @@ function createSelect(options = {}) {
     const hwnd = t ? t.root || t.hwnd : null
     const rawApp = down && hwnd ? keys.processOf(hwnd) : null
     const app = rawApp ? Object.assign({}, rawApp, { self: isSelfProcess(rawApp) }) : null
-    // ① 光标形状 ② 目标窗口是不是置顶弹窗 —— 两条合起来识别"框选/截图工具"
+    // ① 光标形状
     const cursor = keys.cursorKind()
-    const flags = hwnd ? keys.windowFlags(hwnd) : null
+    // ②③ 两套窗口样式都要判：
+    //     · 光标下面那个窗口（target）—— 决定"这是不是全屏框选层"
+    //     · **前台窗口**（foreground）—— 我们发出去的复制键是给它的，它才是真正可能被误触的那个
+    //     2026-10-22：框 WorkBuddy 时 target 是 workbuddy.exe（非置顶弹窗），
+    //     但键落到了截图工具的框选层上 → 仍被复制。必须两边都判。
+    const fg = keys.foreground()
+    const flagsT = hwnd ? keys.windowFlags(hwnd) : null
+    const flagsF = fg ? keys.windowFlags(fg) : null
+    const capT = !!(flagsT && flagsT.topmost && flagsT.popup)
+    const capF = !!(flagsF && flagsF.topmost && flagsF.popup)
     let overOwnUi = false
     let overPet = false
     try {
@@ -170,7 +179,13 @@ function createSelect(options = {}) {
       overOwnUi,
       overPet,
       cursor,
-      overlay: { topmost: !!(flags && flags.topmost), popup: !!(flags && flags.popup) },
+      overlay: {
+        // 任一窗口像框选层就算 —— 见上面注释
+        windowCapture: capT || capF,
+        // 这两个显示的是**前台窗口**的样式（键真正去的地方），面板上更有意义
+        topmost: !!(flagsF && flagsF.topmost),
+        popup: !!(flagsF && flagsF.popup),
+      },
       cfg,
     }
   }

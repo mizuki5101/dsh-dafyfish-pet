@@ -5063,9 +5063,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const vsStatus = $('div', 'dshp-status', '')
     toolsVision.append(vsToggleRow, vsShotRow, vsNote, vsStatus)
 
-    // 面板底部：外壳构建时间 —— 用来确认"我现在跑的是不是新代码"
-    const toolsBuilt = $('div', 'dshp-note', '')
-    toolsPanel.append(toolsQuick, toolsXlate, toolsVision, toolsBuilt)
+    toolsPanel.append(toolsQuick, toolsXlate, toolsVision)
     addCloseButton(toolsPanel)
 
     // ——— 特殊气泡：划词翻译 / 识图的展示层（最高优先级，不走 makeBubble 队列）———
@@ -5103,7 +5101,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         vsToggle,
         vsStatus,
         vsShot: vsShotBtn,
-        built: toolsBuilt,
         openDsh: openDshBtn,
       },
       // 特殊气泡（划词翻译 / 识图）：不走 makeBubble，优先级最高
@@ -6882,40 +6879,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     t.xlTest.disabled = toolsSaving
 
     const sel = st.select || {}
+    // 面板只写给用户看的东西。判据明细（光标/窗口样式/复制键/跳过计数）全部**不上屏**，
+    // 它们在 select.js 里保留，需要排查时看 boot.log（report() 会写）。
     const bits = []
-    if (noNative) bits.push('⚠️ 缺原生组件（Koffi）：划词翻译用不了（' + (native.reason || 'unknown') + '）')
-    else if (tl.enabled) {
-      bits.push(
-        '划词：已开启 · ' +
-          (XL_ENGINE_LABELS[engine] || engine) +
-          ' · 轮询' +
-          (sel.running ? (sel.paused ? '暂停中' : '跑着') : '**没起来**'),
-      )
-    } else bits.push('划词：已关闭')
-    if (sel.grabs) bits.push('本次已触发 ' + sel.grabs + ' 次')
-    if (sel.lastApp) bits.push('上次拖选：' + sel.lastApp + '（复制键 ' + (sel.lastCopyKey || '?') + '）')
-    // 最近一次松手的完整判据 —— 出问题时这一行就能定位，不用猜
-    const d = sel.lastDecision
-    if (d) {
-      const act =
-        d.acted === 'grab'
-          ? '发了复制键（' + (sel.lastCopyKey || '?') + '）'
-          : d.acted === 'skip'
-            ? '跳过：判为框选/截图'
-            : d.acted === 'clear'
-              ? '只收气泡'
-              : '没动作（没够拖动阈值）'
-      bits.push(
-        '上次松手 ' + d.ms + 'ms · 光标=' + (d.cursor || '?') +
-          ' · 置顶弹窗=' + (d.topmost ? 1 : 0) + '/' + (d.popup ? 1 : 0) +
-          ' · 应用=' + (d.app || '?') +
-          (d.pet ? ' · 压在她身上' : '') +
-          ' → ' + act,
-      )
-    }
-    if (sel.restoreSkipped) bits.push('有 ' + sel.restoreSkipped + ' 次剪贴板被别人占用 → 已跳过恢复（不会覆盖截图键截的图）')
-    if (sel.skips) bits.push('有 ' + sel.skips + ' 次判定为框选/截图 → 没有发 Ctrl+C')
-    if (sel.lastError) bits.push('上次：' + sel.lastError)
+    if (noNative) bits.push('⚠️ 缺原生组件（Koffi）：划词翻译用不了')
+    else if (tl.enabled) bits.push('划词：已开启 · ' + (XL_ENGINE_LABELS[engine] || engine))
+    else bits.push('划词：已关闭')
+    if (sel.lastError) bits.push('上次没翻成：' + sel.lastError)
     if (st.lastError) bits.push('翻译失败：' + st.lastError)
     t.xlStatus.textContent = bits.join('\n')
 
@@ -6928,11 +6898,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       : '识图：已关闭'
     t.vsToggle.title = model.configured ? 'Shift + 右击她，框一块屏幕让她看' : '先在「心跳」页配一个能看图的模型'
 
-    // 外壳构建时间：如果这一行比你刚装的 asar 还旧，说明**外壳没重启**
-    const built = st.shell && st.shell.builtAt
-    t.built.textContent = built
-      ? '外壳构建：' + new Date(built).toLocaleString('zh-CN') + '（pid ' + (st.shell.pid || '?') + '）'
-      : '外壳构建：未知'
     t.vsShot.disabled = !model.configured
   }
 

@@ -401,7 +401,8 @@ console.log('\n【8】主进程里的出口字段（防"存了但读不到"）')
   ok('hitJS 认得 .dshp-pin', pet.includes('.dshp-pin'))
   ok('页面有 pin 事件分支', /case 'pin':/.test(pet))
   ok('功能面板有「框一块屏幕」按钮（不依赖系统截图键）', pet.includes('框一块屏幕'))
-  ok('面板显示外壳构建时间（确认是否在跑新代码）', /外壳构建：/.test(pet))
+  // 面板是给用户看的，不能出现调试字样（判据明细只走 boot.log）
+  ok('面板不再显示调试信息', !/外壳构建：|上次松手|本次已触发|已跳过恢复/.test(pet))
 
   const toolsSrc = fs.readFileSync(path.join(ROOT, 'shell/src/tools/index.js'), 'utf8')
   ok('tools 状态里带 shell.builtAt', /shell: \{ builtAt/.test(toolsSrc))
@@ -489,6 +490,10 @@ console.log('\n【11】认得出「框选/截图」→ 绝不发 Ctrl+C')
   ok('只是置顶（不是弹窗）→ 不是', f({ topmost: true, popup: false }) === false)
   ok('普通窗口 → 不是', f({}) === false)
   ok('缺参不崩', f(null) === false)
+  // ⭐ 2026-10-22 真机：框 WorkBuddy 时"光标下面的窗口"是 workbuddy.exe（非置顶弹窗），
+  //    但复制键落到了截图工具的框选层上 → 仍被复制。所以前台窗口也要判。
+  ok('前台窗口是框选层 → 算框选', f({ windowCapture: true }) === true)
+  ok('光标下面是普通程序、但前台是框选层 → 仍算框选', f({ windowCapture: true, topmost: false, popup: false }) === true)
 
   // 端到端：十字光标下拖一大段，必须 emit skip 而不是 grab
   const cfg = { dragPx: 8, skipApps: [] }
@@ -510,6 +515,14 @@ console.log('\n【11】认得出「框选/截图」→ 绝不发 Ctrl+C')
   s = sc.step(s, { down: true, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'arrow', overlay: {} }, cfg).state
   r = sc.step(s, { down: false, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'arrow', overlay: {} }, cfg)
   ok('按下时是十字就够（松手变箭头也跳过）', r.emit && r.emit.type === 'skip', r.emit)
+
+  // 光标下面是普通程序（workbuddy），但前台/目标里有一个是框选层 → 也要跳过
+  s = base()
+  s = sc.step(s, { down: true, pt: { x: 100, y: 100 }, rect, app, seq: 5, now: 1000, overOwnUi: false, cursor: 'other', overlay: { windowCapture: true, topmost: false, popup: false } }, cfg).state
+  s = sc.step(s, { down: true, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1200, overOwnUi: false, cursor: 'other', overlay: { windowCapture: true, topmost: false, popup: false } }, cfg).state
+  r = sc.step(s, { down: false, pt: { x: 140, y: 140 }, rect, app, seq: 5, now: 1300, overOwnUi: false, cursor: 'other', overlay: { windowCapture: true, topmost: false, popup: false } }, cfg)
+  ok('只要有一层是框选层就跳过（哪怕光标下面是普通程序）', r.emit && r.emit.type === 'skip', r.emit)
+  ok('判据里带上 windowCapture 便于排查', r.state.lastDecision && r.state.lastDecision.windowCapture === true)
 
   // 正常选字：I 形光标 + 普通窗口 → 必须照旧 grab
   s = base()
@@ -540,8 +553,11 @@ console.log('\n【11】认得出「框选/截图」→ 绝不发 Ctrl+C')
   // ⭐ 认"你在操作哪个程序"必须用 WindowFromPoint，不能用 GetForegroundWindow
   //    （我们的置顶穿透窗可能是前台窗口 → 会被认成自己 → 一次都不抓）
   ok('select.js 用 targetWindow 认窗口', /keys\.targetWindow\(\)/.test(selSrc))
-  ok('select.js 不再用 foreground() 认窗口', !/keys\.foreground\(\)/.test(selSrc))
+  // 「应用是谁」必须来自 WindowFromPoint；前台窗口只用来判"键会落到谁那儿"
+  ok('应用身份来自 targetWindow + processOf', /keys\.processOf\(hwnd\)/.test(selSrc))
   ok('select.js 不再用 foregroundProcess()', !/keys\.foregroundProcess\(\)/.test(selSrc))
+  ok('前台窗口也参与框选判定（复制键去的地方）', /const fg = keys\.foreground\(\)/.test(selSrc))
+  ok('两套样式分别算 capT / capF', /capT\s*=[\s\S]{0,80}capF\s*=/.test(selSrc))
   ok('skip 有日志', /像是框选\/截图/.test(selSrc))
   // 复制键先用 Ctrl+Insert，再退 Ctrl+C（截图工具几乎只绑后者）
   ok('先试 Ctrl+Insert', /sendCopy\('insert'\)/.test(selSrc))
@@ -554,7 +570,7 @@ console.log('\n【11】认得出「框选/截图」→ 绝不发 Ctrl+C')
 }
 
 // ————————————————————————————————————————————————————————————
-console.log('\n【12】最近一次松手的判据要留在 state 上（面板直接显示）')
+console.log('\n【12】最近一次松手的判据要留在 state 上（供 boot.log 排查，不上屏）')
 {
   const cfg = { dragPx: 8, skipApps: [] }
   const app = { ok: true, name: 'chrome' }
