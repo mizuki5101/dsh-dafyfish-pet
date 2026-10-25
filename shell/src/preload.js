@@ -67,6 +67,17 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     shot: () => ipcRenderer.invoke('tools:shot'),
     // 鼠标按在特殊气泡上 → 主进程这段时间内不把 click 当成「取消选中」
     pinHold: () => ipcRenderer.send('pin:hold'),
+    // 外设电量（2026-10-24）：只读，不带副作用；force 只越过主进程的 3s 节流
+    battery: (req) => ipcRenderer.invoke('tools:battery', { force: !!(req && req.force) }),
+    // 强制刷新电量：会让 HFP（通话/麦克风）断 1~2 秒 —— 只在用户点按钮时调
+    batteryForce: () => ipcRenderer.invoke('tools:battery-force'),
+  },
+  // 「声音」/TTS（2026-10-24）：合成全在主进程，页面只拿「试听」和一个停播通知。
+  // 语音本体不从这里返回 —— 由主进程经 events 通道推 {t:'tts-play'}，页面用 <audio> 播。
+  tts: {
+    test: () => ipcRenderer.invoke('tts:test'),
+    // 气泡被顶掉/关掉时通知一下（在途合成不会被取消，只是页面停声）
+    stop: () => ipcRenderer.send('tts:stop'),
   },
 })
 

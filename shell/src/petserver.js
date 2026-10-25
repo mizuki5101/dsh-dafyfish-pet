@@ -38,6 +38,7 @@ const MIME = {
   '.moc3': 'application/octet-stream',
   '.wasm': 'application/wasm',
   '.svg': 'image/svg+xml',
+  '.wav': 'audio/wav',
 }
 
 /**
@@ -58,6 +59,7 @@ const ROUTES = {
   '/dsh-pet/control': 'proxy',
   '/dsh-pet/vendor/': 'static',
   '/dsh-pet/model/': 'static',
+  '/dsh-pet/tts/': 'ttsfile',
 }
 
 /** 这条路径由本服务负责吗（测试与 404 文案都查它） */
@@ -152,6 +154,10 @@ function createPetServer(opts) {
   const token = String(opts.token || crypto.randomBytes(16).toString('hex'))
   const host = String(opts.host || '127.0.0.1')
   const log = typeof opts.log === 'function' ? opts.log : () => {}
+  // TTS 缓存目录（2026-10-24）：/dsh-pet/tts/<32hex>.wav 从这里读。
+  // 只 serve 白名单文件名（isTtsFileName），别的路径一律 404 —— 和 vendor/model 同级的信任边界。
+  const ttsDir = typeof opts.ttsDir === 'string' && opts.ttsDir ? opts.ttsDir : ''
+  const { isTtsFileName } = require('./tts/tts-cache')
 
   /** 运行态。全部集中在这里，方便 /dsh-pet/state 与测试一次性读出来 */
   const st = {
@@ -814,6 +820,18 @@ function createPetServer(opts) {
           const prefix = isVendor ? '/dsh-pet/vendor/' : '/dsh-pet/model/'
           const rel = pathname.slice(prefix.length)
           const abs = findAsset(path.posix.join(isVendor ? 'vendor' : 'model', rel))
+          if (!abs) {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+            res.end('not found: ' + pathname)
+            return
+          }
+          serveFile(req, res, abs, 'no-cache')
+          return
+        }
+        case 'ttsfile': {
+          // TTS 缓存音频。文件名是外壳算出来的 sha256 截断，白名单正则挡住一切路径花招。
+          const name = pathname.slice('/dsh-pet/tts/'.length)
+          const abs = ttsDir && isTtsFileName(name) ? path.join(ttsDir, name) : null
           if (!abs) {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
             res.end('not found: ' + pathname)

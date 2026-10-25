@@ -50,6 +50,8 @@ let heartSettingsPayload = null
 let chatMemory = null
 /** 功能面板（划词翻译 / 识图）；在 app.whenReady 里装配，独立于心跳 */
 let tools = null
+/** 「声音」/TTS（2026-10-24）：合成在外壳，播放/口型在页面；装配在 heart 建立之后 */
+let tts = null
 
 /**
  * 识图遮罩窗是不是开着。
@@ -220,6 +222,8 @@ async function startLocalServer() {
     seedFile: path.join(app.getPath('userData'), 'layout-seed.json'),
     version: require('./package.json').version,
     log: bootLog,
+    // TTS 缓存音频也走同源路由下发（页面 AnalyserNode 取口型振幅，跨域会静音）
+    ttsDir: path.join(app.getPath('userData'), 'tts-cache'),
   })
   const preferred = Number(readSettings().localPort) || 19400
   let got = 0
@@ -1761,6 +1765,22 @@ app.whenReady().then(() => {
                   prompt: cfg.tools.vision.prompt,
                 },
               },
+              // 「声音」/TTS（2026-10-24）：apiKey 绝不回传页面，只给布尔
+              tts: {
+                enabled: cfg.tts.enabled,
+                backend: cfg.tts.backend,
+                baseUrl: cfg.tts.baseUrl,
+                model: cfg.tts.model,
+                voice: cfg.tts.voice,
+                refAudioPath: cfg.tts.refAudioPath,
+                promptAudioPath: cfg.tts.promptAudioPath,
+                promptText: cfg.tts.promptText,
+                speed: cfg.tts.speed,
+                maxChars: cfg.tts.maxChars,
+                timeoutMs: cfg.tts.timeoutMs,
+                sources: cfg.tts.sources,
+                apiKeySet: !!cfg.tts.apiKey,
+              },
             }
           : null
         return {
@@ -1770,6 +1790,8 @@ app.whenReady().then(() => {
           dreamStatus: heart ? heart.dreamStatus() : null,
           model: modelServer ? modelServer.status() : null,
           defaultPrompt: promptModule.SYSTEM,
+          // 「声音」页的运行状态行（合成中 / 缓存条数 / 上次失败原因）
+          ttsStatus: tts ? tts.status() : null,
         }
       }
       heart = createHeart({
@@ -1804,6 +1826,9 @@ app.whenReady().then(() => {
           }
           try {
             petServer.push(control)
+            // 语音（2026-10-24）：台词交给 TTS 合成，meta.bili 有值 = 刷视频那条。
+            // TTS 内部自己判开关/来源/缓存/代次，失败静默，文字链路不受影响。
+            if (tts && control.say) tts.speak(meta && meta.bili ? 'bili' : 'heart', control.say)
             // 2026-10-19：心跳台词不再写进 chat.json（会挤满对话预算，模型还会接着
             // 自己的独白说「那就好」→「快把白饭端来」）。改由 heart:chat 在请求时
             // 把最近一条拼进 system 当旁白。
@@ -1852,6 +1877,19 @@ app.whenReady().then(() => {
         },
       })
       heart.start()
+      // 「声音」/TTS（2026-10-24）：放在 heart 之后装配，getCfg 直接读 heart 的归一化配置。
+      // 合成结果落 userData/tts-cache，经 petserver 的 /dsh-pet/tts/ 同源路由给页面播。
+      const { createTts } = require('./tts')
+      tts = createTts({
+        log: bootLog,
+        dir: path.join(app.getPath('userData'), 'tts-cache'),
+        push: (msg) => {
+          try {
+            if (petServer) petServer.push(msg)
+          } catch (e) {}
+        },
+        getCfg: () => (heart ? heart.config().tts : null),
+      })
       ipcMain.handle('heart:status', () => {
         if (!heart) return { enabled: false, lastReason: 'no-heart' }
         // diag：P0 用来核对「窗口坐标 / 屏幕坐标 / 截图坐标」三套单位。
@@ -1984,11 +2022,21 @@ app.whenReady().then(() => {
         chatMemory.add('user', text)
         chatMemory.add('assistant', r.text)
         bootLog('对话(回应模式)：' + text.slice(0, 40) + ' → ' + String(r.text).slice(0, 60))
+        // 语音（2026-10-24）：回复交给 TTS。气泡由页面在 invoke 返回时照常显示，
+        // 语音合成好了通过 tts-play 事件跟上（慢/失败都只是没声音，不碰文字）。
+        if (tts) tts.speak('chat', r.text)
         return { ok: true, text: r.text, ms: r.ms, candidate: r.candidate && r.candidate.model }
       })
       ipcMain.handle('heart:chat-clear', () => {
         if (chatMemory) chatMemory.clear()
         return { ok: true }
+      })
+      // 「声音」/TTS（2026-10-24）：面板「试听」= 合成一句固定的话并直接推给页面播。
+      // 只绕过 enabled/sources 开关，参考音频没配好照样报原因（不弹遮罩不冒气泡）。
+      ipcMain.handle('tts:test', () => (tts ? tts.test() : { ok: false, reason: 'no-tts' }))
+      // 页面来消息说音频停了（气泡关了/被顶了）。只记数——在途合成不取消，见 tts/index.js。
+      ipcMain.on('tts:stop', () => {
+        if (tts) tts.noteStop()
       })
       // —— 设置面板「心跳」页用 ——
       // 读：配置 + 运行状态 + 模型进程 + 默认提示词（面板要能「恢复默认」）
@@ -2009,6 +2057,8 @@ app.whenReady().then(() => {
           bootLog('心跳：设置已保存 ' + JSON.stringify(redactForLog(clean)))
           // 划词翻译的开关也在 settings.json 的 heart 段里 → 保存后让 tools 重新对齐
           if (tools) tools.sync()
+          // TTS 的配置也在 heart 段里：保存后顺手清一次过期缓存
+          if (tts) tts.sync()
           return heartSettingsPayload()
         } catch (e) {
           return { ok: false, reason: String((e && e.message) || e), config: null }

@@ -314,6 +314,317 @@ function sendCopy(which) {
   }
 }
 
+// ————————————————————————————————————————————————————————————
+// 蓝牙外设电量（2026-10-24）—— setupapi.dll，只读，无副作用
+//
+// 为什么放在这个文件里：`resolveKoffi()` 是全项目唯一的 koffi 解析（注释见文件头），
+// 另起一个模块就要复制一遍加载顺序，出问题两处对不上。所以 SetupAPI 也搭在这里，
+// 但**独立懒加载**：setupapi 挂了不能连累键鼠那条链（initialize 里 catch 住）。
+//
+// 读的是 DEVPKEY_Bluetooth_Battery = {104EA319-6EE2-4701-BD47-8DDBF425BBE5}, 2。
+// 它只挂在 **HFP(AudioGateway) devnode** 上，设备主节点上没有，注册表里也没有
+// （= 驱动按需算的，读一次很便宜）。判据/说明见 tools/battery-core.js 文件头。
+// ————————————————————————————————————————————————————————————
+const DEVPKEY_BT_BATTERY = { fmtid: '104ea319-6ee2-4701-bd47-8ddbf425bbe5', pid: 2 }
+/**
+ * 电量**时间戳**（同一个 fmtid 的 pid 7）—— 「这个百分比是什么时候收到的」。
+ *
+ * ⚠️ 2026-10-24 修正：上午我以为它是 `DEVPKEY_Bluetooth_LastConnectedTime`，**错了**。
+ * 实测同一台设备上两者是两个不同的属性（M114：pid7 = 2026-09-26，LastConnectedTime = 2025-10-09），
+ * 而且 HFP 节点上**根本没有** LastConnectedTime（只有 DEV_ 主节点有）。
+ * 这个结论在 FerrisPulse 的 `BluetoothDeviceHelper.cs` 里也写着（它叫 BatteryTimestamp），
+ * 两边对上了：pid 7 = 电量时间戳。
+ * 用途：同一台设备会有多个节点都报电量（BLE GATT / HFP / 主节点），
+ * **取时间戳最新的那条**，就能避免"旧 HFP 节点的值卡住不动"。
+ */
+const DEVPKEY_BT_BATTERY_TS = { fmtid: '104ea319-6ee2-4701-bd47-8ddbf425bbe5', pid: 7 }
+/**
+ * 设备当前是否连着（bool）。⚠️ 只在主节点 `BTHENUM\DEV_<mac>` 上准 ——
+ * 各个服务节点（HFP/A2DP/AVRCP）上读到的恒为 False，拿它判连接会永远判成"没连"。
+ * 所以下游按 MAC 聚合：**只要同一台设备的任一节点报 true 就算连着**。
+ */
+const DEVPKEY_DEVICE_ISCONNECTED = { fmtid: '83da6326-97a6-4088-9453-a1923f573b29', pid: 15 }
+const DEVPKEY_DEVICE_FRIENDLYNAME = { fmtid: 'a45c254e-df1c-4efd-8020-67d146a850e0', pid: 14 }
+const DEVPKEY_DEVICE_DEVNODESTATUS = { fmtid: '4340a6c5-93fa-4706-972c-7b648008a5a7', pid: 2 }
+const DIGCF_PRESENT = 0x00000002
+const DIGCF_ALLCLASSES = 0x00000004
+/** DN_STARTED：设备已启动（= 蓝牙链路现在是活的） */
+const DN_STARTED = 0x00000008
+
+// —— 逼耳机重新上报电量（2026-10-24 实测可行）——
+// 关掉再打开 HFP 服务 = 让这条链路重新握手，耳机通常会在 SLC 建立时把电量再报一次。
+// 实测：EDIFIER MT6 Pro 的电量时间戳从 10:48:33 跳到当前时刻，值也随之刷新。
+// 副作用：HFP 是「通话/麦克风」那条链路，会断 1~2 秒；A2DP（听歌）不受影响。
+// ⚠️ 只需 0x111E（Handsfree，耳机侧 SLC）。0x111F（Audio Gateway）实测返回 1060
+//    ERROR_SERVICE_DOES_NOT_EXIST，别用它。
+const HFP_HF_SERVICE = '0000111e-0000-1000-8000-00805f9b34fb'
+const BLUETOOTH_SERVICE_DISABLE = 0x00
+const BLUETOOTH_SERVICE_ENABLE = 0x01
+/** BLUETOOTH_DEVICE_SEARCH_PARAMS 大小（x64：4 + 5*4 + 1 + pad3 + 8 = 40） */
+const BT_SEARCH_SIZE = 40
+/** BLUETOOTH_DEVICE_INFO 大小（x64：4+pad4+ADDR8+COD4+3*BOOL12+2*SYSTEMTIME32+WCHAR[248]496 = 560） */
+const BT_DEVINFO_SIZE = 560
+const BT_OFF_ADDR = 8
+const BT_OFF_CONNECTED = 20
+const BT_OFF_NAME = 64
+
+let btApi = null
+let btTried = false
+let btReason = ''
+
+/** 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' (+可选 pid) → DEVPROPKEY / GUID 的原始字节 */
+function devPropKey(fmtid, pid) {
+  const hex = String(fmtid).replace(/[{}\s-]/g, '')
+  if (hex.length !== 32) throw new Error('bad guid: ' + fmtid)
+  const hasPid = pid !== undefined
+  const buf = Buffer.alloc(hasPid ? 20 : 16)
+  buf.writeUInt32LE(parseInt(hex.slice(0, 8), 16), 0)
+  buf.writeUInt16LE(parseInt(hex.slice(8, 12), 16), 4)
+  buf.writeUInt16LE(parseInt(hex.slice(12, 16), 16), 6)
+  for (let i = 0; i < 8; i++) buf.writeUInt8(parseInt(hex.slice(16 + i * 2, 18 + i * 2), 16), 8 + i)
+  if (hasPid) buf.writeUInt32LE(pid >>> 0, 16)
+  return buf
+}
+
+/** 结构体大小：cbSize(4) + GUID(16) + DevInst(4) + Reserved(指针) → x64 上是 32 */
+function devInfoDataSize(koffi) {
+  return 24 + koffi.sizeof('void *')
+}
+
+function btInit() {
+  if (btTried) return btApi
+  btTried = true
+  const a = init()
+  if (!a) {
+    btReason = initReason || 'no-native'
+    return null
+  }
+  try {
+    const sa = a.koffi.load('setupapi.dll')
+    btApi = {
+      koffi: a.koffi,
+      getClassDevs: sa.func(
+        'void *__stdcall SetupDiGetClassDevsW(void *ClassGuid, void *Enumerator, void *hwndParent, uint32 Flags)',
+      ),
+      enumDeviceInfo: sa.func('bool __stdcall SetupDiEnumDeviceInfo(void *set, uint32 index, void *devInfoData)'),
+      getDeviceInstanceId: sa.func(
+        'bool __stdcall SetupDiGetDeviceInstanceIdW(void *set, void *devInfoData, void *buf, uint32 size, void *required)',
+      ),
+      getDeviceProperty: sa.func(
+        'bool __stdcall SetupDiGetDevicePropertyW(void *set, void *devInfoData, void *key, void *type, void *buf, uint32 size, void *required, uint32 flags)',
+      ),
+      destroyDeviceInfoList: sa.func('bool __stdcall SetupDiDestroyDeviceInfoList(void *set)'),
+    }
+    // bthprops 单独 try：它挂了只是"不能强制刷新"，读取那条路必须照常能用
+    try {
+      const bt = a.koffi.load('bthprops.cpl')
+      btApi.findFirstRadio = bt.func('void *__stdcall BluetoothFindFirstRadio(void *params, void *radio)')
+      btApi.findNextRadio = bt.func('bool __stdcall BluetoothFindNextRadio(void *hFind, void *radio)')
+      btApi.findRadioClose = bt.func('bool __stdcall BluetoothFindRadioClose(void *hFind)')
+      btApi.findFirstDevice = bt.func('void *__stdcall BluetoothFindFirstDevice(void *params, void *devInfo)')
+      btApi.findNextDevice = bt.func('bool __stdcall BluetoothFindNextDevice(void *hFind, void *devInfo)')
+      btApi.findDeviceClose = bt.func('bool __stdcall BluetoothFindDeviceClose(void *hFind)')
+      btApi.setServiceState = bt.func(
+        'uint32 __stdcall BluetoothSetServiceState(void *hRadio, void *devInfo, void *guid, uint32 flags)',
+      )
+    } catch (e) {
+      report('加载 bthprops 失败（只能读、不能强制刷新）：' + (e && e.message))
+    }
+    return btApi
+  } catch (e) {
+    btReason = 'setupapi-failed'
+    report('加载 setupapi 失败：' + (e && e.message))
+    btApi = null
+    return null
+  }
+}
+
+/** 读一条设备属性 → { type, size, data:Buffer } / null（属性不存在、类型不对都返回 null） */
+function readDeviceProp(api, set, info, keyBuf) {
+  const typeBuf = Buffer.alloc(4)
+  const reqBuf = Buffer.alloc(4)
+  const valBuf = Buffer.alloc(512)
+  let ok = false
+  try {
+    ok = api.getDeviceProperty(set, info, keyBuf, typeBuf, valBuf, valBuf.length, reqBuf, 0)
+  } catch (e) {
+    return null
+  }
+  if (!ok) return null
+  const size = reqBuf.readUInt32LE(0)
+  if (!size || size > valBuf.length) return null
+  return { type: typeBuf.readUInt32LE(0), size, data: valBuf }
+}
+
+/**
+ * 枚举**在场**的蓝牙设备，拿到每个 devnode 的 instance / 友好名 / DevNodeStatus / 电量原始值。
+ * 返回行数组，形状见 tools/battery-core.js 的 pickDevices()。任何一步失败返回 []（不抛）。
+ */
+function btRawDevices() {
+  const api = btInit()
+  if (!api) return []
+  const koffi = api.koffi
+  const out = []
+  let set = null
+  try {
+    // ⚠️ 必须按**枚举器**枚举，不能按「Bluetooth 设备类」枚举（2026-10-24 实测）：
+    //    HFP 节点的 PnP 类是 MEDIA、JL_SPP 是 PORTS，用 GUID_DEVCLASS_BLUETOOTH
+    //    一个都拿不到（表现是 rows=10、个个数都没有 battery，看着像"设备不支持"）。
+    //    按 BTHENUM 枚举器拿到的才是这块无线电下面**所有**蓝牙服务节点。
+    const enumName = Buffer.from('BTHENUM\u0000', 'utf16le')
+    set = api.getClassDevs(null, enumName, null, DIGCF_PRESENT | DIGCF_ALLCLASSES)
+    // ⚠️ HDEVINFO 是**不透明句柄**：x64 上实测是个很大的数（约 2.3e12），
+    //    不能拿 0xFFFFFFFF 当"无效"判据（第一次就是这么写成 rows=0 的）。
+    //    无效只有两种形态：NULL(0) 和 INVALID_HANDLE_VALUE(-1，按无符号看是 1.8e19)。
+    const hv = toAddr(koffi, set)
+    if (!hv || hv < 0 || hv > 1e19) return []
+    const sz = devInfoDataSize(koffi)
+    const keyName = devPropKey(DEVPKEY_DEVICE_FRIENDLYNAME.fmtid, DEVPKEY_DEVICE_FRIENDLYNAME.pid)
+    const keyStatus = devPropKey(DEVPKEY_DEVICE_DEVNODESTATUS.fmtid, DEVPKEY_DEVICE_DEVNODESTATUS.pid)
+    const keyBatt = devPropKey(DEVPKEY_BT_BATTERY.fmtid, DEVPKEY_BT_BATTERY.pid)
+    const keyTs = devPropKey(DEVPKEY_BT_BATTERY_TS.fmtid, DEVPKEY_BT_BATTERY_TS.pid)
+    const keyConn = devPropKey(DEVPKEY_DEVICE_ISCONNECTED.fmtid, DEVPKEY_DEVICE_ISCONNECTED.pid)
+    for (let i = 0; i < 256; i++) {
+      const info = Buffer.alloc(sz)
+      info.writeUInt32LE(sz, 0)
+      if (!api.enumDeviceInfo(set, i, info)) break
+      const idBuf = Buffer.alloc(1024)
+      const reqBuf = Buffer.alloc(4)
+      if (!api.getDeviceInstanceId(set, info, idBuf, 512, reqBuf)) continue
+      // ⚠️ 不能用 indexOf(0) 找结尾：UTF-16LE 里每个 ASCII 字符的高字节就是 0x00，
+      //    第一个 0 出现在下标 1，字符串会被截成空（第一次就踩了这个，rows=0 但不报错）。
+      //    RequiredSize 是**字符数**，直接按它取。
+      const idChars = Math.min(reqBuf.readUInt32LE(0), 512)
+      const instance = idBuf
+        .toString('utf16le', 0, idChars * 2)
+        .replace(/\u0000[\s\S]*$/, '')
+      if (!instance) continue
+      const nameProp = readDeviceProp(api, set, info, keyName)
+      const statusProp = readDeviceProp(api, set, info, keyStatus)
+      const battProp = readDeviceProp(api, set, info, keyBatt)
+      const tsProp = readDeviceProp(api, set, info, keyTs)
+      const connProp = readDeviceProp(api, set, info, keyConn)
+      out.push({
+        instance,
+        name:
+          nameProp && Number(nameProp.type) === 0x12
+            ? String(nameProp.data.toString('utf16le', 0, nameProp.size)).replace(/\u0000[\s\S]*$/, '')
+            : '',
+        devStatus: statusProp ? Number(statusProp.data.readUInt32LE(0)) : 0,
+        battery: battProp ? { type: battProp.type, size: battProp.size, data: battProp.data } : null,
+        batteryTs: tsProp ? { type: tsProp.type, size: tsProp.size, data: tsProp.data } : null,
+        // 原始属性交给 battery-core 解码（这一层不依赖 tools/，保持只有 koffi）
+        isConnected: connProp ? { type: connProp.type, size: connProp.size, data: connProp.data } : null,
+      })
+    }
+    return out
+  } catch (e) {
+    report('枚举蓝牙设备失败：' + (e && e.message))
+    return []
+  } finally {
+    try {
+      if (set) api.destroyDeviceInfoList(set)
+    } catch (e) {}
+  }
+}
+
+function btAvailable() {
+  return !!btInit()
+}
+
+/**
+ * 逼蓝牙耳机把电量重新报一次。
+ *
+ * 做法：对 **HFP 服务** 先 disable 再 enable，让这条链路重新握手；耳机一般会在
+ * SLC 建立时再报一次 `+CIEV: battchg`，Windows 的属性（值和 pid 7 时间戳）随之刷新。
+ * 实测 EDIFIER MT6 Pro：时间戳从 10:48:33 跳到当前时刻。
+ *
+ * ⚠️ 副作用：HFP = 通话/麦克风那条链路，**会断 1~2 秒**；听歌（A2DP）不受影响。
+ *    调用方必须把这件事告诉用户，别在后台偷偷调。
+ * ⚠️ 只对**已连接**的设备做：对断连设备调 enable 会把耳机叫起来，不是我们想要的。
+ *
+ * @param {{nameHint?:string}} opts
+ * @returns {{ok:boolean, reason?:string, mac?:string, name?:string, retDisable?:number, retEnable?:number}}
+ */
+function btForceRefresh(opts) {
+  const api = btInit()
+  if (!api) return { ok: false, reason: 'no-native' }
+  if (!api.setServiceState) return { ok: false, reason: 'no-bthprops' }
+  const hint = String((opts && opts.nameHint) || '')
+  try {
+    // 1) 找无线电
+    const findParams = Buffer.alloc(4)
+    findParams.writeUInt32LE(4, 0)
+    const radioOut = Buffer.alloc(8)
+    const hFind = api.findFirstRadio(findParams, radioOut)
+    if (!hFind) return { ok: false, reason: 'no-radio' }
+    let radio = 0n
+    try {
+      radio = radioOut.readBigUInt64LE(0)
+    } finally {
+      try {
+        api.findRadioClose(hFind)
+      } catch (e) {}
+    }
+    if (!radio) return { ok: false, reason: 'no-radio' }
+
+    // 2) 找目标设备（优先名字命中，否则取第一个"已连接"的）
+    const params = Buffer.alloc(BT_SEARCH_SIZE)
+    params.writeUInt32LE(BT_SEARCH_SIZE, 0)
+    params.writeUInt32LE(1, 4) // fReturnAuthenticated
+    params.writeUInt32LE(1, 8) // fReturnRemembered
+    params.writeUInt32LE(0, 12) // fReturnUnknown
+    params.writeUInt32LE(1, 16) // fReturnConnected
+    params.writeUInt32LE(0, 20) // fIssueInquiry
+    params.writeUInt8(1, 24) // cTimeoutMultiplier
+    params.writeBigUInt64LE(radio, 32) // hRadio
+    const dev = Buffer.alloc(BT_DEVINFO_SIZE)
+    dev.writeUInt32LE(BT_DEVINFO_SIZE, 0)
+    const hDev = api.findFirstDevice(params, dev)
+    if (!hDev) return { ok: false, reason: 'no-device' }
+    let target = null
+    try {
+      for (;;) {
+        const name = dev.toString('utf16le', BT_OFF_NAME, BT_OFF_NAME + 496).replace(/\u0000[\s\S]*$/, '')
+        const connected = dev.readUInt32LE(BT_OFF_CONNECTED) !== 0
+        const mac = Array.from(dev.subarray(BT_OFF_ADDR, BT_OFF_ADDR + 6))
+          .reverse()
+          .map((x) => x.toString(16).toUpperCase().padStart(2, '0'))
+          .join('')
+        if (connected && (!target || (hint && name.includes(hint)))) {
+          target = { name, mac, raw: Buffer.from(dev) }
+          if (hint && name.includes(hint)) break
+        }
+        if (!api.findNextDevice(hDev, dev)) break
+      }
+    } finally {
+      try {
+        api.findDeviceClose(hDev)
+      } catch (e) {}
+    }
+    if (!target) return { ok: false, reason: 'no-connected-device' }
+
+    // 3) 关掉再打开 HFP
+    const guid = devPropKey(HFP_HF_SERVICE) // 不传 pid 时得到的就是 16 字节 GUID
+    const retDisable = api.setServiceState(radio, target.raw, guid, BLUETOOTH_SERVICE_DISABLE)
+    const retEnable = api.setServiceState(radio, target.raw, guid, BLUETOOTH_SERVICE_ENABLE)
+    report('强制重报：' + target.name + ' disable=' + retDisable + ' enable=' + retEnable)
+    // 0 = ERROR_SUCCESS；两个都失败才算失败（enable 失败会比 disable 失败更糟）
+    if (retEnable !== 0 && retDisable !== 0) {
+      return { ok: false, reason: 'set-service-failed:' + retDisable + '/' + retEnable, mac: target.mac, name: target.name }
+    }
+    return { ok: true, mac: target.mac, name: target.name, retDisable, retEnable }
+  } catch (e) {
+    report('强制重报失败：' + (e && e.message))
+    return { ok: false, reason: 'error:' + (e && e.message) }
+  }
+}
+
+function btReason_() {
+  btInit()
+  return btReason
+}
+
 function setLog(fn) {
   if (typeof fn === 'function') log = fn
 }
@@ -405,5 +716,11 @@ module.exports = {
   isFileDrop,
   clipSeq,
   sendCopy,
+  // 蓝牙外设电量（setupapi，只读）
+  btRawDevices,
+  btAvailable,
+  btUnavailableReason: btReason_,
+  // 逼耳机重新上报电量（bthprops，会让 HFP 断 1~2 秒）
+  btForceRefresh,
   VK_LBUTTON,
 }

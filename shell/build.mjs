@@ -115,6 +115,10 @@ function verify() {
     'tools/shot.js',
     'tools/preload-overlay.js',
     'tools/overlay.js',
+    // 2026-10-24：外设电量
+    'tools/battery.js',
+    'tools/battery-core.js',
+    'tools/bt-toggle-worker.js',
   ]) {
     syntaxOk(path.join(tmp, f))
   }

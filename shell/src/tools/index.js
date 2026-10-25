@@ -18,6 +18,7 @@ const keys = require('../native/keys')
 const { createSelect } = require('./select')
 const { createTranslate } = require('./translate')
 const { createShot } = require('./shot')
+const { createBattery } = require('./battery')
 const core = require('./translate-core')
 
 function createTools(options = {}) {
@@ -129,6 +130,9 @@ function createTools(options = {}) {
 
   const translate = createTranslate({ log, getHeart })
 
+  // 外设电量（2026-10-24）：只读 setupapi，没有定时器 —— 面板开着时页面每 30s 问一次
+  const battery = createBattery({ log })
+
   const shot = createShot({
     log,
     getCfg,
@@ -178,6 +182,8 @@ function createTools(options = {}) {
       select: select.status(),
       shot: shot.status(),
       pin: { id: currentId, kind: currentKind },
+      // 只回缓存（status() 不触发真实读取），排查时能看出"到底有没有读到"
+      battery: battery.status(),
       lastError,
     }
   }
@@ -193,6 +199,11 @@ function createTools(options = {}) {
 
   // —— IPC ——
   ipcMain.handle('tools:status', () => ({ ok: true, ...status() }))
+
+  // 外设电量：{ force:true } 只越过 3s 节流，不会去动蓝牙链路
+  ipcMain.handle('tools:battery', (_e, req) => battery.read(!!(req && req.force)))
+  // 强制刷新：会让 HFP 断 1~2 秒（通话/麦克风那一路），只在用户点按钮时走这里
+  ipcMain.handle('tools:battery-force', () => battery.forceRefresh())
 
   ipcMain.handle('tools:translate', async (_e, req) => {
     const text = req && typeof req.text === 'string' ? req.text : ''
@@ -247,6 +258,7 @@ function createTools(options = {}) {
     destroy,
     shotOpen: () => shot.isOpen(),
     startShot: () => shot.start(),
+    battery,
     pinShow,
     pinUpdate,
     pinClose,

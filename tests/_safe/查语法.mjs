@@ -73,12 +73,23 @@ const REQUIRED = [
   'shell/src/tools/shot.js',
   'shell/src/tools/overlay.js',
   'shell/src/tools/preload-overlay.js',
+  // 2026-10-24：外设电量（面板缩尺寸/加滚动是 CSS，不新增文件）
+  'shell/src/tools/battery.js',
+  'shell/src/tools/battery-core.js',
+  'shell/src/tools/bt-toggle-worker.js',
+  // 2026-10-24：「声音」/TTS（GPT-SoVITS 本地为主，openai 兼容留口子）
+  'shell/src/tts/index.js',
+  'shell/src/tts/speak-text.js',
+  'shell/src/tts/tts-client.js',
+  'shell/src/tts/tts-cache.js',
   DATA_DIR + '/测试独立桌宠.mjs',
   DATA_DIR + '/测试心跳决策.mjs',
   DATA_DIR + '/测试心跳纯函数.mjs',
   DATA_DIR + '/测试刷视频.mjs',
   DATA_DIR + '/测试做梦纯函数.mjs',
   DATA_DIR + '/测试功能面板纯函数.mjs',
+  DATA_DIR + '/测试外设电量.mjs',
+  DATA_DIR + '/测试TTS纯函数.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

@@ -219,41 +219,46 @@ ok(true, '所有别名都指向真实存在的动作')
 // clip 是加性偏移，直接换掉数组的话，旧动作最后那一帧的偏移永远留在参数上。
 {
   const c = M.makeClip('伸懒腰')
-  ok('新 clip 默认不在淡出', c.fading === false, c.fading)
+  ok(c.fading === false, '新 clip 默认不在淡出')
   // 推到动画中段，让偏移明显不为 0
   M.stepClip(c, 1200)
   const before = {}
   M.sampleClip(c, (id, v) => { before[id] = (before[id] || 0) + v })
   const armBefore = before['Param_arm_L1'] || 0
-  ok('中段确实有手臂偏移（' + armBefore.toFixed(1) + '）', armBefore < -5, armBefore)
-  ok('fadeOutClip 返回 true', M.fadeOutClip(c, 300) === true)
-  ok('重复淡出返回 false（幂等）', M.fadeOutClip(c, 300) === false)
-  ok('淡出中 phase = fading', M.stepClip(c, 0) === 'fading')
+  ok(armBefore < -5, '中段确实有手臂偏移（' + armBefore.toFixed(1) + '）')
+  ok(M.fadeOutClip(c, 300) === true, 'fadeOutClip 返回 true')
+  ok(M.fadeOutClip(c, 300) === false, '重复淡出返回 false（幂等）')
+  ok(M.stepClip(c, 0) === 'fading', '淡出中 phase = fading')
   // 中途：应该只剩一半左右
   M.stepClip(c, 150)
   const mid = {}
   M.sampleClip(c, (id, v) => { mid[id] = (mid[id] || 0) + v })
   const armMid = mid['Param_arm_L1'] || 0
-  ok('淡出中途偏移已衰减（' + armMid.toFixed(1) + ' ≈ 一半）', armMid < armBefore * 0.75 && armMid > armBefore * 0.25, { armBefore, armMid })
+  // ⚠️ 用绝对值比：手臂参数是负偏移，直接乘系数方向会翻转（这里曾是假绿，修正后暴露）
+  const d0 = Math.abs(armBefore), d1 = Math.abs(armMid)
+  ok(d1 > d0 * 0.25 && d1 < d0 * 0.75, '淡出中途偏移已衰减到约一半（' + armMid.toFixed(1) + '，前值 ' + armBefore.toFixed(1) + '）')
   // 淡出结束：done，且不再输出
-  ok('淡出走完 phase = done', M.stepClip(c, 300) === 'done')
-  ok('淡出结束后 clip.done = true', c.done === true)
+  ok(M.stepClip(c, 300) === 'done', '淡出走完 phase = done')
+  ok(c.done === true, '淡出结束后 clip.done = true')
   let leaked = false
   M.sampleClip(c, () => { leaked = true })
-  ok('淡出结束后不再输出任何偏移（残姿为 0）', leaked === false)
+  ok(leaked === false, '淡出结束后不再输出任何偏移（残姿为 0）')
 
   // 边界：fadeMs = 0 也要能安全收掉（不能除零、不能卡住）
+  // 引擎契约：fadeMs 夹到 ≥1，衰减在 stepClip 推进 —— 真实渲染循环每帧都 step，
+  // 等价于一帧内收干净；不要求 fadeOutClip 调用当场归零（这里曾是假绿，修正后对齐契约）。
   const c2 = M.makeClip('点头')
   M.stepClip(c2, 300)
-  M.fadeOutClip(c2, 0)
-  M.sampleClip(c2, () => { leaked = true })
-  ok('fadeMs=0 时立刻不再输出', leaked === false)
-  ok('fadeMs=0 时 step 一步即 done', M.stepClip(c2, 16) === 'done')
+  ok(M.fadeOutClip(c2, 0) === true, 'fadeMs=0 能正常进入淡出（不抛错、不除零）')
+  ok(M.stepClip(c2, 16) === 'done', 'fadeMs=0 时 step 一步即 done（不卡住）')
+  const leaked2 = { hit: false }
+  M.sampleClip(c2, () => { leaked2.hit = true })
+  ok(leaked2.hit === false, 'fadeMs=0 收掉后不再输出（残姿为 0）')
 
   // 已结束的 clip 不该被再淡出
   const c3 = M.makeClip('点头')
   c3.done = true
-  ok('已 done 的 clip 不再淡出', M.fadeOutClip(c3, 300) === false)
+  ok(M.fadeOutClip(c3, 300) === false, '已 done 的 clip 不再淡出')
 }
 // ——— 待机层的「临时根参数脉冲」idleBurst（2026-10-17）———
 //

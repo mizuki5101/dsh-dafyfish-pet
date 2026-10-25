@@ -169,6 +169,31 @@ function sanitizeHeartPatch(p) {
     }
     if (Object.keys(t).length) out.tools = t
   }
+  // 「声音」/TTS（2026-10-24）。空串都要放行（清空 apiKey / 换参考音频路径是合法操作）。
+  // ⚠️ 漏了这段 = 又一次「保存成功、界面刷新、值没变」。
+  if (src.tts && typeof src.tts === 'object') {
+    const t = {}
+    if (typeof src.tts.enabled === 'boolean') t.enabled = src.tts.enabled
+    if (src.tts.backend === 'gptsovits' || src.tts.backend === 'gsvlite' || src.tts.backend === 'openai') t.backend = src.tts.backend
+    if (typeof src.tts.baseUrl === 'string') t.baseUrl = src.tts.baseUrl.trim().slice(0, 300)
+    if (typeof src.tts.apiKey === 'string') t.apiKey = src.tts.apiKey.slice(0, 500)
+    if (typeof src.tts.model === 'string') t.model = src.tts.model.trim().slice(0, 200)
+    if (typeof src.tts.voice === 'string') t.voice = src.tts.voice.trim().slice(0, 200)
+    if (typeof src.tts.refAudioPath === 'string') t.refAudioPath = src.tts.refAudioPath.trim().slice(0, 500)
+    if (typeof src.tts.promptAudioPath === 'string') t.promptAudioPath = src.tts.promptAudioPath.trim().slice(0, 500)
+    if (typeof src.tts.promptText === 'string') t.promptText = src.tts.promptText.slice(0, 300)
+    for (const k of ['speed', 'maxChars', 'timeoutMs']) {
+      if (src.tts[k] !== undefined && Number.isFinite(Number(src.tts[k]))) t[k] = Number(src.tts[k])
+    }
+    if (src.tts.sources && typeof src.tts.sources === 'object') {
+      const s = {}
+      for (const k of ['chat', 'heart', 'bili', 'work']) {
+        if (typeof src.tts.sources[k] === 'boolean') s[k] = src.tts.sources[k]
+      }
+      if (Object.keys(s).length) t.sources = s
+    }
+    if (Object.keys(t).length) out.tts = t
+  }
   return out
 }
 

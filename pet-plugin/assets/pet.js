@@ -320,8 +320,14 @@
   const MOUTH_MENU = ['口型切换', '3嘴', '〇嘴']
   const MOUTH_LINES = {
     口型切换: ['（换了张嘴）唔…', '这样说话清楚点', '（动了动嘴）'],
-    '3嘴': ['（三张嘴）看人家！', '这样能同时吃三碗白饭', '（三张嘴一起说）厉害吧'],
+    '3嘴': ['（嘟成 3 字嘴）哼～', '（撅着嘴）人家才没有闹别扭', '哼——就不理你'],
     '〇嘴': ['（嘴成 O 形）哦——', '（惊讶）', '唔…'],
+  }
+  /** 口型按钮的说明（挂在 tooltip 上；参数对应见 model/manifest.json：EXP1/EXP2/EXP8） */
+  const MOUTH_TIPS = {
+    口型切换: '换成另一套嘴型素材（素嘴 ↔ 备用嘴），不影响表情',
+    '3嘴': '把嘴嘟成「3」字形（傲娇撅嘴），不是三张嘴',
+    '〇嘴': '嘴撅成 O 形（惊讶 / 「哦——」）',
   }
 
   /**
@@ -852,13 +858,50 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   .dshp-hud-tag.dshp-valley{background:rgba(52,211,153,.18);color:#6ee7b7;border-color:rgba(110,231,183,.4)}}
 /* ——— 功能面板（2026-10-22）：dock 上的「🧩 功能」 ———
    三段：快捷入口（原 ↗ 的打开 DSH）/ 划词翻译 / 识图。复用 .dshp-panel 基类，
-   所以 hitJS 的 UI 选择器天然认得它（不用另加选择器）。 */
-.dshp-tools{width:min(calc(360px * var(--dshp-ps)),90vw)}
+   所以 hitJS 的 UI 选择器天然认得它（不用另加选择器）。
+   2026-10-24：加「外设电量」+ 缩到 300×420 + 内容区内部滚动（滚轮）。
+   ⚠️ 高度必须封顶：面板是 bottom:100% 挂在 root 上，一变高就整体顶到屏幕外
+      （和「别改菜单面板高度」是同一条理由）。以后加功能只往下塞，不涨高度。 */
+.dshp-tools{width:min(calc(300px * var(--dshp-ps)),90vw);
+  display:flex;flex-direction:column;
+  max-height:min(calc(420px * var(--dshp-ps)),calc(100vh - 40px));
+  overflow:hidden}
+/* 标题栏常驻（× 也挪进来，不再浮在面板角上——内容滚动时它会盖住第一行） */
+.dshp-tools-head{display:flex;align-items:center;gap:6px;flex:0 0 auto;
+  padding-bottom:calc(6px * var(--dshp-ps));border-bottom:1px solid var(--dshp-line);
+  font-size:calc(11px * var(--dshp-ps));opacity:.62;letter-spacing:.3px;font-weight:600}
+.dshp-tools-head .dshp-grow{flex:1}
+.dshp-tools-head .dshp-close{position:static;margin-left:auto;flex:0 0 auto}
+/* 内容区：唯一的滚动容器。min-height:0 是 flex 子项能被压缩的前提 */
+.dshp-tools-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+  overscroll-behavior:contain;padding-right:calc(4px * var(--dshp-ps));
+  scrollbar-gutter:stable}
+.dshp-tools-body::-webkit-scrollbar{width:6px}
+.dshp-tools-body::-webkit-scrollbar-thumb{background:rgba(120,140,180,.45);border-radius:3px}
+.dshp-tools-body::-webkit-scrollbar-track{background:transparent}
 .dshp-tools .dshp-sec{margin-top:calc(10px * var(--dshp-ps));
   border-top:1px solid var(--dshp-line);padding-top:calc(8px * var(--dshp-ps))}
 .dshp-tools .dshp-sec:first-of-type{border-top:none;padding-top:0;margin-top:0}
 .dshp-tools .dshp-sec h4{margin:0 0 calc(5px * var(--dshp-ps));font-size:calc(11px * var(--dshp-ps));
-  opacity:.58;letter-spacing:.3px;font-weight:600}
+  opacity:.58;letter-spacing:.3px;font-weight:600;
+  display:flex;align-items:center;gap:6px}
+.dshp-tools h4 .dshp-grow{flex:1}
+/* 标题栏里的小按钮（↻ 刷新电量）：比普通 .dshp-btn 小一号，别喧宾夺主 */
+.dshp-tools .dshp-mini{padding:calc(0px * var(--dshp-ps)) calc(6px * var(--dshp-ps));
+  font-size:calc(11px * var(--dshp-ps));border-radius:calc(7px * var(--dshp-ps));
+  box-shadow:none;line-height:1.4}
+/* 外设电量：一行「名字 …… 50%」+ 一条细进度条 */
+.dshp-batt-row{display:flex;align-items:baseline;gap:6px;margin-top:calc(6px * var(--dshp-ps))}
+.dshp-batt-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;font-size:calc(11.5px * var(--dshp-ps))}
+.dshp-batt-val{flex:0 0 auto;font-weight:700;font-variant-numeric:tabular-nums;
+  font-size:calc(13px * var(--dshp-ps))}
+.dshp-batt-bar{height:calc(5px * var(--dshp-ps));border-radius:999px;overflow:hidden;
+  background:rgba(124,92,255,.12);margin-top:calc(3px * var(--dshp-ps))}
+.dshp-batt-fill{height:100%;border-radius:999px;background:var(--dshp-accent);
+  transition:width .2s ease}
+.dshp-batt-fill.dshp-low{background:#e8a33d}
+.dshp-batt-fill.dshp-critical{background:#e05656}
 .dshp-tools input[type=text],.dshp-tools input[type=password],.dshp-tools select{
   flex:1;min-width:0;box-sizing:border-box;font:inherit;font-size:calc(11.5px * var(--dshp-ps));
   color:inherit;background:transparent;border:1px solid var(--dshp-line);
@@ -3000,12 +3043,28 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     //
     // 2026-10-17：不再是一个固定正弦 —— 按**语气**调嘴的基准/幅度/节奏，
     // 并且顺手把眉毛、嘴角、歪头也挂上去（幅度都很小，见 @talk-tone 的注释）。
-    if (CFG.talkMouth && rig.talking) {
+    if (CFG.talkMouth && (rig.talking || TtsPlayer.playing)) {
       rig.talkPhase += dt
       const tp = (typeof DSHPetTalkTone !== 'undefined' && DSHPetTalkTone)
         ? DSHPetTalkTone.params(rig.talkTone)
         : { open: 0.28, amp: 0.16, rate: 11, brow: 0, form: 0, yaw: 0, pitch: 0 }
-      add('ParamMouthOpenY', tp.open + tp.amp * Math.sin(rig.talkPhase * tp.rate))
+      // 真口型（2026-10-24）：音频在播时用实时振幅（AnalyserNode 的 RMS，参照
+      // pixi-live2d-display 口型补丁的增益），没在播维持按语气的正弦假口型。
+      let mouth = null
+      if (TtsPlayer.playing && TtsPlayer.analyser) {
+        try {
+          const n = TtsPlayer.analyser.frequencyBinCount
+          if (!TtsPlayer.buf || TtsPlayer.buf.length !== n) TtsPlayer.buf = new Float32Array(n)
+          TtsPlayer.analyser.getFloatTimeDomainData(TtsPlayer.buf)
+          let sum = 0
+          for (let i = 0; i < n; i++) sum += TtsPlayer.buf[i] * TtsPlayer.buf[i]
+          mouth = Math.max(0, Math.min(1, Math.sqrt(sum / n) * 24))
+          TtsPlayer.rms = mouth
+        } catch (e) {
+          mouth = null
+        }
+      }
+      add('ParamMouthOpenY', mouth != null ? 0.08 + mouth * 0.85 : tp.open + tp.amp * Math.sin(rig.talkPhase * tp.rate))
       if (tp.brow) {
         add('ParamBrowLAngle', tp.brow)
         add('ParamBrowRAngle', tp.brow)
@@ -4990,9 +5049,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     )
     addCloseButton(hud, () => closeHud())
 
-    // ——— 功能面板（2026-10-22）：划词翻译 / 识图 / 打开 DSH ———
+    // ——— 功能面板（2026-10-22）：外设电量 / 划词翻译 / 识图 / 打开 DSH ———
     // 用 .dshp-panel 基类（placePanel/closePanels/hitJS 都认得），只有宽度和内边距自己给。
+    // 2026-10-24：内容全部塞进 .dshp-tools-body（唯一滚动容器），标题栏和 × 常驻不滚。
     const toolsPanel = $('div', 'dshp-panel dshp-tools')
+    const toolsHead = $('div', 'dshp-tools-head')
+    toolsHead.append($('span', 'dshp-grow', '功能'))
+    const toolsBody = $('div', 'dshp-tools-body')
+
+    // 外设电量（2026-10-24）：读的是 Windows 缓存的「耳机上报过的那次电量」，
+    // 不是实时值 —— 面板上必须把这句话说清楚，否则用户会以为数字卡住了。
+    const toolsBatt = $('div', 'dshp-sec')
+    const battHead = $('h4')
+    const battRefresh = $('button', 'dshp-btn dshp-mini', '↻ 刷新')
+    battRefresh.title = '现在去问耳机要一次电量。会短暂断一下麦克风和通话，听歌不受影响。'
+    battHead.append($('span', 'dshp-grow', '外设电量'), battRefresh)
+    const battList = $('div', 'dshp-batt-list')
+    const battStatus = $('div', 'dshp-status', '')
+    toolsBatt.append(battHead, battList, battStatus)
+
     const toolsQuick = $('div', 'dshp-sec')
     toolsQuick.append($('h4', null, '快捷入口'))
     const openDshBtn = $('button', 'dshp-btn', '↗ 打开 DeepSeek Harness 界面')
@@ -5063,8 +5138,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const vsStatus = $('div', 'dshp-status', '')
     toolsVision.append(vsToggleRow, vsShotRow, vsNote, vsStatus)
 
-    toolsPanel.append(toolsQuick, toolsXlate, toolsVision)
-    addCloseButton(toolsPanel)
+    toolsBody.append(toolsBatt, toolsQuick, toolsXlate, toolsVision)
+    toolsPanel.append(toolsHead, toolsBody)
+    // × 挂在标题栏里（.dshp-tools-head .dshp-close 是 position:static）
+    addCloseButton(toolsHead)
 
     // ——— 特殊气泡：划词翻译 / 识图的展示层（最高优先级，不走 makeBubble 队列）———
     const pinEl = $('div', 'dshp-pin')
@@ -5089,6 +5166,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // 功能面板（2026-10-22）：划词翻译 / 识图
       tools: {
         el: toolsPanel,
+        battList,
+        battStatus,
+        battRefresh,
         xlToggle,
         xlEngineChips,
         xlApiHint,
@@ -5143,8 +5223,116 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return u
   }
 
+  // ———— 语音播放（2026-10-24，TTS 接入）————
+  // 合成在外壳（shell/src/tts/），这里只负责「播 + 拿振幅驱动口型 + 把气泡拉长到音频结束」。
+  // 单实例：新语音顶旧语音。每个 MediaElement 只能 createMediaElementSource 一次
+  // （规范级坑），所以 AudioContext + AnalyserNode 这条链建一次就缓存。
+  // 音频 URL 走 petserver 的 /dsh-pet/tts/（同源）—— 跨域的 MediaElementSource 会被
+  // 浏览器强制静音，那是规范行为，别试图绕。
+  const TtsPlayer = {
+    audio: null,
+    ctx: null,
+    analyser: null,
+    buf: null,
+    rms: 0,
+    playing: false,
+    id: '',
+    isTest: false,
+    pending: null, // tts-play 到了但气泡还没显示：先挂着，3 秒内气泡一显示就补播
+  }
+
+  function ttsNotifyStop() {
+    try {
+      if (window.dshpetBridge && window.dshpetBridge.tts) window.dshpetBridge.tts.stop()
+    } catch (e) {}
+  }
+
+  function ttsEnsure() {
+    if (TtsPlayer.audio) return
+    const a = document.createElement('audio')
+    a.preload = 'auto'
+    a.addEventListener('playing', () => {
+      TtsPlayer.playing = true
+    })
+    a.addEventListener('ended', () => {
+      TtsPlayer.playing = false
+      TtsPlayer.rms = 0
+    })
+    a.addEventListener('error', () => {
+      TtsPlayer.playing = false
+      TtsPlayer.rms = 0
+    })
+    a.addEventListener('loadedmetadata', () => {
+      // 气泡等声音：把当前气泡的停留拉长到音频结束（上限 30s，防超长音频挂机）。
+      // 试听的音频不挂气泡。
+      const d = TtsPlayer.audio && TtsPlayer.audio.duration
+      if (!TtsPlayer.isTest && Number.isFinite(d) && d > 0 && ui.bubble.visible) {
+        try {
+          ui.bubble.extend(Math.min(30000, d * 1000 + 400))
+        } catch (e) {}
+      }
+    })
+    TtsPlayer.audio = a
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (Ctx) {
+        TtsPlayer.ctx = new Ctx()
+        const src = TtsPlayer.ctx.createMediaElementSource(a)
+        TtsPlayer.analyser = TtsPlayer.ctx.createAnalyser()
+        TtsPlayer.analyser.fftSize = 256
+        TtsPlayer.analyser.smoothingTimeConstant = 0.85
+        src.connect(TtsPlayer.analyser)
+        TtsPlayer.analyser.connect(TtsPlayer.ctx.destination) // 不接 destination 不出声
+      }
+    } catch (e) {}
+    // 不 append 到 DOM 的话，部分 Chromium 会不解码
+    try {
+      a.style.display = 'none'
+      document.body.appendChild(a)
+    } catch (e) {}
+  }
+
+  function handleTtsPlay(m) {
+    if (!m || !m.url) return
+    ttsEnsure()
+    TtsPlayer.isTest = !!m.test
+    TtsPlayer.id = String(m.id || '')
+    // 气泡还没显示（排队等 5s 最小停留 / seal）：非试听的先挂起等气泡
+    if (!ui.bubble.visible && !m.test) {
+      TtsPlayer.pending = { url: m.url, at: Date.now() }
+      return
+    }
+    try {
+      TtsPlayer.pending = null
+      TtsPlayer.audio.src = m.url
+      if (TtsPlayer.ctx && TtsPlayer.ctx.state === 'suspended') TtsPlayer.ctx.resume()
+      const p = TtsPlayer.audio.play()
+      if (p && p.catch) p.catch(() => {})
+    } catch (e) {}
+  }
+
+  function handleTtsStop() {
+    TtsPlayer.pending = null
+    if (TtsPlayer.audio) {
+      try {
+        TtsPlayer.audio.pause()
+      } catch (e) {}
+    }
+    TtsPlayer.playing = false
+    TtsPlayer.rms = 0
+  }
+
+  /** 气泡真正显示出来时补播挂起的语音（超过 3 秒没等到就丢，多半是过时的旧台词）。 */
+  function ttsConsumePending() {
+    const p = TtsPlayer.pending
+    if (!p) return
+    TtsPlayer.pending = null
+    if (Date.now() - p.at < 3000) handleTtsPlay({ url: p.url, id: 'pending', test: false })
+  }
+
   function makeBubble(el, body, foot, dot, headText) {
     let timer = null
+    let timerDueAt = 0
     let streaming = false
     let buffer = ''
     // 工作气泡占用中 → 互动气泡让位（见下面 show 里的优先级守卫）
@@ -5187,6 +5375,10 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
     function render(text, opts) {
       opts = opts || {}
+      // 换内容 = 上一条的声音该停了（这条自己的声音等它的 tts-play 事件）
+      try {
+        if (TtsPlayer.playing || TtsPlayer.pending) ttsNotifyStop()
+      } catch (e) {}
       if (opts.name) headText.textContent = opts.name
       if (opts.stream) {
         if (!streaming) {
@@ -5227,7 +5419,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       // （开场白 2.6s、戳一下 2s 都会被拉长到 5s —— 这是有意的，避免一闪而过）
       const ttl = opts.sticky ? 0 : opts.ttl != null ? opts.ttl : CFG.bubbleTtlMs
       const hold = ttl > 0 ? Math.max(ttl, opts.minHold === 0 ? 0 : MIN_HOLD_MS) : 0
-      if (hold > 0) timer = setTimeout(() => api.hide(true), hold)
+      if (hold > 0) {
+        timer = setTimeout(() => api.hide(true), hold)
+        timerDueAt = Date.now() + hold
+      } else {
+        timerDueAt = 0
+      }
+      // 语音等气泡（2026-10-24）：TTS 已就绪但气泡刚才还没显示的，这一刻补播
+      try {
+        ttsConsumePending()
+      } catch (e) {}
     }
 
     function scheduleDrain(delay) {
@@ -5374,14 +5575,40 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       hide(auto) {
         if (timer) clearTimeout(timer)
         timer = null
+        timerDueAt = 0
         streaming = false
         workHold = false
         busyShown = false
         buffer = ''
         el.classList.remove('dshp-on')
         shownAt = 0
+        // 气泡没了，挂着待播的语音也作废；还在播的声音一并停（「气泡走了声音还在说」防线）
+        try {
+          TtsPlayer.pending = null
+          if (TtsPlayer.playing) {
+            handleTtsStop()
+            ttsNotifyStop()
+          }
+        } catch (e) {}
         // 只有「自然到期」才放队列；手动 hide（开面板/收 HUD）不该把积压的气泡倒出来
         if (auto === true) scheduleDrain(0)
+      },
+      /**
+       * 语音等气泡（2026-10-24）：把当前气泡的停留拉长到音频结束。
+       * 取「音频时长」和「原剩余停留」里较长的那边 —— 音频比气泡短时不缩短；
+       * 流式/工作气泡有自己的生命周期，不参与（返回 false = 没接）。
+       */
+      extend(ms) {
+        if (streaming || busyShown) return false
+        if (!el.classList.contains('dshp-on')) return false
+        const cap = Math.max(0, Math.min(30000, Number(ms) || 0))
+        if (cap <= 0) return false
+        const now = Date.now()
+        const wait = Math.max(cap, timerDueAt ? timerDueAt - now : 0)
+        if (timer) clearTimeout(timer)
+        timerDueAt = now + wait
+        timer = setTimeout(() => api.hide(true), wait)
+        return true
       },
       get visible() {
         return el.classList.contains('dshp-on')
@@ -6579,6 +6806,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     ui.menu.el.classList.remove('dshp-on')
     try { ui.mail.el.classList.remove('dshp-on') } catch (e) {}
     try { ui.tools.el.classList.remove('dshp-on') } catch (e) {}
+    // 面板关了就别再读电量了（这数不会自己变，后台问是白问）
+    try { stopBatteryPoll() } catch (e) {}
     ui.root.classList.remove('dshp-open')
   }
 
@@ -6791,6 +7020,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     clampPanels()
     requestAnimationFrame(() => clampPanels())
     refreshToolsPane()
+    // 电量只在面板开着时轮询（关面板就停，见 stopBatteryPoll）
+    startBatteryPoll()
   }
 
   /* ==== 功能面板（2026-10-22）：划词翻译 / 识图 ====
@@ -6811,8 +7042,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     return window.dshpetBridge && window.dshpetBridge.tools ? window.dshpetBridge.tools : null
   }
 
-  /** 最近一次读到的状态：{ st: tools.status(), cfg: payload.config.tools } */
-  let toolsState = { st: null, cfg: null }
+  /** 最近一次读到的状态：{ st: tools.status(), cfg: payload.config.tools, batt: tools.battery() } */
+  let toolsState = { st: null, cfg: null, batt: null }
   /** 正在保存：防止连点 */
   let toolsSaving = false
 
@@ -6841,6 +7072,135 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (!btn) return
     btn.textContent = on ? '开' : '关'
     btn.classList.toggle('dshp-primary', !!on)
+  }
+
+  /* ===== 外设电量（2026-10-24）=====
+   *
+   * 值从哪来：主进程用 setupapi 读 HFP 设备节点上的 DEVPKEY_Bluetooth_Battery
+   * （细节见 shell/src/tools/battery-core.js 文件头）。
+   * **它不是实时值**：耳机通过 HFP 把电量报给 Windows，Windows 记下来；很多耳机
+   * 只在连上的那一刻报一次。所以我们只能显示"Windows 收到的那次"，面板上要说明。
+   *
+   * 轮询：只在面板开着的时候跑（30s），关面板就停 —— 关着的时候这数也不会自己变。
+   */
+  let toolsBattTimer = null
+
+  function fmtClock(ms) {
+    if (!ms) return ''
+    const d = new Date(ms)
+    const hh = String(d.getHours()).padStart(2, '0')
+    const mm = String(d.getMinutes()).padStart(2, '0')
+    return hh + ':' + mm
+  }
+
+  function paintBattery() {
+    const t = ui && ui.tools
+    if (!t || !t.battList) return
+    const st = toolsState.batt
+    const list = (st && st.devices) || []
+    t.battList.textContent = ''
+    if (!list.length) {
+      // 文案口径：说人话，不出现 Windows / 上报 / 组件 这些词（除了真出故障那种）
+      const why = st
+        ? st.available === false
+          ? '这台机器问不到电量（少了点东西：' + (st.reason || '?') + '）'
+          : '现在没有耳机连着'
+        : '还没问呢'
+      t.battList.append($('div', 'dshp-note', why))
+      t.battStatus.textContent = ''
+      return
+    }
+    for (const d of list) {
+      const row = $('div', 'dshp-batt-row')
+      const name = $('span', 'dshp-batt-name', d.label || d.name)
+      name.title = d.name
+      const val = $('span', 'dshp-batt-val', d.percent + '%')
+      row.append(name, val)
+      const bar = $('div', 'dshp-batt-bar')
+      const fill = $('div', 'dshp-batt-fill')
+      fill.style.width = Math.max(2, Math.min(100, d.percent)) + '%'
+      if (d.percent <= 10) fill.classList.add('dshp-critical')
+      else if (d.percent <= 20) fill.classList.add('dshp-low')
+      bar.append(fill)
+      t.battList.append(row, bar)
+      // 只有"确认没连"才需要解释 —— 连着的设备不啰嗦，时间放到下面那行统一说
+      if (d.stale) {
+        const age = shortAge(d.ageMs)
+        t.battList.append(
+          $('div', 'dshp-note', age ? '它现在没连着（最后看到它 ' + age + '）' : '它现在没连着，这个数可能是旧的'),
+        )
+      }
+    }
+    // 两行：第一行是"这个数有多旧"，第二行解释"为什么它不会自己动" + 出口
+    const first = list[0]
+    const line1 = first && first.at ? '上次更新 ' + fmtClock(first.at) + '（' + shortAge(first.ageMs) + '）' : ''
+    const line2 = '耳机自己想报才更新 · 点「↻ 刷新」问它'
+    t.battStatus.textContent = line1 ? line1 + '\n' + line2 : line2
+  }
+
+  /** ageMs → 「40 分钟前 / 3 小时前」；面板只用来解释"这个数有多旧"（不带尾部空格，拼接时自己加） */
+  function shortAge(ms) {
+    if (!Number.isFinite(ms) || ms < 0) return ''
+    const m = Math.floor(ms / 60000)
+    if (m < 1) return '刚刚'
+    if (m < 60) return m + ' 分钟前'
+    const h = Math.floor(m / 60)
+    if (h < 24) return h + ' 小时前'
+    return Math.floor(h / 24) + ' 天前'
+  }
+
+  /**
+   * 强制刷新失败 → 一句人话。
+   * 主进程回的是 reason 代码（见 shell/src/tools/battery.js），
+   * 别把 `set-service-failed:0/5` 这种字符串直接甩到面板上。
+   */
+  function forceReasonText(reason) {
+    const r = String(reason || '')
+    const map = {
+      throttled: '刚问过，过几秒再点',
+      busy: '上一次还没问完',
+      'no-connected-device': '现在没有连着的耳机',
+      'no-radio': '找不到蓝牙适配器',
+      'no-device': '找不到耳机',
+      'no-bthprops': '这台机器的系统不给问',
+      'worker-timeout': '耳机没回话',
+      'worker-empty': '耳机没回话',
+    }
+    if (map[r]) return map[r]
+    if (r.startsWith('set-service-failed')) return '系统不让碰这条蓝牙链路'
+    if (r.startsWith('worker-')) return '后台问话出了点岔子'
+    return r || '不知道为啥'
+  }
+
+  async function refreshBattery(force) {
+    const tb = toolsBridge()
+    // 浏览器版没有外壳 → 这话得说明白，否则面板上永远停在"还没读到"
+    if (!tb || !tb.battery) {
+      toolsState.batt = { available: false, reason: '浏览器里没有桌面外壳', devices: [] }
+      paintBattery()
+      return
+    }
+    try {
+      const st = await tb.battery({ force: !!force })
+      toolsState.batt = st
+      paintBattery()
+    } catch (e) {
+      toolsState.batt = { available: false, reason: String((e && e.message) || e), devices: [] }
+      paintBattery()
+    }
+  }
+
+  function startBatteryPoll() {
+    if (toolsBattTimer) return
+    refreshBattery(false)
+    // 30s：这一项本来就不会快变，问太勤没意义
+    toolsBattTimer = setInterval(() => refreshBattery(false), 30000)
+  }
+
+  function stopBatteryPoll() {
+    if (!toolsBattTimer) return
+    clearInterval(toolsBattTimer)
+    toolsBattTimer = null
   }
 
   function paintToolsPane() {
@@ -6943,6 +7303,32 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     t.openDsh.addEventListener('click', () => {
       try { openDshLink() } catch (e) {}
       closePanels()
+    })
+    // 电量：「↻ 刷新」= **强制让耳机重新上报**（会让 HFP 断 1~2 秒），
+    //       不是"再查一遍缓存"—— 光查缓存永远是同一个数（原因见 battery-core 文件头）。
+    t.battRefresh.addEventListener('click', async () => {
+      const tb = toolsBridge()
+      if (!tb || !tb.batteryForce) return
+      t.battRefresh.disabled = true
+      t.battRefresh.textContent = '问着呢'
+      t.battStatus.textContent = '正在问耳机要电量……（麦克风会断一两秒）'
+      try {
+        const st = await tb.batteryForce()
+        toolsState.batt = st
+        paintBattery()
+        const f = st && st.force
+        if (f && f.ok === false) {
+          t.battStatus.textContent = '没问成：' + forceReasonText(f.reason)
+        } else if (f && f.fresh === false) {
+          // 命令发过去了，但没等到比之前更新的时间戳 —— 别装作成功
+          t.battStatus.textContent = '问了，但耳机没回新数（它可能正忙），过会儿再点一次'
+        }
+      } catch (e) {
+        t.battStatus.textContent = '没问成：' + ((e && e.message) || e)
+      } finally {
+        t.battRefresh.disabled = false
+        t.battRefresh.textContent = '↻ 刷新'
+      }
     })
     t.xlToggle.addEventListener('click', () => {
       const on = !(toolsState.cfg && toolsState.cfg.translate && toolsState.cfg.translate.enabled)
@@ -7162,12 +7548,13 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 
   function bindMenu(u) {
     const TABS = [
-      ['face', '表情'],
-      ['mouth', '口型'],
+      // 2026-10-25：表情+口型合并（机制完全一样，共用一套渲染），腾出页签位给「声音」
+      ['face', '表情口型'],
       ['action', '动作'],
       ['script', '小戏'],
       ['heart', '心跳'],
       ['dream', '做梦'],
+      ['tts', '声音'],
       ['setting', '设置'],
     ]
     u.menu.focused = 'face'
@@ -7897,6 +8284,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       audioRow.append($('span', null, '听到声音'), audioBtn)
       box.append(audioRow, $('div', 'dshp-hint', '开着的话，突然的声响会让她马上看一眼屏幕（15 秒内只触发一次）。'))
 
+      // （2026-10-25：「声音」/TTS 的配置整段挪去了独立的「声音」页签 —— renderTtsPane。
+      //   同一个配置两处能改早晚不一致，心跳页不再保留。）
+
       // —— 刷视频：视频口味 + 抽帧数（2026-10-20）——
       const bcfg = cfg.bili || {}
       const tasteRow = $('div', 'dshp-label')
@@ -8170,6 +8560,184 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
+   * 「声音」页签（2026-10-25，从心跳页整段挪出来单开一栏）：
+   * TTS 的开关 / 后端 / 参考音频 / 来源 / 试听。心跳页不再保留这些控件 ——
+   * 同一个配置两处能改，早晚不一致（做梦页当年拆出去也是同一个理由）。
+   */
+  function renderTtsPane(box) {
+    const HB = heartBridge()
+    if (!HB || typeof HB.settings !== 'function') {
+      box.append($('div', 'dshp-hint', '「声音」只在桌面外壳里可用（合成在外壳的 TTS 模块，浏览器版没有主进程）。'))
+      return
+    }
+    const tip = $('div', 'dshp-hint', '读取中…')
+    box.append(tip)
+    const refresh = () => renderPane('tts')
+    const save = async (patch) => {
+      tip.textContent = '保存中…'
+      let r = null
+      try {
+        r = await HB.save(patch)
+      } catch (e) {
+        r = { ok: false, reason: String((e && e.message) || e) }
+      }
+      if (!r || !r.ok) {
+        tip.textContent = '保存失败：' + ((r && r.reason) || '未知')
+        return
+      }
+      refresh()
+    }
+
+    HB.settings().then((s) => {
+      if (ui.menu.focused !== 'tts') return
+      box.textContent = ''
+      const cfg = (s && s.config) || {}
+      const tc = cfg.tts || {}
+      const tStat = s.ttsStatus || {}
+
+      // —— 总开关 ——
+      const ttsHead = $('div', 'dshp-row')
+      ttsHead.append($('span', null, '语音'))
+      const ttsSw = $('button', 'dshp-chip' + (tc.enabled ? ' dshp-on' : ''), tc.enabled ? '开' : '关')
+      ttsSw.addEventListener('click', () => save({ tts: { enabled: !tc.enabled } }))
+      ttsHead.appendChild(ttsSw)
+      box.append(
+        ttsHead,
+        $('div', 'dshp-hint', tc.enabled
+          ? '台词会合成成语音（气泡照常显示，声音跟上）。文本只发给本机 TTS 服务，不出门。'
+          : '默认关。要她出声需要：本机跑着 GPT-SoVITS（或兼容服务）+ 一段 3~10 秒参考音频（见 docs/桌宠说话-GPT-SoVITS部署 文档）。'),
+      )
+
+      // 后端：本地 GPT-SoVITS（主）/ OpenAI 兼容（留口子）
+      const beRow = $('div', 'dshp-row')
+      beRow.append($('span', null, '后端'))
+      const mkBe = (key, label, title) => {
+        const b = $('button', 'dshp-chip' + ((tc.backend || 'gptsovits') === key ? ' dshp-on' : ''), label)
+        b.title = title
+        b.addEventListener('click', () => save({ tts: { backend: key } }))
+        return b
+      }
+      beRow.append(
+        mkBe('gsvlite', 'GSV-TTS-Lite', 'pip 可装的高性能后端（端口 8000），CPU/低显存友好'),
+        mkBe('gptsovits', 'GPT-SoVITS 整合包', '原版 api_v2（端口 9880），文本不出门'),
+        mkBe('openai', 'OpenAI 兼容', '云端/自建 /audio/speech，会发给所填服务'),
+      )
+      box.append(beRow)
+
+      // 文本输入工厂：change / Enter 都提交
+      const mkTextIn = (placeholder, value, onApply) => {
+        const inp = document.createElement('input')
+        inp.type = 'text'
+        inp.value = value || ''
+        inp.placeholder = placeholder
+        inp.style.cssText =
+          'flex:1;min-width:0;font-size:12px;padding:4px 6px;border-radius:6px;' +
+          'border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit'
+        const apply = () => onApply(inp.value.trim())
+        inp.addEventListener('change', apply)
+        inp.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault()
+            apply()
+          }
+        })
+        return inp
+      }
+      const backendNow = tc.backend || 'gptsovits'
+      const svcRow = $('div', 'dshp-label')
+      svcRow.append($('span', null, '服务地址'))
+      svcRow.appendChild(mkTextIn(backendNow === 'gsvlite' ? 'http://127.0.0.1:8000' : 'http://127.0.0.1:9880', tc.baseUrl, (v) => save({ tts: { baseUrl: v } })))
+      box.append(svcRow, $('div', 'dshp-hint', backendNow === 'gsvlite'
+        ? 'GSV-TTS-Lite 的 fastapi 服务默认 8000 端口（部署见 docs/桌宠说话-GPT-SoVITS部署 文档）。'
+        : 'GPT-SoVITS 整合包的 api_v2 默认就是 9880 端口。'))
+
+      if (backendNow !== 'openai') {
+        const refRow = $('div', 'dshp-label')
+        refRow.append($('span', null, '参考音频'))
+        refRow.appendChild(mkTextIn('D:\\path\\to\\ref.wav（3~10 秒，干净人声）', tc.refAudioPath, (v) => save({ tts: { refAudioPath: v } })))
+        const prRow = $('div', 'dshp-label')
+        prRow.append($('span', null, '转写文本'))
+        prRow.appendChild(mkTextIn('这段音频说的原话，一字不差', tc.promptText, (v) => save({ tts: { promptText: v } })))
+        box.append(refRow, prRow)
+        if (backendNow === 'gsvlite') {
+          const stRow = $('div', 'dshp-label')
+          stRow.append($('span', null, '风格参考'))
+          stRow.appendChild(mkTextIn('（可选）另一段音频决定语气节奏；留空 = 同参考音频', tc.promptAudioPath, (v) => save({ tts: { promptAudioPath: v } })))
+          box.append(stRow)
+        }
+        box.append(
+          $('div', 'dshp-hint', '转写必须逐字一致，错了声音会明显变差；路径是本机文件，不进任何仓库。'),
+        )
+      } else {
+        const moRow = $('div', 'dshp-label')
+        moRow.append($('span', null, '模型 / 音色'))
+        moRow.appendChild(mkTextIn('模型名，如 step-tts-mini', tc.model, (v) => save({ tts: { model: v } })))
+        const voRow = $('div', 'dshp-label')
+        voRow.append($('span', null, '音色 ID'))
+        voRow.appendChild(mkTextIn('克隆服务给的 voice id', tc.voice, (v) => save({ tts: { voice: v } })))
+        const akRow = $('div', 'dshp-label')
+        akRow.append($('span', null, 'API Key'))
+        akRow.appendChild(mkTextIn(tc.apiKeySet ? '已设置（留空 = 不改）' : '密钥（只存本机 settings.json）', '', (v) => save({ tts: { apiKey: v } })))
+        box.append(moRow, voRow, akRow)
+      }
+
+      box.append(
+        mkRange('语速', Number(tc.speed) > 0 ? Number(tc.speed) : 1, 0.5, 2, 0.05, (v) => v.toFixed(2) + 'x', (v) => {
+          save({ tts: { speed: v } })
+        }),
+      )
+
+      // 语音来源：回应模式 / 心跳 默认开，刷视频默认关（长文）
+      const srcRow = $('div', 'dshp-row')
+      srcRow.append($('span', null, '谁出声'))
+      const ttsSources = tc.sources || {}
+      const mkSrc = (key, label, title) => {
+        const on = ttsSources[key] !== undefined ? !!ttsSources[key] : key === 'chat' || key === 'heart'
+        const b = $('button', 'dshp-chip' + (on ? ' dshp-on' : ''), label)
+        b.title = title
+        b.addEventListener('click', () => save({ tts: { sources: Object.assign({}, ttsSources, { [key]: !on }) } }))
+        return b
+      }
+      srcRow.append(
+        mkSrc('chat', '回应模式', '对话框（回应模式）的回复出声'),
+        mkSrc('heart', '心跳', '她自己看屏幕嘀咕的话出声'),
+        mkSrc('bili', '刷视频', '刷视频气泡出声（正文长，默认关）'),
+      )
+      box.append(srcRow)
+
+      // 试听 + 状态
+      const ttsBtnRow = $('div', 'dshp-row')
+      const ttsTestBtn = $('button', 'dshp-btn', '试听')
+      const ttsStatLine = $('div', 'dshp-hint', tStat.lastError
+        ? '上次失败：' + tStat.lastError
+        : tStat.lastOkAt
+          ? '上次语音 ' + new Date(tStat.lastOkAt).toTimeString().slice(0, 5) + ' · 缓存 ' + (tStat.cacheCount || 0) + ' 条'
+          : '还没出过声。点「试听」验一下。')
+      ttsTestBtn.addEventListener('click', async () => {
+        if (!window.dshpetBridge || !window.dshpetBridge.tts) {
+          ttsStatLine.textContent = '要在桌面壳里用'
+          return
+        }
+        ttsTestBtn.disabled = true
+        ttsTestBtn.textContent = '合成中…'
+        try {
+          const r = await window.dshpetBridge.tts.test()
+          ttsStatLine.textContent = r && r.ok ? '播了，听听看（声音不挂气泡）' : '没合成成：' + ((r && r.reason) || '未知')
+        } catch (e) {
+          ttsStatLine.textContent = '试听失败：' + ((e && e.message) || e)
+        } finally {
+          ttsTestBtn.disabled = false
+          ttsTestBtn.textContent = '试听'
+        }
+      })
+      ttsBtnRow.append(ttsTestBtn)
+      box.append(ttsBtnRow, ttsStatLine, $('div', 'dshp-hint', 'CPU 合成一句要 2~3 秒：气泡先出、声音后到是正常的。CPU 常驻不占显存，和模型互不影响。'))
+    }).catch((e) => {
+      tip.textContent = '读取失败：' + ((e && e.message) || e)
+    })
+  }
+
+  /**
    * 「做梦」页签（2026-10-21）。
    *
    * 这里只放**做梦自己的参数**：开关 / 冷却 / 日记目录 / 下次立即做梦 / 状态。
@@ -8327,6 +8895,87 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     })
   }
 
+  /**
+   * 「表情 + 口型」合并页（2026-10-25，原两个页签）。
+   * 两边机制完全一样：点一下 → 走 override 层换脸/换嘴 + 说一句配好的话，三四秒后自己让位。
+   * 「平常」两区各放一个（合并前每个页签各有一个，行为不变 —— 它同时清掉脸和嘴，
+   * 两层本来就写同一个 override/user 槽）。
+   */
+  function renderFaceMouthPane(panes) {
+    /*
+     * 反向索引：表情 → 哪些"情绪"会用到它（只用来写 tooltip）。
+     */
+    const moodsOf = {}
+    for (const key of Object.keys(MOOD_FACE)) {
+      if (key === 'neutral') continue
+      const e = MOOD_FACE[key]
+      if (!e || e === '晕晕' || e === '呆呆眼') continue
+      if (!moodsOf[e]) moodsOf[e] = []
+      moodsOf[e].push(key)
+    }
+    // 合并后口型区没有独立的 hint 行可以解释每个按钮，说明直接挂 tooltip
+    const neutralChip = () => {
+      const n = $('button', 'dshp-chip', '平常')
+      if (!rig.override && !rig.user.face) n.classList.add('dshp-on')
+      n.title = '立刻回到平常脸和素嘴（她自己的表情也交还给她）'
+      n.addEventListener('click', () => {
+        clearUserFace()
+        clearReaction()
+        act({ mood: 'neutral', props: [], ms: 800 })
+        renderPane('face')
+      })
+      return n
+    }
+    const chipGrid = (menuList, ownLines, tips) => {
+      const grid = $('div', 'dshp-grid')
+      // 遍历的是**显式列表**（不依赖鲸鱼娘那张情绪映射表）
+      for (const expr of menuList) {
+        if (!EXPR[expr]) continue
+        const moods = moodsOf[expr] || []
+        // 有"情绪身份"的表情（脸红 / 生气）走 FACE_ACT 的台词；其余用 FACE_LINES
+        const rep = moods.find((k) => FACE_ACT[k]) || null
+        const lines = (rep && FACE_ACT[rep].lines) || ownLines[expr] || []
+        const b = $('button', 'dshp-chip', expr)
+        // 亮着的判断看**当前这一次性表演**：菜单表情是临时的，谁最后说话谁亮
+        if (rig.override && rig.override.face === expr) b.classList.add('dshp-on')
+        const tip = (tips && tips[expr]) || ''
+        b.title =
+          (tip ? tip + (moods.length || lines.length ? '\n' : '') : '') +
+          (moods.length ? moods.join(' / ') + '\n' : '') +
+          (lines.length ? `她会说：${lines[0]}` : '')
+        b.addEventListener('click', () => {
+          //   · 3~4 秒后自己让位，平常状态永远回到「平常脸」
+          //   · 期间任何新表情（她自己挑的 / agent 事件 / 你再点一个）都会把它顶掉
+          // 所以这里不写 30 秒的 rig.user 手动层，只走一次性 override。
+          clearUserFace()
+          if (rep) {
+            playItem('face', rep, true)   // 有情绪条目 → 走原来那条路（带 FACE_ACT 的台词/mood）
+          } else {
+            // 没有情绪条目的新表情：直接把 face 交给 override 层。
+            // force：手点的，气泡直接抢占（不排在心跳台词后面）
+            act({ face: expr, mood: 'neutral', props: [], line: pickFresh(lines, 'face-' + expr), ms: 3600, force: true })
+          }
+          renderPane('face')
+        })
+        grid.appendChild(b)
+      }
+      return grid
+    }
+    // —— 表情 ——
+    const faceGrid = chipGrid(FACE_MENU, FACE_LINES)
+    faceGrid.insertBefore(neutralChip(), faceGrid.firstChild)
+    // —— 口型 ——
+    const mouthGrid = chipGrid(MOUTH_MENU, MOUTH_LINES, MOUTH_TIPS)
+    mouthGrid.insertBefore(neutralChip(), mouthGrid.firstChild)
+    panes.append(
+      faceGrid,
+      $('div', 'dshp-hint', '点一下 = 换脸 + 说一句配好的话，**三四秒后自己让位**（平常状态永远是平常脸）。期间她自己的表情、agent 事件、或者你再点一个，都会把它顶掉。'),
+      $('div', 'dshp-label', '口型'),
+      mouthGrid,
+      $('div', 'dshp-hint', '换嘴素材（不是表情）：点一下换个嘴 + 说一句话，三四秒后自己让位。不知道哪个是哪个就把鼠标放按钮上看说明。'),
+    )
+  }
+
   function renderPane(id) {
     const panes = ui.menu.panes
     // 心跳页更高（见 CSS .dshp-menu.dshp-heart），其它页回到 300px 小卡片
@@ -8342,72 +8991,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       renderDreamPane(panes)
       return
     }
+    if (id === 'tts') {
+      // 「声音」（2026-10-25，从心跳页拆出来）：TTS 配置 + 试听，见 renderTtsPane
+      renderTtsPane(panes)
+      return
+    }
     if (id === 'face' || id === 'mouth') {
-      const grid = $('div', 'dshp-grid')
-      // 「表情」和「口型」两个页签**共用这套渲染**：
-      // 机制完全一样（点一下 → 走 override 层换个脸），只是列表和台词表不同。
-      const menuList = id === 'face' ? FACE_MENU : MOUTH_MENU
-      const ownLines = id === 'face' ? FACE_LINES : MOUTH_LINES
-      /*
-       * 反向索引：表情 → 哪些"情绪"会用到它（只用来写 tooltip）。
-       */
-      const moodsOf = {}
-      for (const key of Object.keys(MOOD_FACE)) {
-        if (key === 'neutral') continue
-        const e = MOOD_FACE[key]
-        if (!e || e === '晕晕' || e === '呆呆眼') continue
-        if (!moodsOf[e]) moodsOf[e] = []
-        moodsOf[e].push(key)
-      }
-      const neutral = $('button', 'dshp-chip', '平常')
-      if (!rig.override && !rig.user.face) neutral.classList.add('dshp-on')
-      neutral.title = '立刻回到平常脸（她自己的表情也交还给她）'
-      neutral.addEventListener('click', () => {
-        clearUserFace()
-        clearReaction()
-        act({ mood: 'neutral', props: [], ms: 800 })
-        renderPane(id)
-      })
-      grid.appendChild(neutral)
-      // 遍历的是**显式列表**（不再依赖鲸鱼娘那张情绪映射表）
-      for (const expr of menuList) {
-        if (!EXPR[expr]) continue
-        const moods = moodsOf[expr] || []
-        // 有"情绪身份"的表情（脸红 / 生气）走 FACE_ACT 的台词；其余用 FACE_LINES
-        const rep = moods.find((k) => FACE_ACT[k]) || null
-        const lines = (rep && FACE_ACT[rep].lines) || ownLines[expr] || []
-        const b = $('button', 'dshp-chip', expr)
-        // 亮着的判断看**当前这一次性表演**，不是看手动层：菜单里的表情是临时的，
-        // 谁最后一个说话谁亮。
-        if (rig.override && rig.override.face === expr) b.classList.add('dshp-on')
-        b.title = (moods.length ? moods.join(' / ') + '\n' : '') + (lines.length ? `她会说：${lines[0]}` : '')
-        b.addEventListener('click', () => {
-          //   · 3~4 秒后自己让位，平常状态永远回到「平常脸」
-          //   · 期间任何新表情（她自己挑的 / agent 事件 / 你再点一个）都会把它顶掉
-          // 所以这里不写 30 秒的 rig.user 手动层，只走一次性 override。
-          clearUserFace()
-          if (rep) {
-            playItem('face', rep, true)   // 有情绪条目 → 走原来那条路（带 FACE_ACT 的台词/mood）
-          } else {
-            // 没有情绪条目的新表情：直接把 face 交给 override 层。
-            // 不写 rig.user 手动层 —— 菜单表情是"演三四秒"，不是常驻。
-            // force：手点的，气泡直接抢占（不排在心跳台词后面）
-            act({ face: expr, mood: 'neutral', props: [], line: pickFresh(lines, 'face-' + expr), ms: 3600, force: true })
-          }
-          renderPane(id)
-        })
-        grid.appendChild(b)
-      }
-      panes.append(
-        grid,
-        $(
-          'div',
-          'dshp-hint',
-          id === 'mouth'
-            ? '换嘴素材。和「表情」页是同一套机制：点一下换个嘴 + 说一句话，**三四秒后自己让位**。'
-            : '点一下 = 换脸 + 说一句配好的话，**三四秒后自己让位**（平常状态永远是平常脸）。\n期间她自己的表情、agent 事件、或者你再点一个，都会把它顶掉。',
-        ),
-      )
+      // 2026-10-25：「表情」「口型」合并成一个页签（机制完全一样，共用一套渲染）。
+      // 'mouth' 保留为别名（老调用/诊断口可能还传它），落到同一页。
+      renderFaceMouthPane(panes)
       return
     }
     if (id === 'action') {
@@ -8976,6 +9568,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       case 'audio':
         idle.audio.peak = Math.max(0, Math.min(1, Number(m.peak) || 0))
         idle.audio.at = performance.now()
+        break
+
+      // 外壳 TTS（2026-10-24）：合成好了 → 播；换条/打断 → 停（播放与口型见 TtsPlayer）
+      case 'tts-play':
+        handleTtsPlay(m)
+        break
+
+      case 'tts-stop':
+        handleTtsStop()
         break
 
       case 'user':
@@ -10854,6 +11455,20 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       }, Math.max(300, Number(ms) || 2500))
       return { tone: tone, params: T ? T.params(tone) : null, ms: Math.max(300, Number(ms) || 2500) }
     },
+    /** 诊断：让外壳真的合成并播一句（走完整 TTS 链路；不冒气泡） */
+    ttsTest: () => (window.dshpetBridge && window.dshpetBridge.tts ? window.dshpetBridge.tts.test() : Promise.resolve({ ok: false, reason: 'no-bridge' })),
+    /** 诊断：手动喂一段本机音频验「播放 → 气泡拉长 → 口型」链路（不合成） */
+    ttsPlayProbe: (url) => handleTtsPlay({ url: url || '/dsh-pet/tts/debug.wav', id: 'probe', test: true }),
+    ttsStopProbe: () => handleTtsStop(),
+    /** 诊断：TtsPlayer 当前状态（在播 / 振幅 / 有没有挂起待播的语音） */
+    ttsState: () => ({
+      playing: TtsPlayer.playing,
+      id: TtsPlayer.id,
+      rms: TtsPlayer.rms,
+      hasCtx: !!TtsPlayer.ctx,
+      hasAnalyser: !!TtsPlayer.analyser,
+      pending: !!(TtsPlayer.pending && Date.now() - TtsPlayer.pending.at < 3000),
+    }),
     setBase,
     setReaction,
     clearReaction,

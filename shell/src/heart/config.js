@@ -110,6 +110,31 @@ const DEFAULTS = {
   },
   /** 「一键启动」用的本地引擎配置（空路径 = 需要用户在面板里填） */
   modelServer: { exe: '', model: '', mmproj: '', extraArgs: '' },
+  /**
+   * 「声音」/TTS（2026-10-24）：让她的台词真正出声。默认**关闭**。
+   * backend：'gptsovits' = 本地 GPT-SoVITS api_v2（整合包，主路线，文本不出门）
+   *          'gsvlite'   = GSV-TTS-Lite（2026-10-25 加，pip 可装的高性能后端，/tts/single 两步协议）
+   *          'openai'    = OpenAI 兼容 /audio/speech（云端克隆留的口子）
+   * refAudioPath：3~10 秒参考音频的**本机路径**（api_v2 只收服务器本机路径）；
+   * promptText：参考音频的逐字转写（不匹配会明显劣化）。
+   * promptAudioPath：GSV-TTS-Lite 的「风格参考」，留空 = 同参考音频（原版零克隆的等价行为）。
+   * timeoutMs 给大：CPU 合成 50 字要 2~3 秒，30s 覆盖整段长句。
+   */
+  tts: {
+    enabled: false,
+    backend: 'gptsovits',
+    baseUrl: 'http://127.0.0.1:9880',
+    apiKey: '',
+    model: '',
+    voice: '',
+    refAudioPath: '',
+    promptAudioPath: '',
+    promptText: '',
+    speed: 1,
+    maxChars: 120,
+    timeoutMs: 30000,
+    sources: { chat: true, heart: true, bili: false, work: false },
+  },
 }
 
 const PROVIDERS = ['auto', 'separate', 'ollama', 'openai']
@@ -120,6 +145,13 @@ function num(v, def, min, max) {
   const n = Number(v)
   if (!Number.isFinite(n)) return def
   return Math.min(max, Math.max(min, Math.round(n)))
+}
+
+/** num 的可变精度版：speed 这种 0.5 步进的值不能 Math.round（1.5 会变 2） */
+function numF(v, def, min, max) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return def
+  return Math.min(max, Math.max(min, n))
 }
 
 function str(v, def) {
@@ -143,6 +175,8 @@ function normalize(raw) {
   const tl = tsrc.translate && typeof tsrc.translate === 'object' ? tsrc.translate : {}
   const tlApi = tl.api && typeof tl.api === 'object' ? tl.api : {}
   const vi = tsrc.vision && typeof tsrc.vision === 'object' ? tsrc.vision : {}
+  const tt = src.tts && typeof src.tts === 'object' ? src.tts : {}
+  const ttsSrc = tt.sources && typeof tt.sources === 'object' ? tt.sources : {}
   return {
     enabled: src.enabled === true,
     // 2026-10-18 起：看屏间隔与说话间隔统一 15~600s（面板只有一个滑块）。
@@ -244,6 +278,27 @@ function normalize(raw) {
       model: str(ms.model, '').trim(),
       mmproj: str(ms.mmproj, '').trim(),
       extraArgs: str(ms.extraArgs, '').trim().slice(0, 500),
+    },
+    // 「声音」/TTS（2026-10-24）：白名单在 settings.js 的 sanitizeHeartPatch，两边同步
+    tts: {
+      enabled: bool(tt.enabled, DEFAULTS.tts.enabled),
+      backend: ['gptsovits', 'gsvlite', 'openai'].includes(tt.backend) ? tt.backend : DEFAULTS.tts.backend,
+      baseUrl: str(tt.baseUrl, DEFAULTS.tts.baseUrl).trim().slice(0, 300) || DEFAULTS.tts.baseUrl,
+      apiKey: str(tt.apiKey, '').slice(0, 500),
+      model: str(tt.model, '').trim().slice(0, 200),
+      voice: str(tt.voice, '').trim().slice(0, 200),
+      refAudioPath: str(tt.refAudioPath, '').trim().slice(0, 500),
+      promptAudioPath: str(tt.promptAudioPath, '').trim().slice(0, 500),
+      promptText: str(tt.promptText, '').slice(0, 300),
+      speed: numF(tt.speed, DEFAULTS.tts.speed, 0.5, 2),
+      maxChars: num(tt.maxChars, DEFAULTS.tts.maxChars, 20, 300),
+      timeoutMs: num(tt.timeoutMs, DEFAULTS.tts.timeoutMs, 1000, 120000),
+      sources: {
+        chat: bool(ttsSrc.chat, DEFAULTS.tts.sources.chat),
+        heart: bool(ttsSrc.heart, DEFAULTS.tts.sources.heart),
+        bili: bool(ttsSrc.bili, DEFAULTS.tts.sources.bili),
+        work: bool(ttsSrc.work, DEFAULTS.tts.sources.work),
+      },
     },
   }
 }
