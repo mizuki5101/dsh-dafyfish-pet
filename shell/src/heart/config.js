@@ -106,7 +106,11 @@ const DEFAULTS = {
       ],
       api: { baseUrl: '', model: '', apiKey: '' },
     },
-    vision: { enabled: false, minSize: 24, maxTokens: 300, prompt: '' },
+    // answer：图里有问题就回答（2026-10-27，默认**关**）。
+    //   关着 = 只描述，和以前完全一样。开 = 多走一跳，用她的人格答图里的问题。
+    //   默认关不是"没做完"，是防注入的主防线：截图里的字可以是别人写的，
+    //   而开了这一项，那些字就会变成"要她回答的问题"。见 tools/read-core.js 文件头。
+    vision: { enabled: false, minSize: 24, maxTokens: 300, prompt: '', answer: false },
   },
   /** 「一键启动」用的本地引擎配置（空路径 = 需要用户在面板里填） */
   modelServer: { exe: '', model: '', mmproj: '', extraArgs: '' },
@@ -135,6 +139,15 @@ const DEFAULTS = {
     timeoutMs: 30000,
     sources: { chat: true, heart: true, bili: false, work: false },
   },
+  /**
+   * 连续上下文（2026-10-31）：心跳/对话的提示词改成
+   * [稳定 system] + [近况回放=昨天以前的摘要] + [ledger 追加式窗口] + [本次新鲜情境尾]。
+   * 历史只追加不重写 ⇒ 相邻请求共享越来越长的公共前缀 ⇒ DeepSeek 的自动前缀缓存
+   * （命中约 1/10 价）与本地 llama-server 的 KV cache 都吃到。
+   * enabled=false 完全回到旧拼装（ledger 照常记录，只是不喂给模型）。
+   * windowTokens = 追加窗口的 token 预算；summaryDays = 「近况回放」回看几天。
+   */
+  context: { enabled: true, windowTokens: 2048, summaryDays: 3 },
 }
 
 const PROVIDERS = ['auto', 'separate', 'ollama', 'openai']
@@ -177,6 +190,7 @@ function normalize(raw) {
   const vi = tsrc.vision && typeof tsrc.vision === 'object' ? tsrc.vision : {}
   const tt = src.tts && typeof src.tts === 'object' ? src.tts : {}
   const ttsSrc = tt.sources && typeof tt.sources === 'object' ? tt.sources : {}
+  const cx = src.context && typeof src.context === 'object' ? src.context : {}
   return {
     enabled: src.enabled === true,
     // 2026-10-18 起：看屏间隔与说话间隔统一 15~600s（面板只有一个滑块）。
@@ -271,6 +285,7 @@ function normalize(raw) {
         minSize: num(vi.minSize, DEFAULTS.tools.vision.minSize, 24, 400),
         maxTokens: num(vi.maxTokens, DEFAULTS.tools.vision.maxTokens, 64, 1024),
         prompt: str(vi.prompt, '').slice(0, 2000),
+        answer: bool(vi.answer, DEFAULTS.tools.vision.answer),
       },
     },
     modelServer: {
@@ -299,6 +314,12 @@ function normalize(raw) {
         bili: bool(ttsSrc.bili, DEFAULTS.tts.sources.bili),
         work: bool(ttsSrc.work, DEFAULTS.tts.sources.work),
       },
+    },
+    // 连续上下文（2026-10-31）：白名单在 settings.js 的 sanitizeHeartPatch，两边同步
+    context: {
+      enabled: bool(cx.enabled, DEFAULTS.context.enabled),
+      windowTokens: num(cx.windowTokens, DEFAULTS.context.windowTokens, 512, 16384),
+      summaryDays: num(cx.summaryDays, DEFAULTS.context.summaryDays, 1, 7),
     },
   }
 }

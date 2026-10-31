@@ -15,6 +15,8 @@ const vision = require('./vision')
 const gate = require('./gate')
 const { pickOpener } = require('./opener')
 const { MAX_ENTRIES: MEMO_MAX } = require('./memo')
+const { renderTurns } = require('./ledger')
+const context = require('./context')
 const biliModule = require('./bili')
 const biliFrames = require('./bili/frames')
 const { createStore: createBiliMemo } = require('./bili/memo')
@@ -52,6 +54,12 @@ function createHeart(opts) {
   const clock = typeof o.now === 'function' ? o.now : () => Date.now()
   /** 短期记忆（memo.json）：重启后她还知道自己刚才说过什么。没有就退化回内存 */
   const memo = o.memo || null
+  /**
+   * 「经历流水」（2026-10-31）：所有调用点共享的 append-only 底账。
+   * 心跳往里写嘀咕、刷视频写摘要；tick 的上下文历史从这里取追加式窗口。
+   * 没有就退化回旧拼装（context.enabled 也关不掉这个退化——没 ledger 就是没有）。
+   */
+  const ledger = o.ledger || null
 
   let cfg = normalize({})
   let timer = null
@@ -105,7 +113,17 @@ function createHeart(opts) {
     dirDefault: o.dreamDir || '',
     stateFile: o.dreamStateFile || '',
     getCfg: () => cfg.dream,
-    getSays: () => (memo ? memo.entries() : []),
+    // 2026-10-31 起 says 优先读 ledger：memo 只有 12 条滚动，做梦只能看到最近半小时的嘀咕；
+    // ledger 是全量底账（30 天），夜里回顾的素材完整得多。字段映射按 collect.js 的口味来。
+    getSays: () => {
+      if (ledger) {
+        return ledger
+          .all()
+          .filter((e) => e.kind === 'say')
+          .map((e) => ({ at: e.at, say: e.text, topic: (e.meta && e.meta.topic) || '', see: (e.meta && e.meta.see) || '' }))
+      }
+      return memo ? memo.entries() : []
+    },
     getChat: o.getChat,
     // 刷视频/回应模式正在用模型时先别做梦（两边抢 -np 1 会都变慢）
     isBusy: () => holds > 0 || biliRunning,
@@ -135,6 +153,37 @@ function createHeart(opts) {
     },
     log,
   })
+
+  // —— 一次性回填（2026-10-31）——
+  // ledger 是新库：第一次创建时把旧的三份记忆（memo 12 条 / chat.json / bili-memo 40 条）
+  // 搬进来，否则近况回放和做梦在头几天看不到历史。以「ledger 文件在打开时是否存在」为准，
+  // 只搬一次；之后三份旧记忆照常维护（做梦的 chat/bili 素材仍读它们）。
+  if (ledger && typeof ledger.existed === 'function' && !ledger.existed()) {
+    try {
+      const back = []
+      if (memo) {
+        for (const m of memo.entries() || []) {
+          if (m && m.say) back.push({ at: m.at, kind: 'say', text: m.say, meta: { topic: m.topic || '', see: m.see || '' } })
+        }
+      }
+      if (typeof o.getChat === 'function') {
+        for (const c of o.getChat() || []) {
+          if (c && c.content) back.push({ at: c.at, kind: c.role === 'user' ? 'chat-user' : 'chat-her', text: c.content })
+        }
+      }
+      try {
+        const bs = biliMemo()
+        for (const b of (bs && bs.entries()) || []) {
+          if (b && b.title) back.push({ at: b.at, kind: 'bili', text: b.one || b.title, meta: { bvid: b.bvid || '', title: b.title, up: b.up || '' } })
+        }
+      } catch (e) {}
+      back.sort((a, b) => (Number(a.at) || 0) - (Number(b.at) || 0))
+      for (const b of back) ledger.record(b.kind, b.text, b.meta, b.at)
+      if (back.length) log('ledger 回填：' + back.length + ' 条旧记忆')
+    } catch (e) {
+      log('ledger 回填失败（不影响其它功能）：' + ((e && e.message) || e))
+    }
+  }
 
   function reload() {
     try {
@@ -248,6 +297,18 @@ function createHeart(opts) {
      */
     let retryNoImage = false
     const sameDiff = cap.diff
+    // —— 连续上下文（2026-10-31）——
+    // ledger 开着时：历史走 system 后面的「近况回放 + 追加式窗口」，情境里的「最近说过」
+    // 就不再塞（同一句话出现两次会教坏模型照抄）。回放一天一换、窗口只追加、
+    // 每次变化的情境永远在最后一条 user —— 这个形状是 DeepSeek 前缀缓存命中的前提。
+    const ctxOn = !!(ledger && cfg.context && cfg.context.enabled)
+    const ctxWindow = ctxOn ? renderTurns(ledger.window({ budgetTokens: cfg.context.windowTokens })) : []
+    const ctxSummary = ctxOn ? context.dailySummary(ledger.all(), { days: cfg.context.summaryDays }) : ''
+    const ctxMiddle = ctxOn
+      ? ctxSummary
+        ? [{ role: 'user', content: context.SUMMARY_HEAD + ctxSummary + context.SUMMARY_TAIL }].concat(ctxWindow)
+        : ctxWindow
+      : []
     while (attempts < 2) {
       const useImage = !(attempts > 0 && retryNoImage)
       const messages = buildMessages({
@@ -256,7 +317,8 @@ function createHeart(opts) {
         systemOverride: cfg.prompt,
         situation,
         lastText,
-        recent: recentSays,
+        recent: ctxOn ? [] : recentSays,
+        middle: ctxMiddle,
         opener: openerLine || '',
         nudge: attempts > 0 ? retryNudge : '',
       })
@@ -282,6 +344,26 @@ function createHeart(opts) {
         backoffUntil = t + wait * 1000
         log('心跳：推理失败 ' + r.error + (detail.baseUrl ? ' @ ' + detail.baseUrl : '') +
           (detail.hint ? ' — ' + detail.hint : '') + '（' + wait + 's 后再试）')
+        // 「空白正文」现场落盘（2026-10-31）：图片 + 请求消息（图转占位）存进 userData/heart，
+        // 供 试云端心跳.mjs --replay 精确重放、二分定位触发条件。文件每次覆盖，只留最近一次。
+        if (String(r.error || '').startsWith('empty content') && o.debugDir) {
+          try {
+            const fs2 = require('node:fs')
+            const path2 = require('node:path')
+            const slim = messages.map((mm) => ({
+              role: mm.role,
+              content: Array.isArray(mm.content)
+                ? mm.content.map((p) => (p && p.type === 'image_url' ? { type: 'image_url', image_url: { url: '<见 last-blank.jpg>' } } : p))
+                : mm.content,
+            }))
+            fs2.writeFileSync(
+              path2.join(o.debugDir, 'last-blank-request.json'),
+              JSON.stringify({ at: t, error: r.error, model: cfg.model.model, maxTokens: cfg.model.maxTokens, messages: slim }, null, 1),
+            )
+            if (cap && cap.jpeg) fs2.writeFileSync(path2.join(o.debugDir, 'last-blank.jpg'), Buffer.from(cap.jpeg, 'base64'))
+            log('心跳：空白现场已存 ' + o.debugDir + '/last-blank.{jpg,request.json}')
+          } catch (e2) {}
+        }
         return { ok: false, reason: lastSkip, candidates: r.candidates || 0, error: lastInferError }
       }
       totalMs += r.ms
@@ -289,6 +371,8 @@ function createHeart(opts) {
       const p = decide.sanitize(r.text)
       if (!p.ok) {
         retryWhy = 'bad-json'
+        // 不是 JSON（纯聊天散文）→ 第二次把格式约束拉满（接云端后模型的常见走神方式）
+        retryNudge = decide.RETRY_JSON
         attempts++
         continue
       }
@@ -337,7 +421,8 @@ function createHeart(opts) {
     if (!parsed || !parsed.ok) {
       lastSkip = 'decide:' + ((parsed && parsed.reason) || retryWhy || 'unknown')
       lastReason = 'bad-json'
-      log('心跳：模型输出解析失败 —— ' + String((lastCall && lastCall.text) || '').slice(0, 120))
+      // JSON.stringify：空白/控制字符也能看出来（2026-10-31 真机踩过 content=一串空格）
+      log('心跳：模型输出解析失败 —— ' + JSON.stringify(String((lastCall && lastCall.text) || '').slice(0, 120)))
       return { ok: false, reason: lastSkip, text: (lastCall && lastCall.text) || '' }
     }
     if (retryWhy) log('心跳：第一次输出不合格（' + retryWhy + '），已重试一次' + (retryNoImage ? '（这次不带图，换话题）' : ''))
@@ -369,6 +454,12 @@ function createHeart(opts) {
       if (recentSays.length > MEMO_MAX) recentSays = recentSays.slice(-MEMO_MAX)
       // 落盘：连 topic/see 一起存 —— 以后要按「这个场景我说过什么」检索时不用改存储格式
       if (memo) memo.add({ at: t, say: arb.action.say, topic: arb.action.topic, see: arb.action.see })
+      // 经历流水（2026-10-31）：嘀咕进底账——做梦的素材从这里来，近况回放也靠它
+      if (ledger) {
+        try {
+          ledger.record('say', arb.action.say, { topic: arb.action.topic || '', see: arb.action.see || '' }, t)
+        } catch (e) {}
+      }
     }
     if (arb.action.motion || arb.action.face) lastMotionAt = t
     lastReason = 'acted'
@@ -715,6 +806,12 @@ function createHeart(opts) {
       if (typeof o.onReport === 'function') {
         try {
           o.onReport({ title: it.title, body: it.detail, bv: it.bvid, url: it.url, up: it.up, worth: it.worth, at: t })
+        } catch (e) {}
+      }
+      // 经历流水（2026-10-31）：她看完的视频进底账——近况回放里「她看完视频《…》」就是这么来的
+      if (ledger) {
+        try {
+          ledger.record('bili', it.say || it.title, { bvid: it.bvid || '', title: it.title || '', up: it.up || '' }, t)
         } catch (e) {}
       }
       return { ok: true, item: it }

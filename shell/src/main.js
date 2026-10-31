@@ -52,6 +52,8 @@ let chatMemory = null
 let tools = null
 /** 「声音」/TTS（2026-10-24）：合成在外壳，播放/口型在页面；装配在 heart 建立之后 */
 let tts = null
+/** 「经历流水」（2026-10-31）：所有模型调用共享的 append-only 底账 + 连续上下文的素材源 */
+let ledger = null
 
 /**
  * 识图遮罩窗是不是开着。
@@ -1696,6 +1698,8 @@ app.whenReady().then(() => {
       const { CHAT_SYSTEM, createChatMemory } = require('./heart/chat')
       const { createMemo } = require('./heart/memo')
       const { normalize: normalizeHeart } = require('./heart/config')
+      const { createLedger, renderTurns } = require('./heart/ledger')
+      const context = require('./heart/context')
       modelServer = createModelServer({ log: bootLog })
       // 对话历史按 token 预算裁（默认 16K ≈ 30~40 轮短对话），不再固定 12 轮
       const heartCfg0 = normalizeHeart((readSettings() || {}).heart)
@@ -1706,6 +1710,11 @@ app.whenReady().then(() => {
       })
       // 她主动搭话的短期记忆（12 条）：重启后不重复自己说过的话
       const heartMemo = createMemo({ file: path.join(app.getPath('userData'), 'heart', 'memo.json'), max: 12 })
+      // 经历流水（2026-10-31）：append-only 底账。回填旧记忆在 createHeart 里做（它拿得到三份旧记忆）
+      ledger = createLedger({
+        file: path.join(app.getPath('userData'), 'heart', 'ledger.jsonl'),
+        log: bootLog,
+      })
       heartSettingsPayload = () => {
         const cfg = heart ? heart.config() : null
         const pub = cfg
@@ -1763,6 +1772,7 @@ app.whenReady().then(() => {
                   minSize: cfg.tools.vision.minSize,
                   maxTokens: cfg.tools.vision.maxTokens,
                   prompt: cfg.tools.vision.prompt,
+                  answer: cfg.tools.vision.answer,
                 },
               },
               // 「声音」/TTS（2026-10-24）：apiKey 绝不回传页面，只给布尔
@@ -1781,6 +1791,8 @@ app.whenReady().then(() => {
                 sources: cfg.tts.sources,
                 apiKeySet: !!cfg.tts.apiKey,
               },
+              // 连续上下文（2026-10-31）：面板暂不做控件，settings.json 里可调
+              context: cfg.context,
             }
           : null
         return {
@@ -1798,6 +1810,10 @@ app.whenReady().then(() => {
         log: bootLog,
         readSettings,
         memo: heartMemo,
+        // 经历流水（2026-10-31）：心跳写嘀咕/刷视频摘要，tick 的历史窗口也从这里取
+        ledger,
+        // 「空白正文」现场落盘目录（2026-10-31 排查用，试云端心跳.mjs --replay 吃这个）
+        debugDir: path.join(app.getPath('userData'), 'heart'),
         getWindow: () => win,
         getMaskRects: petMaskRects,
         getAgentState: petAgentState,
@@ -2001,9 +2017,26 @@ app.whenReady().then(() => {
         if (note && note.say && note.at && Date.now() - note.at < 30 * 60 * 1000) {
           sideNote = '\n\n（你刚才自己嘀咕过：「' + note.say.slice(0, 60) + '」。如果和主人现在说的无关，就忽略它，不要硬接。）'
         }
-        const messages = [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
-          { role: 'user', content: text + sideNote },
-        ])
+        // —— 连续上下文（2026-10-31）——
+        // [system] + [近况回放（昨天以前，一天一换）] + [ledger 环境窗口（排除对话轮，
+        // 那份在 chat.json 里，别出现两遍）] + [对话历史] + [这句]。
+        // 每段内部都只追加，变化的永远是最后一条 user —— DeepSeek 前缀缓存吃这个形状。
+        // ledger 开着时旁白（sideNote）不要了：她的嘀咕已经在环境窗口里。
+        const cfgCtx = cfg.context || {}
+        const ctxOn = !!(ledger && cfgCtx.enabled)
+        const messages = ctxOn
+          ? context.assemble({
+              system: CHAT_SYSTEM,
+              summary: context.dailySummary(ledger.all(), { days: cfgCtx.summaryDays }),
+              blocks: [
+                renderTurns(ledger.window({ budgetTokens: cfgCtx.windowTokens, excludeKinds: ['chat-user', 'chat-her'] })),
+                chatMemory.messages(),
+              ],
+              tail: text + (ctxOn ? '' : sideNote),
+            })
+          : [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
+              { role: 'user', content: text + sideNote },
+            ])
         // 聊天期间让心跳让路：llama-server 只有 -np 1 一个槽位，抢起来会「想好久」
         heart.hold()
         let r = null
@@ -2021,6 +2054,14 @@ app.whenReady().then(() => {
         if (!r || !r.ok) return { ok: false, reason: (r && r.error) || 'no-response', candidates: (r && r.candidates) || 0 }
         chatMemory.add('user', text)
         chatMemory.add('assistant', r.text)
+        // 经历流水（2026-10-31）：对话轮进底账——心跳的窗口、做梦的素材、近况回放都看得到
+        if (ledger) {
+          try {
+            const now0 = Date.now()
+            ledger.record('chat-user', text, null, now0)
+            ledger.record('chat-her', r.text, null, now0 + 1) // +1ms 保证先后序
+          } catch (e) {}
+        }
         bootLog('对话(回应模式)：' + text.slice(0, 40) + ' → ' + String(r.text).slice(0, 60))
         // 语音（2026-10-24）：回复交给 TTS。气泡由页面在 invoke 返回时照常显示，
         // 语音合成好了通过 tts-play 事件跟上（慢/失败都只是没声音，不碰文字）。
@@ -2103,6 +2144,8 @@ app.whenReady().then(() => {
       tools = createTools({
         log: bootLog,
         getHeart: () => heart,
+        // 识图/答题的结果进经历流水（2026-10-31）：她看到过什么、答过什么，都是底账的一行
+        ledger: ledger ? { record: (kind, text, meta) => ledger.record(kind, text, meta) } : null,
         // 划词用：光标的落点是不是压在我们真正的 UI 上（复用 90ms 轮询的判定结果）。
         // ⚠️ 不能用 win.getBounds() 代替 —— fullscreenPrimary=true 时它铺满全屏，
         //    「在窗内」恒为真，划词会整条哑火（2026-10-22 真踩）。

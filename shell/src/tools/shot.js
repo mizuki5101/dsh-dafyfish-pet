@@ -14,6 +14,7 @@ const path = require('node:path')
 const { BrowserWindow, screen } = require('electron')
 const { captureScreen } = require('../heart/capture')
 const vision = require('../heart/vision')
+const read = require('./read-core')
 
 const HIDE_SETTLE_MS = 90
 
@@ -27,9 +28,15 @@ const SHOT_SYSTEM =
 
 const SHOT_DEFAULT_PROMPT = '这是我框出来的一块屏幕，告诉我这是什么、上面写了什么。'
 
+function sec(ms) {
+  return (Math.max(0, Number(ms) || 0) / 1000).toFixed(1) + 's'
+}
+
 function createShot(options = {}) {
   const log = typeof options.log === 'function' ? options.log : () => {}
   const getCfg = typeof options.getCfg === 'function' ? options.getCfg : () => null
+  /** 经历流水（2026-10-31）：看到什么/答了什么记一行。以前是「答完即焚」，现在进底账 */
+  const record = typeof options.record === 'function' ? options.record : null
   const getHeart = typeof options.getHeart === 'function' ? options.getHeart : () => null
   const pinShow = typeof options.pinShow === 'function' ? options.pinShow : () => 0
   const pinUpdate = typeof options.pinUpdate === 'function' ? options.pinUpdate : () => {}
@@ -147,6 +154,31 @@ function createShot(options = {}) {
     return new Promise((r) => setTimeout(r, ms))
   }
 
+  /**
+   * 整段调用期间持有心跳（heart.hold 是引用计数，可嵌套）。
+   * ⚠️ 必须在 finally 里 release —— 漏了心跳会永久停摆。
+   * 两跳要**一起**持有：中间放开会让心跳挤进来，而 llama-server 只有一个槽位。
+   */
+  async function withHold(fn) {
+    const heart = getHeart()
+    let hold = false
+    if (heart && heart.hold) {
+      try {
+        heart.hold()
+        hold = true
+      } catch (e) {}
+    }
+    try {
+      return await fn()
+    } finally {
+      if (hold && heart && heart.release) {
+        try {
+          heart.release()
+        } catch (e) {}
+      }
+    }
+  }
+
   /** 遮罩 → 截图。必须唯一入口：先 hide 再等两帧再拍。 */
   async function hideThenCapture(region) {
     const bounds = ovWin && !ovWin.isDestroyed() ? ovWin.getContentBounds() : null
@@ -189,51 +221,132 @@ function createShot(options = {}) {
       report('截到 ' + cap.width + '×' + cap.height + ' / ' + Math.round(cap.bytes / 1024) + 'KB / ' + cap.ms + 'ms @' + JSON.stringify(abs))
       const cfg = getCfg()
       const v = (cfg && cfg.tools && cfg.tools.vision) || {}
-      const heart = getHeart()
+      const answerOn = !!v.answer
       const promptText = (v.prompt && String(v.prompt).trim()) || SHOT_DEFAULT_PROMPT
-      const messages = [
-        { role: 'system', content: SHOT_SYSTEM },
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: promptText },
-            { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + cap.jpeg } },
-          ],
-        },
-      ]
-      let hold = false
-      if (heart && heart.hold) {
-        try {
-          heart.hold()
-          hold = true
-        } catch (e) {}
-      }
-      let out = null
-      try {
-        out = await vision.infer(cfg, messages, {
-          maxTokens: Number(v.maxTokens) || 300,
+      const modelTimeout = (cfg && cfg.model && cfg.model.timeoutMs) || 30000
+      const imgPart = { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,' + cap.jpeg } }
+      // 开了答题，第一跳的任务就换成「转写 + 摘问题」：
+      //   用户自己写的描述提示词（默认那句"告诉我这是什么"）在这里必须**不用** ——
+      //   它会让模型顺手把题也答了，第一跳就不干净了（内容还没经过第二跳的隔离）。
+      const messages = answerOn
+        ? [
+            { role: 'system', content: read.READ_SYSTEM },
+            { role: 'user', content: [{ type: 'text', text: '按格式回答，不要写别的。' }, imgPart] },
+          ]
+        : [
+            { role: 'system', content: SHOT_SYSTEM },
+            { role: 'user', content: [{ type: 'text', text: promptText }, imgPart] },
+          ]
+      // 答题模式要一次吐出描述 + 问题，300 会不够（描述被截断 → 问题也没了）
+      const firstMax = answerOn
+        ? Math.min(1024, Math.max(480, Number(v.maxTokens) || 300))
+        : Number(v.maxTokens) || 300
+
+      let first = null
+      let rd = null
+      let second = null
+      let refused = false
+      await withHold(async () => {
+        first = await vision.infer(cfg, messages, {
+          maxTokens: firstMax,
           // 小模型把预算全花在思考上就只剩空 content
           enableThinking: false,
-          temperature: 0.3,
-          timeoutMs: (cfg && cfg.model && cfg.model.timeoutMs) || 30000,
+          temperature: answerOn ? 0.2 : 0.3,
+          timeoutMs: modelTimeout,
         })
-      } finally {
-        if (hold && heart && heart.release) {
+        if (!first || !first.ok || !answerOn) return
+
+        rd = read.parseRead(first.text)
+        const seenNow = rd.seen || '（它没看清这块是什么）'
+        // 先把「看到什么」落屏：第二跳还要再等几秒，光转圈会让人以为卡死
+        pinUpdate(id, {
+          text: seenNow,
+          head: '看图 · 框选',
+          foot: '看图 ' + sec(first.ms) + (rd.hasQuestion ? ' · 图里有问题，她在想…' : ' · 图里没看到要回答的问题'),
+        })
+        report('第一跳 ' + sec(first.ms) + ' · 问题=' + (rd.hasQuestion ? rd.question.slice(0, 40) : '无'))
+        if (record) {
           try {
-            heart.release()
+            record('see', seenNow, { question: rd.hasQuestion ? rd.question.slice(0, 100) : '' })
           } catch (e) {}
         }
-      }
-      if (!out || !out.ok) {
-        const why = (out && (out.error || out.reason)) || 'unknown'
+        if (!rd.hasQuestion) return
+
+        // 第②层防线：本地判据先拦一道，不指望模型自觉（判断依据见 read-core 文件头）
+        const chk = read.checkAnswerable(rd.question)
+        if (!chk.ok) {
+          refused = true
+          pinUpdate(id, {
+            text: read.REFUSE_TEXT,
+            head: '答题 · 框选',
+            answer: true,
+            foot: '看图 ' + sec(first.ms) + ' · 图里有越权要求，没发给她',
+          })
+          report('拦下越权提问：' + rd.question.slice(0, 60))
+          return
+        }
+
+        second = await vision.infer(cfg, read.answerMessages(rd.question, rd.seen), {
+          maxTokens: 640,
+          enableThinking: false,
+          temperature: 0.5,
+          timeoutMs: modelTimeout,
+        })
+      })
+
+      if (!first || !first.ok) {
+        const why = (first && (first.error || first.reason)) || 'unknown'
         pinUpdate(id, { text: '', foot: '没看成：' + String(why).slice(0, 120) })
         report('模型失败：' + why)
         return { ok: false, reason: 'infer-failed' }
       }
-      const text = String(out.text || '').trim()
-      pinUpdate(id, { text: text || '（它看了半天没说出什么…）', foot: '看图 · ' + cap.width + '×' + cap.height })
-      report('描述完成 ' + (out.ms || 0) + 'ms / ' + text.length + ' 字')
-      return { ok: true }
+
+      // —— 没开答题：和旧版一模一样，只显示描述 ——
+      if (!answerOn) {
+        const text = String(first.text || '').trim()
+        pinUpdate(id, { text: text || '（它看了半天没说出什么…）', foot: '看图 · ' + cap.width + '×' + cap.height })
+        report('描述完成 ' + (first.ms || 0) + 'ms / ' + text.length + ' 字')
+        if (record && text) {
+          try {
+            record('see', text, {})
+          } catch (e) {}
+        }
+        return { ok: true }
+      }
+
+      // —— 开了答题，但图里没有需要回答的问题 ——
+      const seen = (rd && rd.seen) || '（它没看清这块是什么）'
+      if (!rd || !rd.hasQuestion) {
+        pinUpdate(id, { text: seen, head: '看图 · 框选', foot: '看图 ' + sec(first.ms) + ' · 图里没看到要回答的问题' })
+        report('读图完成，无问句 ' + sec(first.ms))
+        return { ok: true, answered: false }
+      }
+
+      // —— 被本地判据拦下：台词是写死的，没经过模型 ——
+      if (refused) return { ok: true, answered: false, refused: true }
+
+      // —— 第二跳失败：至少把看到的内容留着，别让人以为白拍了 ——
+      if (!second || !second.ok) {
+        const why = (second && (second.error || second.reason)) || 'unknown'
+        pinUpdate(id, { text: seen, head: '答题 · 框选', foot: '问题看到了，但答案没想出来：' + String(why).slice(0, 100) })
+        report('答不出来：' + why)
+        return { ok: false, reason: 'answer-failed' }
+      }
+
+      const ans = read.cleanAnswer(second.text, 1200)
+      pinUpdate(id, {
+        text: ans.text || '（她想不出来…）',
+        head: '答题 · 框选',
+        answer: true,
+        foot: '看图 ' + sec(first.ms) + ' + 想 ' + sec(second.ms) + (ans.truncated ? ' · 已截断' : ''),
+      })
+      report('答题完成 · 问「' + rd.question.slice(0, 30) + '」→ ' + ans.text.length + ' 字 / ' + sec(second.ms))
+      if (record && ans.text) {
+        try {
+          record('answer', ans.text, { question: rd.question.slice(0, 100) })
+        } catch (e) {}
+      }
+      return { ok: true, answered: true }
     } catch (e) {
       pinUpdate(id, { text: '', foot: '出错了：' + String((e && e.message) || e).slice(0, 100) })
       report('异常：' + (e && e.stack ? e.stack : e))

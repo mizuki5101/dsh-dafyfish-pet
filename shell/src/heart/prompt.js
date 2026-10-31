@@ -47,6 +47,8 @@ function situationText(s) {
 /**
  * @param {object} opts
  *   imageDataUrl / newScene / situation / systemOverride / nudge（重试时的追加要求）
+ *   middle：插在 system 和本次情境之间的追加式轮次（2026-10-31 连续上下文：
+ *   ledger 的历史窗口走这里。位置在情境之前 ⇒ 情境怎么变都不动前面的前缀）
  */
 function buildMessages(opts) {
   const o = opts || {}
@@ -54,6 +56,7 @@ function buildMessages(opts) {
     '情境：' + situationText(o.situation),
     o.lastText ? '上次说过：' + String(o.lastText).slice(0, 50) : '',
     // 最近 3 句：15 秒一轮时同一画面很容易复读，明确列出来让它换角度
+    // （接了 ledger 后历史走 middle，这里就不再重复列——同一句话出现两次会教坏模型）
     Array.isArray(o.recent) && o.recent.length
       ? '最近说过：' + o.recent.slice(-3).map((x) => String(x).slice(0, 40)).join(' / ') + '（不要重复这些话）'
       : '',
@@ -72,10 +75,16 @@ function buildMessages(opts) {
 
   // 面板里改过提示词就用改过的；空 = 默认人设。
   const sys = typeof o.systemOverride === 'string' && o.systemOverride.trim() ? o.systemOverride.trim() : SYSTEM
-  return [
-    { role: 'system', content: sys },
-    { role: 'user', content },
-  ]
+  const messages = [{ role: 'system', content: sys }]
+  if (Array.isArray(o.middle)) {
+    for (const m of o.middle) {
+      if (m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim()) {
+        messages.push({ role: m.role, content: m.content })
+      }
+    }
+  }
+  messages.push({ role: 'user', content })
+  return messages
 }
 
 module.exports = { SYSTEM, SCHEMA, situationText, buildMessages }

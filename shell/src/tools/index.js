@@ -83,6 +83,8 @@ function createTools(options = {}) {
       chars: Number((info && info.chars) || 0),
       truncated: !!(info && info.truncated),
       pending: !!(info && info.pending),
+      // 答题气泡（2026-10-27）：页面据此把 body 的高度放宽（答案比描述长）
+      answer: !!(info && info.answer),
     })
     select.onPin(true)
     return id
@@ -97,6 +99,7 @@ function createTools(options = {}) {
       text: patch && patch.text !== undefined ? String(patch.text) : undefined,
       foot: patch && patch.foot !== undefined ? String(patch.foot) : undefined,
       head: patch && patch.head !== undefined ? String(patch.head) : undefined,
+      answer: patch && patch.answer !== undefined ? !!patch.answer : undefined,
     })
   }
 
@@ -137,6 +140,9 @@ function createTools(options = {}) {
     log,
     getCfg,
     getHeart,
+    // 识图/答题的结果进「经历流水」（2026-10-31）：她看到过什么、答过什么，都是底账的一行。
+    // 记录失败静默——流水只是增益，不能让它影响识图本身。
+    record: typeof (o.ledger && o.ledger.record) === 'function' ? o.ledger.record : null,
     pinShow,
     pinUpdate,
     onOpenChange: (open) => {

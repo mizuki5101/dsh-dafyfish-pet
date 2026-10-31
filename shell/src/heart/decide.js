@@ -192,6 +192,12 @@ function needsRetry(flags, action) {
 const RETRY_NUDGE =
   '上一版没有给出有效台词（或把动作名念了出来）。请重写：这一轮必须 act=speak 且 say 非空，像跟主人说话；能提到画面里的细节最好，没看懂就自然地说一句关心的话也可以。'
 
+/** 第一跳的输出根本不是 JSON（纯聊天散文，一个花括号都没有）时的重试要求。
+ * 2026-10-31 接云端后常见：屏幕上正好有对话类内容，模型会顺着聊而不是报 JSON。
+ * json_object 帮不上忙（DeepSeek 实测会退化成空白正文，见交接文档），只能靠这句拉满格式约束。 */
+const RETRY_JSON =
+  '重写：只输出一个 JSON 对象，第一个字符必须是 {、最后一个字符必须是 }，字段按上面的格式示例来；不要聊天、不要解释、不要 markdown 代码块。'
+
 /** 和最近说过的话太像（同一张截图时 9B 很容易复读） */
 const RETRY_DUP =
   '上一句和最近说过的几乎一样。请换个角度或说法重写，不要重复最近说过的话。'
@@ -337,5 +343,5 @@ module.exports = {
   MAX_SAY, MAX_TOPIC, MAX_NOTE, MAX_SAYS_PER_HOUR, MOTION_MIN_GAP_MS, RETRY_NUDGE,
   extractJson, clampText, stripArtifacts, sanitize, needsRetry, arbitrate, toControl,
   hourCount, isNightHour, isGeneric, looksGarbled, overlapsTopic, isDuplicate, RETRY_DUP, RETRY_TOPIC,
-  nextSameCount, retryWithoutImage,
+  nextSameCount, retryWithoutImage, RETRY_JSON,
 }

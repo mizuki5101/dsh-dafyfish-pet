@@ -71,6 +71,7 @@ const REQUIRED = [
   'shell/src/tools/translate.js',
   'shell/src/tools/translate-core.js',
   'shell/src/tools/shot.js',
+  'shell/src/tools/read-core.js',
   'shell/src/tools/overlay.js',
   'shell/src/tools/preload-overlay.js',
   // 2026-10-24：外设电量（面板缩尺寸/加滚动是 CSS，不新增文件）
@@ -82,6 +83,9 @@ const REQUIRED = [
   'shell/src/tts/speak-text.js',
   'shell/src/tts/tts-client.js',
   'shell/src/tts/tts-cache.js',
+  // 2026-10-31：云端 API 连续上下文（经历流水 ledger 是唯一事实源）
+  'shell/src/heart/ledger.js',
+  'shell/src/heart/context.js',
   DATA_DIR + '/测试独立桌宠.mjs',
   DATA_DIR + '/测试心跳决策.mjs',
   DATA_DIR + '/测试心跳纯函数.mjs',
@@ -90,6 +94,8 @@ const REQUIRED = [
   DATA_DIR + '/测试功能面板纯函数.mjs',
   DATA_DIR + '/测试外设电量.mjs',
   DATA_DIR + '/测试TTS纯函数.mjs',
+  DATA_DIR + '/测试云端适配.mjs',
+  DATA_DIR + '/测试经历流水.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

@@ -165,6 +165,8 @@ function sanitizeHeartPatch(p) {
         if (sv[k] !== undefined && Number.isFinite(Number(sv[k]))) v[k] = Math.round(Number(sv[k]))
       }
       if (typeof sv.prompt === 'string') v.prompt = sv.prompt.slice(0, 2000)
+      // 「回答问题」开关（2026-10-27）：漏了这一行 = 面板点了保存、返回 ok、值不变
+      if (typeof sv.answer === 'boolean') v.answer = sv.answer
       if (Object.keys(v).length) t.vision = v
     }
     if (Object.keys(t).length) out.tools = t
@@ -193,6 +195,15 @@ function sanitizeHeartPatch(p) {
       if (Object.keys(s).length) t.sources = s
     }
     if (Object.keys(t).length) out.tts = t
+  }
+  // 连续上下文（2026-10-31）。漏了这段 = 又一次「保存成功、界面刷新、值没变」。
+  if (src.context && typeof src.context === 'object') {
+    const t = {}
+    if (typeof src.context.enabled === 'boolean') t.enabled = src.context.enabled
+    for (const k of ['windowTokens', 'summaryDays']) {
+      if (src.context[k] !== undefined && Number.isFinite(Number(src.context[k]))) t[k] = Math.round(Number(src.context[k]))
+    }
+    if (Object.keys(t).length) out.context = t
   }
   return out
 }

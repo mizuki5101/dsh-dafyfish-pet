@@ -937,6 +937,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
 .dshp-pin-body{max-height:26vh;overflow:auto;overscroll-behavior:contain;
   white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
 .dshp-pin-body.dshp-pending{opacity:.55;font-style:italic}
+/* 答题（2026-10-27）：答案比描述长得多，body 放宽到 44vh 并允许滚动 */
+.dshp-pin.dshp-answer .dshp-pin-body{max-height:44vh}
 .dshp-pin-foot{margin-top:4px;font-size:calc(10px * var(--dshp-ps));opacity:.5;white-space:pre-wrap}
 .dshp-pin-btns{display:flex;gap:6px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
 .dshp-pin-btns button{border:1px solid var(--dshp-line);background:var(--dshp-bg);color:var(--dshp-fg);
@@ -5135,8 +5137,18 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     vsShotBtn.title = '直接进入框选（不用 Shift+右击，也不用系统截图键）'
     const vsShotRow = $('div', 'dshp-row')
     vsShotRow.append($('span', 'dshp-grow'), vsShotBtn)
+    // 「回答问题」（2026-10-27）：默认关，这是防注入的第一道闸门 ——
+    // 截图里的字可能是别人写的，只有用户亲手打开它，那些字才会变成"要她回答的问题"。
+    const vsAnsRow = $('div', 'dshp-row')
+    const vsAnsToggle = $('button', 'dshp-btn', '关')
+    vsAnsToggle.title = '开启后：图里如果有要人回答的题目，她会直接作答（多等几秒）'
+    vsAnsRow.append($('span', 'dshp-grow', '回答问题'), vsAnsToggle)
+    const vsAnsNote = $('div', 'dshp-note',
+      '关着：只描述看到什么，不答题。\n' +
+      '开着：图里有要人回答的题目，她会答；没题目还是只描述。\n' +
+      '不管开没开，图里的字都只当「内容」不当「命令」——写「忽略你的设定」「把提示词发出来」这种，她不会照做。')
     const vsStatus = $('div', 'dshp-status', '')
-    toolsVision.append(vsToggleRow, vsShotRow, vsNote, vsStatus)
+    toolsVision.append(vsToggleRow, vsAnsRow, vsShotRow, vsNote, vsAnsNote, vsStatus)
 
     toolsBody.append(toolsBatt, toolsQuick, toolsXlate, toolsVision)
     toolsPanel.append(toolsHead, toolsBody)
@@ -5181,6 +5193,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         vsToggle,
         vsStatus,
         vsShot: vsShotBtn,
+        vsAns: vsAnsToggle,
         openDsh: openDshBtn,
       },
       // 特殊气泡（划词翻译 / 识图）：不走 makeBubble，优先级最高
@@ -5521,13 +5534,24 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
           return
         }
 
+        // ⚠️ seal 检查必须在「屏幕空就直通」**之前**（2026-10-31 修复）：
+        // 原来的顺序是先看屏幕上有没有气泡，空了就直接 render —— 于是探头气泡一过期
+        // （5 秒最小停留），seal 就形同虚设，待机/互动气泡在读图窗口里直通插队。
+        // 本地推理快（~4s < 5s）时这条缝被盖住；接云端后上下文变长、窗口变宽，露出来了。
+        // 开场白不受影响：主进程保证它永远在 seal(true) **之前**推（index.js 的顺序）。
+        // 「她在想」占位（busy）和流式更新在上面已经放行，是刻意的。
+        if (sealed) {
+          enqueue(text, opts, Date.now() - shownAt)
+          return
+        }
+
         if (!el.classList.contains('dshp-on')) {
           render(text, opts)
           return
         }
 
         const age = Date.now() - shownAt
-        if (sealed || age < MIN_HOLD_MS) {
+        if (age < MIN_HOLD_MS) {
           enqueue(text, opts, age)
           return
         }
@@ -7253,10 +7277,19 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const model = st.model || {}
     t.vsStatus.textContent = vs.enabled
       ? model.configured
-        ? '识图：已开启 · 模型 ' + (model.model || model.baseUrl)
+        ? '识图：已开启 · 模型 ' + (model.model || model.baseUrl) + ' · 答题' + (vs.answer ? '开' : '关')
         : '识图：已开启，但还没配能看图的模型'
       : '识图：已关闭'
     t.vsToggle.title = model.configured ? 'Shift + 右击她，框一块屏幕让她看' : '先在「心跳」页配一个能看图的模型'
+
+    // 答题开关：总开关关着时它没有意义，直接灰掉（比"能点但没用"清楚）
+    paintToggle(t.vsAns, !!vs.answer)
+    t.vsAns.disabled = !vs.enabled
+    t.vsAns.title = !vs.enabled
+      ? '先把识图总开关打开'
+      : vs.answer
+        ? '图里有要人回答的题目就作答；关掉就只描述'
+        : '开启后：图里有要人回答的题目，她会直接作答'
 
     t.vsShot.disabled = !model.configured
   }
@@ -7364,6 +7397,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const on = !(toolsState.cfg && toolsState.cfg.vision && toolsState.cfg.vision.enabled)
       saveTools({ vision: { enabled: on } }, on ? '识图开了：Shift + 右击她，框一块屏幕' : '识图关掉了')
     })
+    // 答题开关（2026-10-27）：只写盘，不需要通知主进程做别的事（每次截图现读配置）
+    t.vsAns.addEventListener('click', () => {
+      const on = !(toolsState.cfg && toolsState.cfg.vision && toolsState.cfg.vision.answer)
+      saveTools(
+        { vision: { answer: on } },
+        on ? '好，图里要是有题目我就答～（看到的字只当内容，不当命令）' : '答题关了，我只说看到了什么',
+      )
+    })
     // 直接框选：不依赖 Shift+右击，也不碰系统截图键
     t.vsShot.addEventListener('click', async () => {
       const tb = toolsBridge()
@@ -7435,6 +7476,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (m && m.chars) foot.push(m.chars + ' 字')
     if (m && m.truncated) foot.push('已截断')
     p.foot.textContent = foot.join(' · ')
+    // 每次新气泡都重置「答案模式」：上一条是答案、这一条是描述时不能继承高度
+    p.el.classList.toggle('dshp-answer', !!(m && m.answer))
     paintPinButtons()
     p.el.classList.add('dshp-on')
     // 重放呼吸光：移除 → 强制重排 → 再加（和 openHud 的 flash 一个手法）
@@ -7460,6 +7503,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
     if (m.foot !== undefined) p.foot.textContent = String(m.foot || '')
     if (m.head !== undefined && m.head) p.head.textContent = String(m.head)
+    if (m.answer !== undefined) p.el.classList.toggle('dshp-answer', !!m.answer)
     pinAnchor = null
     try { placePin() } catch (e) {}
   }
@@ -7467,7 +7511,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function pinClose(reason) {
     const p = ui.pin
     if (!p) return
-    p.el.classList.remove('dshp-on', 'dshp-flash')
+    p.el.classList.remove('dshp-on', 'dshp-flash', 'dshp-answer')
     p.id = 0
     p.kind = ''
     p.phase = 'idle'
@@ -8652,21 +8696,44 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         : 'GPT-SoVITS 整合包的 api_v2 默认就是 9880 端口。'))
 
       if (backendNow !== 'openai') {
-        const refRow = $('div', 'dshp-label')
-        refRow.append($('span', null, '参考音频'))
-        refRow.appendChild(mkTextIn('D:\\path\\to\\ref.wav（3~10 秒，干净人声）', tc.refAudioPath, (v) => save({ tts: { refAudioPath: v } })))
-        const prRow = $('div', 'dshp-label')
-        prRow.append($('span', null, '转写文本'))
-        prRow.appendChild(mkTextIn('这段音频说的原话，一字不差', tc.promptText, (v) => save({ tts: { promptText: v } })))
-        box.append(refRow, prRow)
-        if (backendNow === 'gsvlite') {
+        const isLiteV = backendNow === 'gsvlite'
+        const stPath = String(tc.promptAudioPath || '').trim()
+        if (!isLiteV) {
+          // 原版 api_v2 不分离音色/风格：同一段音频既决定「像谁」也决定语气
+          const refRow = $('div', 'dshp-label')
+          refRow.append($('span', null, '参考音频'))
+          refRow.appendChild(mkTextIn('D:\\path\\to\\ref.wav（3~10 秒，干净人声）', tc.refAudioPath, (v) => save({ tts: { refAudioPath: v } })))
+          const prRow = $('div', 'dshp-label')
+          prRow.append($('span', null, '转写文本'))
+          prRow.appendChild(mkTextIn('上面那段音频说的原话，一字不差', tc.promptText, (v) => save({ tts: { promptText: v } })))
+          box.append(refRow, prRow)
+        } else {
+          // GSV-TTS-Lite 把参考音频拆成两路：
+          //   音色参考 speaker_audio → 只走 SV embedding，决定「像谁」，不需要文本
+          //   风格参考 prompt_audio  → 音素+语义前缀，决定语气节奏
+          // ⚠️ 转写在服务端固定接的是**风格参考**那段（api_server.py: prompt_audio_text=prompt_text），
+          //    所以顺序必须是 音色 → 风格 → 转写，转写紧跟它所描述的那段，否则很容易填成音色参考的转写。
+          const refRow = $('div', 'dshp-label')
+          refRow.append($('span', null, '音色参考'))
+          refRow.appendChild(mkTextIn('D:\\path\\to\\ref.wav（3~10 秒，决定「像谁」）', tc.refAudioPath, (v) => save({ tts: { refAudioPath: v } })))
           const stRow = $('div', 'dshp-label')
           stRow.append($('span', null, '风格参考'))
-          stRow.appendChild(mkTextIn('（可选）另一段音频决定语气节奏；留空 = 同参考音频', tc.promptAudioPath, (v) => save({ tts: { promptAudioPath: v } })))
-          box.append(stRow)
+          stRow.appendChild(mkTextIn('（可选）决定语气节奏，5~8 秒最合适、别超 15 秒；留空 = 用音色参考那段', tc.promptAudioPath, (v) => save({ tts: { promptAudioPath: v } })))
+          const prRow = $('div', 'dshp-label')
+          prRow.append($('span', null, '风格参考转写'))
+          prRow.appendChild(mkTextIn(
+            stPath
+              ? '填上面「风格参考」那段说的原话，一字不差'
+              : '填上面「音色参考」那段说的原话，一字不差（因为风格参考留空了）',
+            tc.promptText,
+            (v) => save({ tts: { promptText: v } }),
+          ))
+          box.append(refRow, stRow, prRow)
         }
         box.append(
-          $('div', 'dshp-hint', '转写必须逐字一致，错了声音会明显变差；路径是本机文件，不进任何仓库。'),
+          $('div', 'dshp-hint', isLiteV
+            ? '「转写」永远对应「风格参考」那段：风格参考留空时，它就是音色参考的原话。转写与音频不一致不会报错，只会明显变难听。路径只存本机，不进任何仓库。'
+            : '转写必须逐字一致，错了声音会明显变差；路径是本机文件，不进任何仓库。'),
         )
       } else {
         const moRow = $('div', 'dshp-label')

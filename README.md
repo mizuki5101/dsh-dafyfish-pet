@@ -174,7 +174,7 @@ shell/                独立桌面外壳
   src/petserver.js    本地 HTTP 服务（页面/脚本/运行时/模型 + 反向代理 + 信任栅栏）
   src/heart/          多模态心跳（采集/遮罩/调度/推理/裁决/模型进程/聊天记忆）
   build.mjs           打包 asar → 装到外壳目录
-tests/                纯 Node 测试（13 套，CI 跑这些）
+tests/                纯 Node 测试（15 套，CI 跑这些）
 ```
 
 ## 开发
@@ -187,7 +187,7 @@ tests/                纯 Node 测试（13 套，CI 跑这些）
 ## 测试
 
 ```bash
-# 纯 Node（不需要外壳、不需要模型文件）：13 个套件
+# 纯 Node（不需要外壳、不需要模型文件）：15 个套件
 node tests/测试动作引擎.mjs
 node tests/测试待机节奏.mjs
 node tests/测试互动感知.mjs
@@ -201,12 +201,14 @@ node tests/测试做梦纯函数.mjs
 node tests/测试功能面板纯函数.mjs
 node tests/测试外设电量.mjs
 node tests/测试TTS纯函数.mjs
+node tests/测试经历流水.mjs
+node tests/测试云端适配.mjs
 
 # 语法检查（本机 node --check 在中文路径下会崩）
 node tests/_safe/查语法.mjs
 ```
 
-合计 **1434 项**。这些套件大多是从 `pet.js` 里把带标记的纯函数块**原样抠出来**跑的，
+合计 **1633 项**。这些套件大多是从 `pet.js` 里把带标记的纯函数块**原样抠出来**跑的，
 所以测的就是线上那份代码，不存在「测试副本和线上不一致」。
 
 > 真机（CDP）套件需要桌面外壳 + 调试口，属于开发时的排障工具，不在这个仓库里。
