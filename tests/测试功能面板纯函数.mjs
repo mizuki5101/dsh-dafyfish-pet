@@ -18,6 +18,7 @@ import rd from '../shell/src/tools/read-core.js'
 import mask from '../shell/src/heart/mask.js'
 import cfgMod from '../shell/src/heart/config.js'
 import settingsMod from '../shell/src/heart/settings.js'
+import ledgerMod from '../shell/src/heart/ledger.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(HERE, '..')
@@ -715,6 +716,77 @@ console.log('\n【14】答题开关的五道关（2026-10-27）')
   const pet = fs.readFileSync(path.join(ROOT, 'pet-plugin/assets/pet.js'), 'utf8')
   ok('面板有答题开关', /vsAnsToggle/.test(pet) && /vision: \{ answer:/.test(pet))
   ok('答案气泡放宽高度', /dshp-answer \.dshp-pin-body/.test(pet))
+}
+
+// ————————————————————————————————————————————————————————————
+console.log('\n【15】经历面板：前端纯函数块与 ledger 的对账（2026-11-01）')
+{
+  // pet.js 里 @experience-panel 标记的那块**原样抠出来**求值 —— 测的就是线上那份
+  const PET = path.join(ROOT, 'pet-plugin', 'assets', 'pet.js')
+  const pet = fs.readFileSync(PET, 'utf8')
+  const m = /\/\* ==== @experience-panel:start ====[\s\S]*?\/\* ==== @experience-panel:end ==== \*\//.exec(pet)
+  ok('@experience-panel 块还在', !!m)
+  const EXP = m ? new Function(m[0].replace('var DSHPetExpPanel =', 'return'))() : null
+  ok('块求值得到对象', EXP && typeof EXP === 'object')
+
+  // 页签 id ↔ ledger.GROUPS：一个不多一个不少（面板页签没死角、没死键）
+  const tabIds = EXP.TABS.map(([id]) => id).filter((id) => id !== 'all')
+  const groupIds = Object.keys(ledgerMod.GROUPS)
+  ok('页签 id 集合 = GROUPS 键集合', tabIds.length === groupIds.length && tabIds.every((id) => groupIds.includes(id)),
+    { tabIds, groupIds })
+  ok('页签第一个是 all', EXP.TABS[0][0] === 'all' && EXP.TABS[0][1] === '全部')
+
+  // kind 标签 ↔ ledger.KINDS / KIND_ZH：流水行上的中文必须和主进程同源
+  const labelKinds = Object.keys(EXP.LABEL)
+  ok('LABEL 覆盖全部 kind', ledgerMod.KINDS.every((k) => labelKinds.includes(k)),
+    ledgerMod.KINDS.filter((k) => !labelKinds.includes(k)))
+  ok('LABEL 没有未知 kind', labelKinds.every((k) => ledgerMod.KINDS.includes(k)))
+  ok('LABEL 文案与 KIND_ZH 一致', labelKinds.every((k) => EXP.LABEL[k] === ledgerMod.KIND_ZH[k]),
+    labelKinds.filter((k) => EXP.LABEL[k] !== ledgerMod.KIND_ZH[k]))
+  ok('kindLabel 未知 kind 原样显示', EXP.kindLabel('nope') === 'nope' && EXP.kindLabel('') === '?')
+
+  // 时间格式：今天 HH:MM，更早 MM-DD HH:MM（本地时区）
+  const noon = new Date(2026, 10, 1, 12, 0, 0).getTime()
+  ok('今天的条目 = HH:MM', EXP.fmtTime(new Date(2026, 10, 1, 9, 5).getTime(), noon) === '09:05')
+  ok('更早的条目 = MM-DD HH:MM', EXP.fmtTime(new Date(2026, 9, 30, 23, 27).getTime(), noon) === '10-30 23:27')
+  ok('跨年也算更早', /^\d{2}-\d{2} \d{2}:\d{2}$/.test(EXP.fmtTime(new Date(2025, 0, 1, 0, 0).getTime(), noon)))
+  ok('非法 at 不炸（epoch 显示）', /^\d{2}:\d{2}$|^\d{2}-\d{2}/.test(EXP.fmtTime(0, noon)))
+
+  // 正文截断：展示裁 300，复制永远全文（clip 只管显示）
+  ok('clip 短文原样', EXP.clip('主人好') === '主人好')
+  ok('clip 长文裁到 300+…', EXP.clip('啊'.repeat(301)) === '啊'.repeat(300) + '…' && EXP.clip('啊'.repeat(300)).length === 300)
+  ok('clip 空值不炸', EXP.clip(null) === '' && EXP.clip(undefined) === '')
+}
+
+// ————————————————————————————————————————————————————————————
+console.log('\n【16】AI 面板：@ai-panel 纯函数块与 config.ROLES 的对账（2026-11-01）')
+{
+  const PET = path.join(ROOT, 'pet-plugin', 'assets', 'pet.js')
+  const pet = fs.readFileSync(PET, 'utf8')
+  const m = /\/\* ==== @ai-panel:start ====[\s\S]*?\/\* ==== @ai-panel:end ==== \*\//.exec(pet)
+  ok('@ai-panel 块还在', !!m)
+  const AIP = m ? new Function(m[0].replace('var DSHPetAIPanel =', 'return'))() : null
+  ok('块求值得到对象', AIP && typeof AIP === 'object')
+
+  // 板块清单同源：前端 ROLE_LABELS ↔ config.ROLES（AI 面板的勾选框没死角）
+  const feIds = AIP.ROLE_LABELS.map((x) => x[0])
+  ok('板块 id 集合 = config.ROLES', feIds.length === cfgMod.ROLES.length && feIds.every((id) => cfgMod.ROLES.includes(id)),
+    { feIds, roles: cfgMod.ROLES })
+  ok('板块都有中文标签', AIP.ROLE_LABELS.every(([id, label]) => id && label && AIP.roleLabel(id) === label))
+  ok('未知板块标签不炸', AIP.roleLabel('nope') === 'nope')
+
+  // 未分配 = roles[r] 为空；translate 的 'free'（免费接口）算已分配
+  ok('空 roles → 全部未分配', AIP.unassignedList({}).length === cfgMod.ROLES.length)
+  ok("'free' 算已分配", !AIP.unassignedList({ translate: 'free' }).includes('translate'))
+  ok("空串/缺失 = 未分配", AIP.unassignedList({ see: 'm1', translate: 'free' }).join(',') === 'answer,dream,chat,bili,tts')
+  ok('兜底说明 7 板块全覆盖', cfgMod.ROLES.every((r) => typeof AIP.FALLBACK_NOTE[r] === 'string' && AIP.FALLBACK_NOTE[r]))
+
+  // 勾选纯函数：点已勾 = 取消；点没勾 = 换绑；不 mutate
+  const r0 = { see: 'm1', chat: 'm1' }
+  ok('点已勾的 → 取消', AIP.toggleRole(r0, 'see', 'm1').see === '')
+  ok('点没勾的 → 换绑（本板块单值覆盖）', AIP.toggleRole(r0, 'see', 'm2').see === 'm2')
+  ok('换绑不牵连别的板块', AIP.toggleRole(r0, 'see', 'm2').chat === 'm1')
+  ok('不 mutate 输入', (() => { AIP.toggleRole(r0, 'see', 'm2'); return r0.see === 'm1' })())
 }
 
 // ————————————————————————————————————————————————————————————

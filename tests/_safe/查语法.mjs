@@ -96,6 +96,7 @@ const REQUIRED = [
   DATA_DIR + '/测试TTS纯函数.mjs',
   DATA_DIR + '/测试云端适配.mjs',
   DATA_DIR + '/测试经历流水.mjs',
+  DATA_DIR + '/测试模型条目.mjs',
   DATA_DIR + '/_safe/查语法.mjs',
 ]
 

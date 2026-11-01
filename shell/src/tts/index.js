@@ -19,6 +19,37 @@ const { cacheKey, cacheHas, cacheSave, pruneCache, countCache, cacheUrl } = requ
 
 const TEST_TEXT = '你好呀主人，我是大肥鱼，这是我用本地声音说的第一句话。'
 
+/**
+ * 生效的 TTS 配置（2026-11-01，模型条目系统）：roles.tts 指到条目 →
+ * 端点（baseUrl/apiKey）用条目的，「声音细节」优先条目的 entry.tts、缺的回落全局 heart.tts。
+ * 没分配（或条目没了）→ 原样返回 heart.tts —— 与 v2.1 行为完全一致。
+ * enabled / sources 永远是全局的（那是「哪些场合出声」，不是「用哪个端点」）。纯函数，可单测。
+ */
+function resolveTtsTarget(cfg) {
+  const base = (cfg && cfg.tts) || {}
+  const roles = (cfg && cfg.roles) || {}
+  const models = Array.isArray(cfg && cfg.models) ? cfg.models : []
+  const e = models.find((m) => m && m.id && m.id === roles.tts)
+  if (!e) return base
+  const t = e.tts && typeof e.tts === 'object' ? e.tts : {}
+  const numOr = (k) => {
+    const n = Number(t[k])
+    return Number.isFinite(n) && n > 0 ? n : base[k]
+  }
+  return Object.assign({}, base, {
+    baseUrl: e.baseUrl || base.baseUrl,
+    apiKey: e.apiKey || base.apiKey,
+    backend: t.backend || base.backend,
+    voice: t.voice || base.voice,
+    refAudioPath: t.refAudioPath || base.refAudioPath,
+    promptAudioPath: t.promptAudioPath || base.promptAudioPath,
+    promptText: t.promptText || base.promptText,
+    speed: numOr('speed') || base.speed,
+    maxChars: numOr('maxChars') || base.maxChars,
+    timeoutMs: numOr('timeoutMs') || base.timeoutMs,
+  })
+}
+
 function createTts(opts) {
   const o = opts || {}
   const log = o.log || (() => {})
@@ -120,4 +151,4 @@ function createTts(opts) {
   }
 }
 
-module.exports = { createTts, TEST_TEXT }
+module.exports = { createTts, resolveTtsTarget, TEST_TEXT }

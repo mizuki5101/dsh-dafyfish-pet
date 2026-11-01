@@ -101,6 +101,10 @@ function createHeart(opts) {
   let lastSkip = ''
   let inferFails = 0
   let backoffUntil = 0
+  /** 心跳「追加窗口」的会话级预算上限（0 = 没发现过超限）。
+   *  200k 大窗口（2026-11-01 默认）撞上模型上下文上限时 400，这里逐级砍半记住，
+   *  后面的跳直接从安全的预算起步（设置保存/heart.reload() 会重置进程状态，含这个）。 */
+  let seeBudgetCap = 0
 
   /* ——————————————————————————————————————————————————————————————
    * 做梦（2026-10-21）：她睡着 → 回顾「上次醒来 → 现在」→ 写一篇日记。
@@ -140,14 +144,13 @@ function createHeart(opts) {
         if (typeof o.onDreamState === 'function') o.onDreamState(!!on)
       } catch (e) {}
     },
-    // 和刷视频同一套出口：所有推理都走 vision.infer，端点解析交给它
+    // 和刷视频同一套出口：所有推理都走 inferFor（模型条目系统），端点解析交给它
     chat: async (messages, op) => {
-      const r = await vision.infer(cfg, messages, {
+      const r = await vision.inferFor(cfg, 'dream', messages, {
         schema: op && op.schema,
         maxTokens: (op && op.maxTokens) || 2048,
         temperature: op && op.temperature,
         timeoutMs: (op && op.timeoutMs) || 180000,
-        enableThinking: cfg.model.enableThinking,
       })
       return r.ok ? { ok: true, text: r.text } : { ok: false, error: r.error }
     },
@@ -195,6 +198,8 @@ function createHeart(opts) {
     // 否则用户刚改对地址，还要干等 20 秒才会重试，看起来像「配置没生效」。
     backoffUntil = 0
     inferFails = 0
+    // 换了模型/窗口预算后，「上次撞上下文上限」的旧结论不再适用，重新从小预算试起
+    seeBudgetCap = 0
     return cfg
   }
 
@@ -302,13 +307,17 @@ function createHeart(opts) {
     // 就不再塞（同一句话出现两次会教坏模型照抄）。回放一天一换、窗口只追加、
     // 每次变化的情境永远在最后一条 user —— 这个形状是 DeepSeek 前缀缓存命中的前提。
     const ctxOn = !!(ledger && cfg.context && cfg.context.enabled)
-    const ctxWindow = ctxOn ? renderTurns(ledger.window({ budgetTokens: cfg.context.windowTokens })) : []
     const ctxSummary = ctxOn ? context.dailySummary(ledger.all(), { days: cfg.context.summaryDays }) : ''
-    const ctxMiddle = ctxOn
-      ? ctxSummary
-        ? [{ role: 'user', content: context.SUMMARY_HEAD + ctxSummary + context.SUMMARY_TAIL }].concat(ctxWindow)
-        : ctxWindow
-      : []
+    // 窗口预算：会话级上限（撞过上下文超限就砍半记住）与配置值取小
+    let windowBudget = ctxOn ? (seeBudgetCap || cfg.context.windowTokens) : 0
+    const buildMiddle = (budget) => {
+      if (!ctxOn) return []
+      const w = renderTurns(ledger.window({ budgetTokens: budget }))
+      return ctxSummary
+        ? [{ role: 'user', content: context.SUMMARY_HEAD + ctxSummary + context.SUMMARY_TAIL }].concat(w)
+        : w
+    }
+    let ctxMiddle = buildMiddle(windowBudget)
     while (attempts < 2) {
       const useImage = !(attempts > 0 && retryNoImage)
       const messages = buildMessages({
@@ -322,15 +331,24 @@ function createHeart(opts) {
         opener: openerLine || '',
         nudge: attempts > 0 ? retryNudge : '',
       })
-      const r = await vision.infer(cfg, messages, {
+      const r = await vision.inferFor(cfg, 'see', messages, {
         schema: PROMPT_SCHEMA,
         maxTokens: cfg.model.maxTokens,
         timeoutMs: cfg.model.timeoutMs,
-        enableThinking: cfg.model.enableThinking,
         // 温度：第一次 0.6（有点变化），重试时 0.95（硬拽出另一种说法）。
         // 实测 0.2 在同一张截图上会一字不差地复读。
         temperature: attempts > 0 ? 0.95 : 0.6,
       })
+      // —— 上下文超长保险丝（2026-11-01）：200k 默认窗口撞上模型上限时 400 ——
+      // 窗口预算砍半重建**立刻重试**（不消耗 attempts 的两次机会，不触发退避），
+      // 砍到能放下为止（下限 2048），并记住 —— 下一跳直接从安全预算起步。
+      if (!r.ok && r.overflow && ctxOn && windowBudget > 2048) {
+        seeBudgetCap = Math.max(2048, Math.floor(windowBudget / 2))
+        log('心跳：请求超过模型上下文，窗口预算 ' + windowBudget + ' → ' + seeBudgetCap + ' 再试')
+        windowBudget = seeBudgetCap
+        ctxMiddle = buildMiddle(windowBudget)
+        continue
+      }
       if (!r.ok) {
         inferFails++
         lastSkip = 'infer:' + r.error
@@ -757,12 +775,11 @@ function createHeart(opts) {
     const stage = typeof o.onBiliStage === 'function' ? o.onBiliStage : null
     try {
       const chat = async (messages, op) => {
-        const r = await vision.infer(cfg, messages, {
+        const r = await vision.inferFor(cfg, 'bili', messages, {
           schema: op && op.schema,
           maxTokens: (op && op.maxTokens) || 400,
           temperature: op && op.temperature,
           timeoutMs: Math.max(cfg.model.timeoutMs, 120000),
-          enableThinking: cfg.model.enableThinking,
         })
         return r.ok ? { ok: true, text: r.text } : { ok: false, error: r.error }
       }

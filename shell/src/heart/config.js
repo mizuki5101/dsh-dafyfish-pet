@@ -145,14 +145,168 @@ const DEFAULTS = {
    * 历史只追加不重写 ⇒ 相邻请求共享越来越长的公共前缀 ⇒ DeepSeek 的自动前缀缓存
    * （命中约 1/10 价）与本地 llama-server 的 KV cache 都吃到。
    * enabled=false 完全回到旧拼装（ledger 照常记录，只是不喂给模型）。
-   * windowTokens = 追加窗口的 token 预算；summaryDays = 「近况回放」回看几天。
+   * windowTokens = 追加窗口的 token 预算。2026-11-01 博士拍板默认 200000（模型上下文
+   * 量级）——代价是底账攒多后每跳的稳定前缀变大（缓存命中部分 1/10 价，整段仍计费）；
+   * 超过模型装得下的量会 400，vision.js 的 overflow 阶梯会把窗口逐级砍半自适应（见那里）。
+   * summaryDays = 「近况回放」回看几天。
    */
-  context: { enabled: true, windowTokens: 2048, summaryDays: 3 },
+  context: { enabled: true, windowTokens: 200000, summaryDays: 3 },
+  /**
+   * 模型条目（2026-11-01，AI 面板的数据面）：一条 = 一个 OpenAI 兼容端点。
+   * models 为空且 settings.json 里**没有** models 键时，normalize 会从旧字段
+   * （heart.model / tools.translate.api）派生（见 deriveModels）——纯派生不落盘，
+   * 面板第一次保存才会真正写进 settings.json。字段存在（哪怕空数组）就完全信任。
+   */
+  models: [],
+  /** 板块 → 条目 id（互斥：单值结构天然一板块一模型）。'' = 未分配 → 回落 heart.model。 */
+  roles: {},
 }
 
 const PROVIDERS = ['auto', 'separate', 'ollama', 'openai']
 /** 翻译引擎白名单（面板里三选一；非法值一律回落默认的免费引擎） */
 const ENGINES = ['free', 'api', 'local']
+
+// ———— 模型条目系统（2026-11-01）————
+
+/** 板块清单：谁要用模型。tts 走 TTS 适配器（端点跟条目，声音细节存 entry.tts），translate 额外允许 'free'。 */
+const ROLES = ['see', 'answer', 'dream', 'chat', 'bili', 'tts', 'translate']
+const MAX_MODELS = 8
+
+/** 条目里的「声音细节」（entry.tts 白名单；端点 = 条目自己的 baseUrl/apiKey） */
+const TTS_FIELDS = ['backend', 'voice', 'refAudioPath', 'promptAudioPath', 'promptText']
+
+function normalizeEntryTts(raw) {
+  const t = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null
+  if (!t) return undefined
+  const out = {}
+  for (const k of TTS_FIELDS) {
+    if (typeof t[k] === 'string') out[k] = t[k].slice(0, 500)
+  }
+  for (const k of ['speed', 'maxChars', 'timeoutMs']) {
+    if (t[k] !== undefined && Number.isFinite(Number(t[k]))) out[k] = Number(t[k])
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * 条目白名单化。没有 baseUrl 的条目直接丢（引用它的板块在 normalizeRoles 里同步摘除）。
+ * id 缺失/撞车时补一个稳定的（序号优先，撞车加随机尾巴）。
+ */
+function normalizeModels(raw) {
+  const out = []
+  const seen = new Set()
+  for (const r of Array.isArray(raw) ? raw : []) {
+    if (!r || typeof r !== 'object') continue
+    const baseUrl = str(r.baseUrl, '').trim().slice(0, 300)
+    if (!baseUrl) continue
+    let id = str(r.id, '').trim().slice(0, 40)
+    if (!id) id = 'm' + (out.length + 1)
+    if (seen.has(id)) {
+      // 撞车补确定性后缀（不用随机数：id 要在多次保存之间保持稳定）
+      let n = 2
+      while (seen.has(id + '-' + n)) n++
+      id = id + '-' + n
+    }
+    seen.add(id)
+    const entry = {
+      id,
+      name: str(r.name, '').trim().slice(0, 30) || '模型 ' + (out.length + 1),
+      baseUrl,
+      model: str(r.model, '').trim().slice(0, 200),
+      apiKey: str(r.apiKey, '').slice(0, 500),
+      timeoutMs: num(r.timeoutMs, DEFAULTS.model.timeoutMs, 1000, 120000),
+      enableThinking: r.enableThinking === true,
+    }
+    const tts = normalizeEntryTts(r.tts)
+    if (tts) entry.tts = tts
+    out.push(entry)
+    if (out.length >= MAX_MODELS) break
+  }
+  return out
+}
+
+/**
+ * 板块映射白名单化：值必须是「现存条目 id」（或 translate 的 'free'），
+ * 否则一律记成 ''（未分配 → 调用侧回落 heart.model 旧路径）。
+ * 删条目后它负责的板块会自动回到未分配 —— 不会留下悬空引用。
+ */
+function normalizeRoles(raw, models) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  const ids = new Set((models || []).map((m) => m.id))
+  const out = {}
+  for (const role of ROLES) {
+    const v = str(src[role], '')
+    if (v && ids.has(v)) out[role] = v
+    else if (role === 'translate' && v === 'free') out[role] = 'free'
+    else out[role] = ''
+  }
+  return out
+}
+
+/**
+ * 旧配置 → 条目的**纯派生迁移**（幂等，不写盘；面板第一次保存才落 settings.json）：
+ *   · heart.model 有端点 → 「默认模型」条目接走全部 LLM 板块；
+ *   · translate 引擎 'api' 且填了 api 端点 → 另起「翻译专用」条目；
+ *     'local' → 也归「默认模型」（同一端点，行为等价）；'free'/没填 → 'free'。
+ * settings.json 里 models 键**不存在**才派生 —— 键存在（哪怕空数组）代表面板已经
+ * 接管（用户可能故意清空），绝不能再从旧字段变出来，否则条目删不掉。
+ */
+function deriveModels(model, tl) {
+  const models = []
+  const roles = {}
+  const m = model || {}
+  const t = tl || {}
+  if (str(m.baseUrl, '').trim()) {
+    const id = 'm1'
+    models.push({
+      id,
+      name: '默认模型',
+      baseUrl: str(m.baseUrl, '').trim().slice(0, 300),
+      model: str(m.model, '').trim().slice(0, 200),
+      apiKey: str(m.apiKey, '').slice(0, 500),
+      timeoutMs: num(m.timeoutMs, DEFAULTS.model.timeoutMs, 1000, 120000),
+      enableThinking: m.enableThinking === true,
+    })
+    for (const r of ['see', 'answer', 'dream', 'chat', 'bili']) roles[r] = id
+    roles.tts = ''
+    roles.translate = t.engine === 'local' ? id : 'free'
+  } else {
+    for (const r of ROLES) roles[r] = ''
+  }
+  const api = t.api || {}
+  if (t.engine === 'api' && str(api.baseUrl, '').trim()) {
+    models.push({
+      id: 'translate',
+      name: '翻译专用',
+      baseUrl: str(api.baseUrl, '').trim().slice(0, 300),
+      model: str(api.model, '').trim().slice(0, 200),
+      apiKey: str(api.apiKey, '').slice(0, 500),
+      timeoutMs: num(api.timeoutMs, 30000, 1000, 120000),
+      enableThinking: false,
+    })
+    roles.translate = 'translate'
+  }
+  return { models, roles }
+}
+
+/**
+ * 板块分配（纯函数，返回新对象不 mutate）。互斥由 roles[role] 的**单值**结构天然保证
+ * （一个板块只能记一个条目 id；勾到 B 条目 = 自动从 A 摘除）。
+ * @param modelId 条目 id | ''（取消分配）| 'free'（仅 translate）
+ */
+function assignRole(roles, role, modelId) {
+  const out = Object.assign({}, roles || {})
+  if (!ROLES.includes(role)) return out
+  if (modelId === 'free' && role === 'translate') out[role] = 'free'
+  else if (!modelId) out[role] = ''
+  else out[role] = String(modelId).slice(0, 40)
+  return out
+}
+
+/** 反查：这个条目负责哪些板块（AI 面板的勾选框要读它） */
+function rolesOfEntry(roles, entryId) {
+  return ROLES.filter((r) => roles && roles[r] === entryId)
+}
 
 function num(v, def, min, max) {
   const n = Number(v)
@@ -191,7 +345,7 @@ function normalize(raw) {
   const tt = src.tts && typeof src.tts === 'object' ? src.tts : {}
   const ttsSrc = tt.sources && typeof tt.sources === 'object' ? tt.sources : {}
   const cx = src.context && typeof src.context === 'object' ? src.context : {}
-  return {
+  const out = {
     enabled: src.enabled === true,
     // 2026-10-18 起：看屏间隔与说话间隔统一 15~600s（面板只有一个滑块）。
     intervalSec: num(src.intervalSec, DEFAULTS.intervalSec, 15, 600),
@@ -318,10 +472,23 @@ function normalize(raw) {
     // 连续上下文（2026-10-31）：白名单在 settings.js 的 sanitizeHeartPatch，两边同步
     context: {
       enabled: bool(cx.enabled, DEFAULTS.context.enabled),
-      windowTokens: num(cx.windowTokens, DEFAULTS.context.windowTokens, 512, 16384),
+      // 上限 200000 = 博士拍板的默认（2026-11-01）；超过模型上下文会 400，由
+      // vision.js 的 overflow 阶梯逐级砍半自适应。下限 512 够放一条像样的话。
+      windowTokens: num(cx.windowTokens, DEFAULTS.context.windowTokens, 512, 200000),
       summaryDays: num(cx.summaryDays, DEFAULTS.context.summaryDays, 1, 7),
     },
   }
+  // 模型条目：settings.json 里 models 键不存在才做旧字段派生（键存在就完全信任，
+  // 哪怕是空数组 —— 否则面板里删掉的条目会在下次读取时「复活」）。
+  if (!Array.isArray(src.models)) {
+    const d = deriveModels(out.model, out.tools.translate)
+    out.models = normalizeModels(d.models)
+    out.roles = normalizeRoles(d.roles, out.models)
+  } else {
+    out.models = normalizeModels(src.models)
+    out.roles = normalizeRoles(src.roles, out.models)
+  }
+  return out
 }
 
 /** 写日志用：**永远不要**把 apiKey 打出去 */
@@ -336,4 +503,8 @@ function describe(cfg) {
   )
 }
 
-module.exports = { DEFAULTS, PROVIDERS, ENGINES, normalize, describe }
+module.exports = {
+  DEFAULTS, PROVIDERS, ENGINES, normalize, describe,
+  // 模型条目系统（2026-11-01）—— 导出便于纯函数单测与 AI 面板
+  ROLES, MAX_MODELS, TTS_FIELDS, normalizeModels, normalizeRoles, deriveModels, assignRole, rolesOfEntry,
+}

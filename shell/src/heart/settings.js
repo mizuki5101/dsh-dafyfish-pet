@@ -205,7 +205,63 @@ function sanitizeHeartPatch(p) {
     }
     if (Object.keys(t).length) out.context = t
   }
+  // 模型条目（2026-11-01）：数组整体替换（deepMerge 对数组就是覆盖）。
+  // apiKey 只有字符串才收：undefined/null = 保留旧值（carryOverEntryKeys 回填），'' = 明确清空。
+  if (Array.isArray(src.models)) {
+    out.models = src.models
+      .filter((m) => m && typeof m === 'object')
+      .slice(0, 8)
+      .map((m) => {
+        const e = {}
+        if (typeof m.id === 'string' && m.id.trim()) e.id = m.id.trim().slice(0, 40)
+        if (typeof m.name === 'string') e.name = m.name.trim().slice(0, 30)
+        if (typeof m.baseUrl === 'string') e.baseUrl = m.baseUrl.trim().slice(0, 300)
+        if (typeof m.model === 'string') e.model = m.model.trim().slice(0, 200)
+        if (typeof m.apiKey === 'string') e.apiKey = m.apiKey.slice(0, 500)
+        if (m.timeoutMs !== undefined && Number.isFinite(Number(m.timeoutMs))) e.timeoutMs = Math.round(Number(m.timeoutMs))
+        if (typeof m.enableThinking === 'boolean') e.enableThinking = m.enableThinking
+        // 「声音细节」跟条目走（2026-11-01）：只有这个条目负责「声音」板块时才有意义
+        if (m.tts && typeof m.tts === 'object' && !Array.isArray(m.tts)) {
+          const t = {}
+          for (const k of ['backend', 'voice', 'refAudioPath', 'promptAudioPath', 'promptText']) {
+            if (typeof m.tts[k] === 'string') t[k] = m.tts[k].slice(0, 500)
+          }
+          for (const k of ['speed', 'maxChars', 'timeoutMs']) {
+            if (m.tts[k] !== undefined && Number.isFinite(Number(m.tts[k]))) t[k] = Number(m.tts[k])
+          }
+          if (Object.keys(t).length) e.tts = t
+        }
+        return e
+      })
+      .filter((e) => Object.keys(e).length)
+  }
+  if (src.roles && typeof src.roles === 'object' && !Array.isArray(src.roles)) {
+    const r = {}
+    for (const k of ['see', 'answer', 'dream', 'chat', 'bili', 'tts', 'translate']) {
+      const v = src.roles[k]
+      if (typeof v === 'string') r[k] = v.trim().slice(0, 40)
+    }
+    if (Object.keys(r).length) out.roles = r
+  }
   return out
+}
+
+/**
+ * 条目密钥回填（纯函数，可单测）：payload 给页面的是 apiKeySet 布尔，页面编辑条目后
+ * 存回来的 patch 里没有明文密钥 —— models 又是**数组整体替换**，不回填就会把密钥洗掉。
+ * 规则：patch 条目 apiKey 为 undefined/null → 沿用旧条目（按 id 对上）的密钥；
+ *       '' 或非空字符串 = 页面明确要 清空/设置，尊重不填。
+ */
+function carryOverEntryKeys(prev, next) {
+  const byId = new Map((Array.isArray(prev) ? prev : []).map((m) => (m && m.id ? [m.id, m] : null)).filter(Boolean))
+  return (Array.isArray(next) ? next : []).map((m) => {
+    if (!m || typeof m !== 'object') return m
+    if (m.apiKey === undefined || m.apiKey === null) {
+      const old = byId.get(m.id)
+      if (old && typeof old.apiKey === 'string' && old.apiKey) return Object.assign({}, m, { apiKey: old.apiKey })
+    }
+    return m
+  })
 }
 
 /**
@@ -236,4 +292,4 @@ function redactForLog(input, depth) {
   return out
 }
 
-module.exports = { readJson, writeJson, deepMerge, patchHeart, sanitizeHeartPatch, redactForLog }
+module.exports = { readJson, writeJson, deepMerge, patchHeart, sanitizeHeartPatch, redactForLog, carryOverEntryKeys }

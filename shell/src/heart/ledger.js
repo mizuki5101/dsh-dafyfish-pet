@@ -53,6 +53,16 @@ const KIND_ZH = {
 
 const MAX_TEXT = 2000
 
+/** 经历面板的筛选页签（2026-11-01）：页签 → kind 集合（pet.js 的 DSHPetExpPanel.KINDS 与之对账）。
+ *  「嘀咕」把 dream 算进去：日记也是她自己主动记的。 */
+const GROUPS = {
+  talk: ['say', 'dream'],
+  chat: ['chat-user', 'chat-her'],
+  see: ['see'],
+  answer: ['answer'],
+  bili: ['bili'],
+}
+
 function pad2(n) {
   return String(n).padStart(2, '0')
 }
@@ -201,6 +211,49 @@ function entryLike(j) {
 }
 
 /**
+ * 经历面板的只读分页（2026-11-01）：从**最新**往回取一页，可按页签组过滤。
+ *
+ * @param {Array} entries 时间升序的流水
+ * @param {{groups?:Array<string>, before?:number, limit?:number}} opts
+ *   groups：页签名数组（见 GROUPS）；null/空/含未知页签 = 全部。
+ *   before：游标（不含）——下一页只取 at < before 的，把这一页里最旧的那条的 at 传回来。
+ *   limit：一页几条（1~200，默认 50）。
+ * @returns {{items:Array, nextBefore:number|null, total:number}}
+ *   items 按**最新在前**排好（面板直接渲染）；nextBefore=null 表示没有更早的了。
+ *   游标用 at 不用下标：面板可能读到的是另一次 load 之后的数组，下标没有意义。
+ *   已知小坑：同毫秒的两条会一起落在游标一侧（record 对话轮已用 +1ms 错开，
+ *   心跳/识图各次调用间隔远大于 1ms，撞上的概率可忽略；只读视图，不值得为它建索引）。
+ */
+function recentPage(entries, opts) {
+  const o = opts || {}
+  const limit = Math.max(1, Math.min(200, Number(o.limit) || 50))
+  const before = Number(o.before) > 0 ? Number(o.before) : 0
+  const kinds = new Set()
+  for (const g of Array.isArray(o.groups) ? o.groups : []) {
+    for (const k of GROUPS[g] || []) kinds.add(k)
+  }
+  const useKinds = kinds.size ? kinds : null
+  const matched = []
+  for (const e of entries || []) {
+    if (!e || Number(e.at) <= 0) continue
+    if (useKinds && !useKinds.has(e.kind)) continue
+    if (before && Number(e.at) >= before) continue
+    matched.push(e)
+  }
+  // 切页边界**整组进出**：切点若落在同毫秒的几条中间，就把这几条一起留给本页
+  // ——游标是 at，切在组中间的话，下一页（at < before）会把没拿走的那几条吞掉。
+  let cut = matched.length > limit ? matched.length - limit : 0
+  const boundAt = cut < matched.length ? matched[cut].at : 0
+  while (cut > 0 && matched[cut - 1].at === boundAt) cut--
+  const items = matched.slice(cut).reverse()
+  return {
+    items,
+    nextBefore: cut > 0 ? items[items.length - 1].at : null,
+    total: matched.length,
+  }
+}
+
+/**
  * 落盘编排：内存数组 + JSONL 追加写 + 低频 prune。
  * @param {{file:string, maxAgeDays?:number, maxEntries?:number, log?:Function}} opts
  */
@@ -289,6 +342,8 @@ function createLedger(opts) {
     record,
     /** 按预算取追加式窗口（见 pickWindow） */
     window: (opts2) => pickWindow(entries, opts2),
+    /** 经历面板的只读分页（见 recentPage） */
+    recent: (opts2) => recentPage(entries, opts2),
     all: () => entries.slice(),
     prune,
     clear() {
@@ -306,12 +361,14 @@ module.exports = {
   ROLE_OF,
   LABEL_OF,
   KIND_ZH,
+  GROUPS,
   MAX_TEXT,
   normalizeEntry,
   pruneEntries,
   entryTurn,
   renderTurns,
   pickWindow,
+  recentPage,
   digestPastDays,
   entryLike,
   createLedger,

@@ -115,7 +115,15 @@ function createTranslate(options = {}) {
   }
 
   /** 解析当前配置到底该用哪个端点 */
-  function resolveTarget(tl, heart) {
+  function resolveTarget(tl, heart, cfg) {
+    // 条目优先（2026-11-01，模型条目系统）：roles.translate 指到条目 → 直接用那个端点。
+    // 'free' / 未分配 / 条目失效 → 走旧的三档引擎逻辑（与 v2.1 行为完全一致）。
+    // 环回端点的条目也 hold()：它多半就是本地 llama-server，和心跳抢同一个槽位。
+    const cand = vision.resolveRole(cfg, 'translate')
+    if (cand) {
+      const loopback = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/i.test(cand.baseUrl)
+      return { ok: true, engine: 'entry', baseUrl: cand.baseUrl, model: cand.model, apiKey: cand.apiKey || '', viaLocal: loopback }
+    }
     const engine = tl.engine === 'api' || tl.engine === 'local' ? tl.engine : 'free'
     if (engine === 'free') return { ok: true, engine }
     if (engine === 'api') {
@@ -138,7 +146,7 @@ function createTranslate(options = {}) {
     const tl = (cfg && cfg.tools && cfg.tools.translate) || {}
     const text = String(rawText == null ? '' : rawText)
     if (!text.trim()) return { ok: false, reason: 'empty' }
-    const target = resolveTarget(tl, heart)
+    const target = resolveTarget(tl, heart, cfg)
     if (!target.ok) {
       return {
         ok: false,
@@ -200,7 +208,7 @@ function createTranslate(options = {}) {
       if (!r.ok) return { ok: false, reason: r.reason, hint: core.describeError(r.reason) }
       return { ok: true, detail: '免费引擎已回话：' + r.text.slice(0, 40) }
     }
-    const target = resolveTarget(tl, heart)
+    const target = resolveTarget(tl, heart, cfg)
     if (!target.ok) return { ok: false, reason: target.reason, hint: core.describeError(target.reason) }
     if (target.engine === 'free') {
       return { ok: false, reason: 'engine-free', hint: '当前是免费引擎，没有端点可测' }

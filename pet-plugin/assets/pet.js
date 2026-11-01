@@ -813,6 +813,54 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   white-space:nowrap;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,.3)}
 .dshp-tune-tip.dshp-on{display:block}
 
+/* 经历面板（设置里的「经历面板…」，2026-11-01）：同一套模态基建（.dshp-tuning 基类 +
+   主题变量 + Esc/点遮罩关闭），只加流水自己的几件东西。窄屏比详细面板窄一点。 */
+.dshp-tuning.dshp-exp{width:min(calc(560px * var(--dshp-ps)),94vw)}
+.dshp-exp-pre{white-space:pre-wrap;font-size:calc(10.5px * var(--dshp-ps));line-height:1.55;
+  background:rgba(124,92,255,.09);border-radius:calc(8px * var(--dshp-ps));
+  padding:calc(8px * var(--dshp-ps));margin:calc(4px * var(--dshp-ps)) 0;
+  max-height:calc(180px * var(--dshp-ps));overflow:auto;user-select:text;word-break:break-word}
+.dshp-exp-cap{font-size:calc(10.5px * var(--dshp-ps));opacity:.55;margin:calc(6px * var(--dshp-ps)) 0 0}
+.dshp-exp-row{display:flex;gap:calc(7px * var(--dshp-ps));align-items:flex-start;
+  padding:calc(5px * var(--dshp-ps)) 2px;border-bottom:1px solid var(--dshp-line)}
+.dshp-exp-row .dshp-exp-t{flex:0 0 auto;font-variant-numeric:tabular-nums;opacity:.55;
+  font-size:calc(10.5px * var(--dshp-ps));white-space:nowrap;padding-top:2px}
+.dshp-exp-row .dshp-exp-k{flex:0 0 auto;font-size:calc(10px * var(--dshp-ps));
+  border:1px solid var(--dshp-line);border-radius:999px;padding:1px 7px;opacity:.75;white-space:nowrap}
+.dshp-exp-row .dshp-exp-x{flex:1;font-size:calc(11.5px * var(--dshp-ps));line-height:1.5;
+  white-space:pre-wrap;word-break:break-word;user-select:text}
+.dshp-exp-row .dshp-exp-c{flex:0 0 auto;border:none;background:transparent;color:inherit;cursor:pointer;
+  font-size:calc(10px * var(--dshp-ps));opacity:.4;padding:2px 5px;border-radius:calc(6px * var(--dshp-ps));line-height:1.4}
+.dshp-exp-row .dshp-exp-c:hover{opacity:.9;background:rgba(124,92,255,.12)}
+.dshp-exp-foot{display:flex;align-items:center;gap:8px;margin-top:calc(8px * var(--dshp-ps))}
+
+/* AI 面板（设置里的「AI 面板…」，2026-11-01）：同款模态基建。条目卡片 + 板块勾选 + 编辑器 */
+.dshp-tuning.dshp-ai{width:min(calc(520px * var(--dshp-ps)),94vw)}
+.dshp-ai-entry{border:1px solid var(--dshp-line);border-radius:calc(10px * var(--dshp-ps));
+  padding:calc(8px * var(--dshp-ps)) calc(10px * var(--dshp-ps));margin:0 0 calc(6px * var(--dshp-ps))}
+.dshp-ai-ehead{display:flex;align-items:center;gap:calc(6px * var(--dshp-ps))}
+.dshp-ai-ehead b{font-size:calc(12.5px * var(--dshp-ps));white-space:nowrap}
+.dshp-ai-esp{flex:1;opacity:.5;font-size:calc(10px * var(--dshp-ps));
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:40px}
+.dshp-ai-btns{display:flex;gap:calc(4px * var(--dshp-ps))}
+.dshp-ai-btns .dshp-btn{font-size:calc(10.5px * var(--dshp-ps));padding:calc(2px * var(--dshp-ps)) calc(8px * var(--dshp-ps))}
+.dshp-ai-chips{display:flex;flex-wrap:wrap;gap:calc(4px * var(--dshp-ps));margin-top:calc(6px * var(--dshp-ps))}
+.dshp-ai-chips .dshp-chip{padding:calc(2px * var(--dshp-ps)) calc(9px * var(--dshp-ps));font-size:calc(10.5px * var(--dshp-ps))}
+.dshp-ai-warn{color:#d81e3f;opacity:.92}
+.dshp-ai-edit{border-top:1px dashed var(--dshp-line);margin-top:calc(8px * var(--dshp-ps));
+  padding-top:calc(8px * var(--dshp-ps));display:flex;flex-direction:column;gap:calc(6px * var(--dshp-ps))}
+.dshp-ai-edit .dshp-label{display:flex;align-items:center;gap:8px;margin:0}
+.dshp-ai-edit .dshp-label > span{flex:0 0 calc(76px * var(--dshp-ps))}
+.dshp-ai-edit input,.dshp-ai-edit select,.dshp-ai-edit textarea{
+  flex:1;min-width:0;font:inherit;font-size:calc(11.5px * var(--dshp-ps));
+  padding:calc(3px * var(--dshp-ps)) calc(6px * var(--dshp-ps));border-radius:calc(6px * var(--dshp-ps));
+  border:1px solid var(--dshp-line);background:transparent;color:inherit}
+.dshp-ai-edit .dshp-btn{font-size:calc(10.5px * var(--dshp-ps))}
+.dshp-ai-edit textarea{height:calc(72px * var(--dshp-ps));resize:vertical}
+.dshp-ai-prompt{width:100%;box-sizing:border-box;height:calc(120px * var(--dshp-ps));resize:vertical;
+  font:inherit;font-size:calc(11.5px * var(--dshp-ps));line-height:1.5;border-radius:calc(8px * var(--dshp-ps));
+  border:1px solid var(--dshp-line);background:transparent;color:inherit;padding:calc(6px * var(--dshp-ps))}
+
 /* ——— HUD：右键弹出的「余额 / 本轮消耗 / 峰谷计价」面板 ———
    主人要求：右键不再是设置菜单，而是这个框；信息要醒目、要盖在最上层、
    又要能自己收起来（不然挡住对话）。所以它是独立一层，z-index 比菜单还高。 */
@@ -5084,15 +5132,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const xlToggle = $('button', 'dshp-btn', '关')
     xlToggle.title = '开启后：在任何程序里按住左键拖选一段文字，她头顶就会冒出译文气泡'
     xlToggleRow.append($('span', 'dshp-grow', '总开关'), xlToggle)
-    // 引擎三选一：用 chip 而不是原生 <select>。
-    // 原生下拉在「透明 + 不激活 + 置顶」的窗口里会弹一下就被系统收掉（2026-10-22 实测：
-    // 按住左键能看见选项，一松就没了，于是永远切不到 API 档）。chip 是纯 DOM，稳。
+    // 引擎二选一（2026-11-01：API 档撤进 AI 面板的模型条目 —— 给「翻译」板块勾条目即可，
+    // 勾了之后条目优先，这里的引擎选择就不参与判断了）。chip 而不是原生 <select>：
+    // 原生下拉在「透明 + 不激活 + 置顶」的窗口里会弹一下就被系统收掉（2026-10-22 实测）。
     const xlEngineRow = $('div', 'dshp-row')
     xlEngineRow.append($('span', 'dshp-k', '引擎'))
     const xlEngineChips = {}
     for (const [v, label] of [
       ['free', '免费引擎'],
-      ['api', '自定义 API'],
       ['local', '本地模型'],
     ]) {
       const b = $('button', 'dshp-chip', label)
@@ -5100,30 +5147,14 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       xlEngineChips[v] = b
       xlEngineRow.append(b)
     }
-    const xlApiBase = $('input')
-    xlApiBase.type = 'text'
-    xlApiBase.placeholder = 'https://…/v1'
-    const xlApiBaseRow = $('div', 'dshp-kv')
-    xlApiBaseRow.append($('span', 'dshp-k', 'API 地址'), xlApiBase)
-    const xlApiModel = $('input')
-    xlApiModel.type = 'text'
-    xlApiModel.placeholder = 'deepseek-chat'
-    const xlApiModelRow = $('div', 'dshp-kv')
-    xlApiModelRow.append($('span', 'dshp-k', '模型名'), xlApiModel)
-    const xlApiKey = $('input')
-    xlApiKey.type = 'password'
-    xlApiKey.placeholder = '留空 = 保持原来的（只存在本机）'
-    const xlApiKeyRow = $('div', 'dshp-kv')
-    xlApiKeyRow.append($('span', 'dshp-k', 'API Key'), xlApiKey)
-    // 这三个字段**任何时候都能填**（先填好再切引擎是常见顺序），只在这里说明当前会不会生效
-    const xlApiHint = $('div', 'dshp-note', '')
+    // 「翻译由条目负责」提示（AI 面板勾了条目后这里只读展示，引擎选择不生效）
+    const xlEntryNote = $('div', 'dshp-note dshp-ai-warn', '')
     const xlBtnRow = $('div', 'dshp-row')
-    const xlSaveBtn = $('button', 'dshp-btn dshp-primary', '保存')
     const xlTestBtn = $('button', 'dshp-btn', '测试引擎')
-    xlBtnRow.append($('span', 'dshp-grow'), xlTestBtn, xlSaveBtn)
-    const xlNote = $('div', 'dshp-note', '只认「按住左键拖选」；双击选词、终端窗口里不会触发（终端里 Ctrl+C 会打断命令）。')
+    xlBtnRow.append($('span', 'dshp-grow'), xlTestBtn)
+    const xlNote = $('div', 'dshp-note', '只认「按住左键拖选」；双击选词、终端窗口里不会触发（终端里 Ctrl+C 会打断命令）。\n要用别的模型翻译：AI 面板 → 给「翻译」板块勾个条目。')
     const xlStatus = $('div', 'dshp-status', '')
-    toolsXlate.append(xlToggleRow, xlEngineRow, xlApiBaseRow, xlApiModelRow, xlApiKeyRow, xlApiHint, xlBtnRow, xlNote, xlStatus)
+    toolsXlate.append(xlToggleRow, xlEngineRow, xlEntryNote, xlBtnRow, xlNote, xlStatus)
 
     const toolsVision = $('div', 'dshp-sec')
     toolsVision.append($('h4', null, '识图（实验性）'))
@@ -5183,11 +5214,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         battRefresh,
         xlToggle,
         xlEngineChips,
-        xlApiHint,
-        xlApiBase,
-        xlApiModel,
-        xlApiKey,
-        xlSave: xlSaveBtn,
+        xlEntryNote,
         xlTest: xlTestBtn,
         xlStatus,
         vsToggle,
@@ -7060,6 +7087,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     free: '免费引擎（腾讯）',
     api: '自定义 API（OpenAI 兼容）',
     local: '本地模型（心跳那个端点）',
+    entry: '模型条目（AI 面板里勾的）',
   }
 
   function toolsBridge() {
@@ -7067,7 +7095,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /** 最近一次读到的状态：{ st: tools.status(), cfg: payload.config.tools, batt: tools.battery() } */
-  let toolsState = { st: null, cfg: null, batt: null }
+  let toolsState = { st: null, cfg: null, heart: null, batt: null }
   /** 正在保存：防止连点 */
   let toolsSaving = false
 
@@ -7076,6 +7104,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const tb = toolsBridge()
     let st = null
     let cfg = null
+    let heartCfg = null
     try {
       if (tb) st = await tb.status()
     } catch (e) {}
@@ -7083,9 +7112,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       if (hb) {
         const p = await hb.settings()
         cfg = p && p.config ? p.config.tools : null
+        // 条目归属提示要读 roles/models（模型条目系统，2026-11-01）
+        heartCfg = p && p.config ? p.config : null
       }
     } catch (e) {}
-    toolsState = { st, cfg }
+    toolsState = { st, cfg, heart: heartCfg }
     // paint 里会碰一堆 DOM：任何一处抛异常都不该变成未处理的 rejection（页面刷新时最容易）
     try {
       paintToolsPane()
@@ -7237,6 +7268,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     const native = st.native || {}
     const t = u.tools
     const engine = tl.engine || 'free'
+    // 「翻译由条目负责」（2026-11-01，模型条目系统）：roles.translate 指到条目 → 引擎选择不生效
+    const heartCfg = toolsState.heart || {}
+    const xlateOwner = (heartCfg.roles && heartCfg.roles.translate)
+      ? (heartCfg.models || []).find((m) => m && m.id === heartCfg.roles.translate) || null
+      : null
     // 原生组件缺失 = 划词整条不可用（识图不受影响）
     const noNative = native.ok === false
 
@@ -7246,28 +7282,21 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ? '划词翻译需要原生组件（Koffi），这个安装缺了它'
       : '开启后：在任何程序里按住左键拖选一段文字，她头顶就会冒出译文气泡'
 
-    for (const [v, b] of Object.entries(t.xlEngineChips || {})) b.classList.toggle('dshp-on', v === engine)
-    t.xlApiBase.value = (tl.api && tl.api.baseUrl) || ''
-    t.xlApiModel.value = (tl.api && tl.api.model) || ''
-    t.xlApiKey.value = ''
-    t.xlApiKey.placeholder = tl.api && tl.api.apiKeySet ? '已设置（留空 = 不改）' : 'sk-…（只存在本机）'
-    // ⚠️ 这三个字段**永远可编辑**：以前按引擎 disable 它们，用户看到的就是"点不开"，
-    //    而当时引擎又切不过去（select 弹不出来），于是彻底没法配。
-    t.xlApiHint.textContent =
-      engine === 'api'
-        ? '这三项只有「自定义 API」引擎会用；地址末尾的 /v1 会自动补。'
-        : engine === 'local'
-          ? '本地模型复用心跳页配的那个端点（这里填了也不会用）。'
-          : '当前是免费引擎，这三项填了也不会用（切到「自定义 API」才生效）。'
-    t.xlSave.disabled = toolsSaving
+    for (const [v, b] of Object.entries(t.xlEngineChips || {})) b.classList.toggle('dshp-on', !xlateOwner && v === engine)
     t.xlTest.disabled = toolsSaving
+    // 「翻译由条目负责」（2026-11-01）：勾了条目后引擎选择不参与判断，只读展示归属
+    if (t.xlEntryNote) {
+      t.xlEntryNote.textContent = xlateOwner
+        ? '翻译已由条目「' + xlateOwner.name + '」负责（AI 面板里改，下面的引擎选择不生效）'
+        : ''
+    }
 
     const sel = st.select || {}
     // 面板只写给用户看的东西。判据明细（光标/窗口样式/复制键/跳过计数）全部**不上屏**，
     // 它们在 select.js 里保留，需要排查时看 boot.log（report() 会写）。
     const bits = []
     if (noNative) bits.push('⚠️ 缺原生组件（Koffi）：划词翻译用不了')
-    else if (tl.enabled) bits.push('划词：已开启 · ' + (XL_ENGINE_LABELS[engine] || engine))
+    else if (tl.enabled) bits.push('划词：已开启 · ' + (xlateOwner ? '条目「' + xlateOwner.name + '」' : (XL_ENGINE_LABELS[engine] || engine)))
     else bits.push('划词：已关闭')
     if (sel.lastError) bits.push('上次没翻成：' + sel.lastError)
     if (st.lastError) bits.push('翻译失败：' + st.lastError)
@@ -7302,12 +7331,17 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     }
     if (toolsSaving) return false
     toolsSaving = true
-    if (ui.tools) ui.tools.xlSave.disabled = true
+    try {
+      paintToolsPane()
+    } catch (e) {}
     let ok = false
     try {
       const p = await hb.save({ tools: patch })
       ok = !!(p && p.ok)
-      if (p && p.config) toolsState.cfg = p.config.tools
+      if (p && p.config) {
+        toolsState.cfg = p.config.tools
+        toolsState.heart = p.config
+      }
       paintToolsPane()
       if (!ok) {
         ui.bubble.show('保存失败：' + ((p && p.reason) || '未知原因'), { name: 'DS 鲸鱼娘', ttl: 6000 })
@@ -7318,7 +7352,6 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       ui.bubble.show('保存失败：' + ((e && e.message) || e), { name: 'DS 鲸鱼娘', ttl: 6000 })
     } finally {
       toolsSaving = false
-      if (ui.tools) ui.tools.xlSave.disabled = false
       refreshToolsPane()
     }
     return ok
@@ -7367,27 +7400,25 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const on = !(toolsState.cfg && toolsState.cfg.translate && toolsState.cfg.translate.enabled)
       saveTools({ translate: { enabled: on } }, on ? '好，划词翻译开了～拖选一段字试试' : '划词翻译关掉了')
     })
-    // 引擎：chip 点击即保存（没有 <select> 的弹层问题）
+    // 引擎：chip 点击即保存（没有 <select> 的弹层问题）。勾了条目时引擎不参与判断，
+    // 但这里不拦 —— 存着无害（条目优先），提示行已说明。
     for (const [v, b] of Object.entries(t.xlEngineChips || {})) {
       b.addEventListener('click', () => {
         if (currentEngine() === v) return
         saveTools({ translate: { engine: v } }, '翻译引擎换成「' + (XL_ENGINE_LABELS[v] || v) + '」')
       })
     }
-    t.xlSave.addEventListener('click', async () => {
-      const api = { baseUrl: t.xlApiBase.value.trim(), model: t.xlApiModel.value.trim() }
-      const key = t.xlApiKey.value.trim()
-      if (key) api.apiKey = key
-      await saveTools({ translate: { api } }, '翻译设置存好了')
-    })
     t.xlTest.addEventListener('click', async () => {
       const tb = toolsBridge()
       if (!tb) return
+      // 勾了条目 → resolveTarget 走条目端点，「model」档测的就是它（2026-11-01）
+      const heartCfg = toolsState.heart || {}
+      const hasEntry = !!(heartCfg.roles && heartCfg.roles.translate)
       const engine = currentEngine()
       t.xlStatus.textContent = '测试中…'
       let r = null
       try {
-        r = await tb.selftest(engine === 'free' ? 'free' : 'model')
+        r = await tb.selftest(hasEntry || engine !== 'free' ? 'model' : 'free')
       } catch (e) {
         r = { ok: false, hint: String((e && e.message) || e) }
       }
@@ -7593,11 +7624,11 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function bindMenu(u) {
     const TABS = [
       // 2026-10-25：表情+口型合并（机制完全一样，共用一套渲染），腾出页签位给「声音」
+      // 2026-11-01：「做梦」页签撤并进 AI 面板（和模型条目/连续上下文一处管），7 签变 6 签
       ['face', '表情口型'],
       ['action', '动作'],
       ['script', '小戏'],
       ['heart', '心跳'],
-      ['dream', '做梦'],
       ['tts', '声音'],
       ['setting', '设置'],
     ]
@@ -7781,6 +7812,8 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   function openTuningPanel() {
     if (!ui || !ui.root) return
     if (ui.tuning) { closeTuningPanel(); return }
+    // 一次只开一个模态（经历面板共用同一层遮罩/同一个「我在弹窗里」信号）
+    closeExperiencePanel()
     const mask = $('div', 'dshp-tuning-mask')
     const panel = $('div', 'dshp-tuning')
     const head = $('h3')
@@ -8181,6 +8214,827 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     if (shell.on) shell.post('modal:on')
   }
 
+  /* ==== @experience-panel:start ====
+   * 经历面板的纯函数块（无 DOM / 网络 / 依赖，能被单测原样抠出来跑）。
+   * 两份映射必须和 shell/src/heart/ledger.js 对齐——测试会逐一对账：
+   *   · TABS 的页签 id（除 all）↔ ledger.GROUPS 的键（一个不多一个不少）；
+   *   · LABEL 的 kind ↔ ledger.KINDS / KIND_ZH（流水行上的中文标签）。
+   * 过滤本身在主进程做（ledger.recentPage），前端只把页签名传回去。
+   */
+  var DSHPetExpPanel = {
+    TABS: [['all', '全部'], ['talk', '嘀咕'], ['chat', '对话'], ['see', '看到'], ['answer', '答题'], ['bili', '视频']],
+    LABEL: { say: '嘀咕', 'chat-user': '主人说', 'chat-her': '她说', see: '看到', answer: '答题', bili: '看视频', dream: '日记' },
+    /** 流水行上的 kind 中文标签（未知 kind 原样显示，别炸） */
+    kindLabel(kind) { return this.LABEL[kind] || String(kind || '?') },
+    /** 行首时间：今天的只显示 HH:MM，更早的显示 MM-DD HH:MM（本地时区） */
+    fmtTime(at, now) {
+      const d = new Date(Number(at) > 0 ? Number(at) : 0)
+      const n = new Date(Number(now) > 0 ? Number(now) : Date.now())
+      const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+      const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()
+      return sameDay
+        ? hm
+        : String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + hm
+    },
+    /** 正文展示截断（复制永远是全文） */
+    clip(text) {
+      const t = String(text || '')
+      return t.length > 300 ? t.slice(0, 300) + '…' : t
+    },
+  }
+  /* ==== @experience-panel:end ==== */
+
+  function closeExperiencePanel() {
+    if (!ui || !ui.experience) return
+    const t = ui.experience
+    ui.experience = null
+    // 通知外壳的「点击穿透」判定：模态结束（和详细面板同一套信号）
+    window.__DSHPET_MODAL__ = false
+    if (shell.on) shell.post('modal:off')
+    try { window.removeEventListener('keydown', t.onKey, true) } catch (e) {}
+    try { t.mask.remove() } catch (e) {}
+    try { t.el.remove() } catch (e) {}
+  }
+
+  /**
+   * 经历面板（2026-11-01）：设置页「经历面板…」打开的只读模态。
+   * 上面一半是「她现在记得什么」——如实展示下一次心跳会带的三段上下文
+   * （system 人设 / 近况回放 / 追加窗口），数据来自 context:preview；
+   * 下面一半是全部经历的时间线（分页 + 页签过滤），数据来自 ledger:recent。
+   * 只有查看：底账是事实源，这里不提供删除。
+   */
+  function openExperiencePanel() {
+    if (!ui || !ui.root) return
+    if (ui.experience) { closeExperiencePanel(); return }
+    closeTuningPanel()
+    const EXP = DSHPetExpPanel
+    const LB = window.dshpetBridge && window.dshpetBridge.ledger ? window.dshpetBridge.ledger : null
+    const mask = $('div', 'dshp-tuning-mask')
+    const panel = $('div', 'dshp-tuning dshp-exp')
+    const head = $('h3')
+    head.append($('span', null, '经历面板'))
+    const close = $('button', 'dshp-close', '×')
+    close.title = '关闭（Esc）'
+    close.addEventListener('click', closeExperiencePanel)
+    head.append(close)
+    panel.append(head)
+    panel.append($('div', 'dshp-tune-note',
+      '只读。上面是她下一次开口会带上的记忆，下面是她经历的时间线。'))
+
+    // —— ◆ 她现在记得什么 ——
+    panel.append($('div', 'dshp-tune-sec', '◆ 她现在记得什么'))
+    const memStatus = $('div', 'dshp-tune-status', '读取中…')
+    const memBody = $('div')
+    panel.append(memStatus, memBody)
+
+    // —— ◆ 流水 ——
+    panel.append($('div', 'dshp-tune-sec', '◆ 流水'))
+    const tabs = $('div', 'dshp-tune-tabs')
+    const list = $('div')
+    const moreBtn = $('button', 'dshp-btn', '加载更早')
+    const logStatus = $('div', 'dshp-tune-status')
+    const foot = $('div', 'dshp-exp-foot')
+    foot.append(moreBtn, logStatus)
+    panel.append(tabs, list, foot)
+
+    let activeTab = 'all'
+    let nextBefore = 0
+    let shown = 0
+    let loading = false
+    let self = null
+
+    const mkCopy = (text) => {
+      const b = $('button', 'dshp-exp-c', '复制')
+      b.title = '复制全文'
+      b.addEventListener('click', () => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text)
+          else {
+            const ta = document.createElement('textarea')
+            ta.value = text
+            document.body.appendChild(ta)
+            ta.select()
+            document.execCommand('copy')
+            ta.remove()
+          }
+          b.textContent = '已复制'
+        } catch (e) {
+          b.textContent = '失败'
+        }
+        setTimeout(() => { try { b.textContent = '复制' } catch (e) {} }, 1200)
+      })
+      return b
+    }
+
+    const renderRows = (items, append) => {
+      if (!append) list.textContent = ''
+      for (const e of items || []) {
+        if (!e) continue
+        const row = $('div', 'dshp-exp-row')
+        row.append(
+          $('span', 'dshp-exp-t', EXP.fmtTime(e.at, Date.now())),
+          $('span', 'dshp-exp-k', EXP.kindLabel(e.kind)),
+          $('span', 'dshp-exp-x', EXP.clip(e.text)),
+          mkCopy(e.text)
+        )
+        list.append(row)
+      }
+    }
+
+    const loadPage = async (reset) => {
+      if (!LB || loading || !self || ui.experience !== self) return
+      loading = true
+      if (reset) { nextBefore = 0; shown = 0; list.textContent = '' }
+      moreBtn.disabled = true
+      moreBtn.textContent = '读取中…'
+      try {
+        const r = await LB.recent({
+          groups: activeTab === 'all' ? null : [activeTab],
+          before: nextBefore,
+          limit: 50,
+        })
+        if (ui.experience !== self) return // 关掉了：别往已拆除的 DOM 里塞
+        const items = (r && r.ok && Array.isArray(r.items)) ? r.items : []
+        nextBefore = (r && r.nextBefore) || 0
+        shown += items.length
+        renderRows(items, !reset)
+        moreBtn.style.display = nextBefore ? '' : 'none'
+        logStatus.textContent = r && r.ok
+          ? '已显示 ' + shown + ' / ' + r.total + ' 条'
+          : '读不到（' + ((r && r.reason) || 'unknown') + '）'
+      } catch (e) {
+        if (ui.experience === self) logStatus.textContent = '读取失败：' + (e && e.message)
+      } finally {
+        loading = false
+        try {
+          moreBtn.disabled = false
+          moreBtn.textContent = '加载更早'
+        } catch (e) {}
+      }
+    }
+
+    const tabRefs = []
+    for (const [id, label] of EXP.TABS) {
+      const b = $('button', 'dshp-tune-tab', label)
+      b.addEventListener('click', () => {
+        activeTab = id
+        for (const [tid, tb] of tabRefs) tb.classList.toggle('dshp-on', tid === id)
+        loadPage(true)
+      })
+      tabRefs.push([id, b])
+      tabs.append(b)
+    }
+    moreBtn.addEventListener('click', () => loadPage(false))
+    tabRefs[0][1].classList.add('dshp-on')
+
+    const renderMem = (p) => {
+      memBody.textContent = ''
+      if (!p || !p.ok) {
+        memStatus.textContent = !LB
+          ? '浏览器版没有经历底账——这个面板只在桌面外壳里有数据。'
+          : '读不到（' + ((p && p.reason) || 'unknown') + '）'
+        return
+      }
+      memStatus.textContent = '连续上下文：' + (p.enabled ? '开' : '关') +
+        ' · 窗口 ' + p.windowTokens + ' tokens · 回放 ' + p.summaryDays + ' 天 · 底账 ' + p.totalEntries + ' 条'
+      if (!p.enabled) {
+        memBody.append($('div', 'dshp-tune-note',
+          '连续上下文没开：每次模型调用只带本次情境，不带历史。想开改 settings.json 的 heart.context.enabled。'))
+      }
+      const sysAdv = $('details', 'dshp-tune-adv')
+      sysAdv.append($('summary', null, 'system 人设' + (p.systemCustom ? '（用了你的覆盖）' : '（默认）')))
+      sysAdv.append($('div', 'dshp-exp-pre', p.system))
+      memBody.append(sysAdv)
+      memBody.append($('div', 'dshp-exp-cap', '近况回放（到昨天为止的摘要，一天一换）：'))
+      memBody.append($('div', 'dshp-exp-pre', p.summary || '（还没有昨天以前的记录）'))
+      const turns = Array.isArray(p.window) ? p.window : []
+      memBody.append($('div', 'dshp-exp-cap',
+        '追加窗口（' + turns.length + ' 轮，最新的在最下面）——这就是她记得的「最近」：'))
+      memBody.append($('div', 'dshp-exp-pre', turns.map((t) => {
+        const who = t.role === 'assistant'
+          ? '她'
+          : (String(t.content).indexOf('主人：') === 0 ? '主人' : '环境')
+        return '【' + who + '】' + t.content
+      }).join('\n') || '（空）'))
+      memBody.append($('div', 'dshp-tune-note',
+        '本次情境（时间、屏幕截图）永远排在最后一条，每次都变，这里不展示。'))
+    }
+
+    mask.addEventListener('click', (e) => { if (e.target === mask) closeExperiencePanel() })
+    const onKey = (e) => { if (e.key === 'Escape') closeExperiencePanel() }
+    window.addEventListener('keydown', onKey, true)
+    ui.root.append(mask, panel)
+    self = { mask: mask, el: panel, onKey: onKey }
+    ui.experience = self
+    window.__DSHPET_MODAL__ = true
+    if (shell.on) shell.post('modal:on')
+
+    // 开了再异步取数（面板不能卡住；关掉了就丢结果）
+    if (!LB) {
+      memStatus.textContent = '浏览器版没有经历底账——这个面板只在桌面外壳里有数据。'
+      logStatus.textContent = ''
+      moreBtn.style.display = 'none'
+    } else {
+      try {
+        LB.contextPreview().then((p) => { if (ui.experience === self) renderMem(p) }).catch(() => {
+          if (ui.experience === self) memStatus.textContent = '读不到（context:preview 出错了）'
+        })
+      } catch (e) {
+        memStatus.textContent = '读不到：' + (e && e.message)
+      }
+      loadPage(true)
+    }
+  }
+
+  /* ==== @ai-panel:start ====
+   * AI 面板的纯函数块（无 DOM / 网络，能被单测原样抠出来跑）。
+   * 与 shell/src/heart/config.js 对账：
+   *   · ROLE_LABELS 的板块 id 集合 = config.ROLES（一个不多一个不少）；
+   *   · 未分配 = roles[r] 为空（'free' 是「走免费接口」，算已分配）。
+   */
+  var DSHPetAIPanel = {
+    ROLE_LABELS: [['see', '看屏'], ['answer', '答题'], ['dream', '做梦'], ['chat', '对话'], ['bili', '视频'], ['tts', '声音'], ['translate', '翻译']],
+    /** 未分配板块的兜底说明（和 config/vision 的回落行为一致，别乱写） */
+    FALLBACK_NOTE: {
+      see: '回落默认端点（heart.model）', answer: '回落默认端点（heart.model）',
+      dream: '回落默认端点（heart.model）', chat: '回落默认端点（heart.model）',
+      bili: '回落默认端点（heart.model）', tts: '沿用全局「声音」页设置', translate: '回落旧引擎逻辑（免费/API/本地）',
+    },
+    roleLabel(id) {
+      const hit = this.ROLE_LABELS.find((x) => x[0] === id)
+      return hit ? hit[1] : String(id || '?')
+    },
+    /** 未分配的板块 id 列表（translate 的 'free' = 免费接口，算已分配） */
+    unassignedList(roles) {
+      return this.ROLE_LABELS.map((x) => x[0]).filter((r) => !(roles && roles[r]))
+    },
+    /** 板块勾选（纯函数）：点已勾的 = 取消；点没勾的 = 换绑（原条目自动让位） */
+    toggleRole(roles, role, entryId) {
+      const cur = roles && roles[role]
+      const out = Object.assign({}, roles || {})
+      out[role] = cur === entryId ? '' : String(entryId)
+      return out
+    },
+  }
+  /* ==== @ai-panel:end ==== */
+
+  function closeAIPanel() {
+    if (!ui || !ui.ai) return
+    const t = ui.ai
+    ui.ai = null
+    // 通知外壳的「点击穿透」判定：模态结束（三块面板共用同一套信号）。
+    // ⚠️ ui.ai 必须在**全部清理做完之后**对调用者可见地失败 —— 这里任何一步抛异常
+    // 都会导致「面板还在、ui.ai 已空」→ 之后再点 × 永远早退 = 面板永久卡死
+    // （2026-11-01 验收踩过：编辑时点 × 卡死）。所以每一步都各自兜异常。
+    try { window.__DSHPET_MODAL__ = false } catch (e) {}
+    try { if (shell.on) shell.post('modal:off') } catch (e) {}
+    try { window.removeEventListener('keydown', t.onKey, true) } catch (e) {}
+    try { t.mask.remove() } catch (e) {}
+    try { t.el.remove() } catch (e) {}
+  }
+
+  /**
+   * AI 面板（2026-11-01，P3）：设置页「AI 面板…」打开的模态。
+   * 把散在心跳页/做梦页的「模型相关」设置收进一处：
+   *   ◆ 模型条目（谁负责哪个板块，勾选即存）◆ 连续上下文（开关/窗口预算/回放天数）
+   *   ◆ 做梦（原「做梦」页签撤并进来）◆ 本地模型（兜底引擎的启停/路径）
+   *   ◆ 提示词（原心跳页的人设覆盖）
+   * 条目保存规则（和 shell 侧 carryOverEntryKeys 对齐）：apiKey 留空不动、
+   * 勾「清除」发空串、新填的覆盖。改完立即生效（每次都走 heart:save 五道关）。
+   */
+  function openAIPanel() {
+    if (!ui || !ui.root) return
+    if (ui.ai) { closeAIPanel(); return }
+    closeTuningPanel()
+    closeExperiencePanel()
+    const AIP = DSHPetAIPanel
+    const HB = heartBridge()
+    const D = dreamBridge()
+    const mask = $('div', 'dshp-tuning-mask')
+    const panel = $('div', 'dshp-tuning dshp-ai')
+    const head = $('h3')
+    head.append($('span', null, 'AI 设置'))
+    const close = $('button', 'dshp-close', '×')
+    close.title = '关闭（Esc）'
+    close.addEventListener('click', closeAIPanel)
+    head.append(close)
+    panel.append(head)
+    const aiStatus = $('div', 'dshp-tune-status', HB ? '读取中…' : '')
+    const body = $('div')
+    panel.append(aiStatus, body)
+    let self = null
+    let s = null // heart:settings 快照（保存后用返回的新 payload 替换）
+    let editingId = null // 正在展开编辑器的条目 id；'@new' = 新建草稿
+    let draft = null // 编辑器草稿（完成才写回）
+
+    mask.addEventListener('click', (e) => { if (e.target === mask) closeAIPanel() })
+    const onKey = (e) => { if (e.key === 'Escape') closeAIPanel() }
+    window.addEventListener('keydown', onKey, true)
+    ui.root.append(mask, panel)
+    self = { mask: mask, el: panel, onKey: onKey }
+    ui.ai = self
+    window.__DSHPET_MODAL__ = true
+    if (shell.on) shell.post('modal:on')
+
+    if (!HB || typeof HB.settings !== 'function') {
+      aiStatus.textContent = '浏览器版没有 AI 设置——这个面板只在桌面外壳里可用。'
+      return
+    }
+
+    const mkInput = (label, value, onChange, opts) => {
+      const o = opts || {}
+      const l = $('label', 'dshp-label')
+      l.append($('span', null, label))
+      const inp = document.createElement('input')
+      inp.type = o.type || 'text'
+      if (o.type === 'number') {
+        inp.min = String(o.min == null ? 1 : o.min)
+        inp.max = String(o.max == null ? 65535 : o.max)
+        inp.step = String(o.step || 1)
+      }
+      inp.value = value == null ? '' : String(value)
+      inp.placeholder = o.placeholder || ''
+      inp.title = o.placeholder || ''
+      inp.addEventListener('change', () => onChange(inp.value))
+      l.append(inp)
+      return l
+    }
+    const save = async (patch) => {
+      aiStatus.textContent = '保存中…'
+      let r = null
+      try {
+        r = await HB.save(patch)
+      } catch (e) {
+        r = { ok: false, reason: String((e && e.message) || e) }
+      }
+      // 异步回来面板可能已经被关了（点 × / Esc）：别再碰 DOM，更别 rebuild
+      if (ui.ai !== self) return null
+      if (!r || !r.ok) {
+        aiStatus.textContent = '保存失败：' + ((r && r.reason) || '未知')
+        return null
+      }
+      s = r
+      aiStatus.textContent = ''
+      rebuild()
+      return r
+    }
+    const refreshSnapshot = async () => {
+      let p = null
+      try {
+        p = await HB.settings()
+      } catch (e) {
+        if (ui.ai === self) aiStatus.textContent = '读取失败：' + ((e && e.message) || e)
+        return
+      }
+      if (ui.ai !== self) return
+      s = p
+      rebuild()
+    }
+
+    // —— 编辑器（草稿 → 完成才落盘）——
+    const buildEntryFromDraft = () => {
+      const entry = {
+        name: draft.name.trim().slice(0, 30) || '未命名',
+        baseUrl: draft.baseUrl.trim(),
+        model: draft.model.trim(),
+        timeoutMs: Math.max(1000, Math.min(120000, Math.round(Number(draft.timeoutMs) || 20000))),
+        enableThinking: !!draft.enableThinking,
+      }
+      if (draft.idNew) entry.id = draft.idNew
+      if (draft.apiKeyNew) entry.apiKey = draft.apiKeyNew
+      else if (draft.apiKeyClear) entry.apiKey = ''
+      // 声音细节只跟「真的负责声音板块」的条目走（新条目还没 id，不可能负责）
+      if (draft.tts && draft.idNew && s && s.config && s.config.roles && s.config.roles.tts === draft.idNew) {
+        entry.tts = draft.tts
+      }
+      return entry
+    }
+    const openEditor = (entry) => {
+      const cfg = (s && s.config) || {}
+      editingId = entry ? entry.id : '@new'
+      const tt = (entry && entry.tts) || {}
+      draft = {
+        idNew: entry ? entry.id : '',
+        name: entry ? entry.name || '' : '',
+        baseUrl: entry ? entry.baseUrl || '' : '',
+        model: entry ? entry.model || '' : '',
+        apiKeySet: !!(entry && entry.apiKeySet),
+        apiKeyNew: '',
+        apiKeyClear: false,
+        timeoutMs: entry ? entry.timeoutMs || 20000 : 20000,
+        enableThinking: entry ? entry.enableThinking === true : false,
+        // 声音细节：条目自己的优先，没有就播当前全局值当种子（用户改起来省事）
+        tts: {
+          backend: tt.backend || (cfg.tts && cfg.tts.backend) || 'gptsovits',
+          refAudioPath: tt.refAudioPath || (cfg.tts && cfg.tts.refAudioPath) || '',
+          promptAudioPath: tt.promptAudioPath || (cfg.tts && cfg.tts.promptAudioPath) || '',
+          promptText: tt.promptText || (cfg.tts && cfg.tts.promptText) || '',
+          speed: Number(tt.speed || (cfg.tts && cfg.tts.speed)) || 1,
+          maxChars: Number(tt.maxChars || (cfg.tts && cfg.tts.maxChars)) || 120,
+          timeoutMs: Number(tt.timeoutMs || (cfg.tts && cfg.tts.timeoutMs)) || 30000,
+        },
+      }
+      rebuild()
+    }
+
+    // —— 单个条目卡片 ——
+    const renderEntryCard = (e) => {
+      const cfg = (s && s.config) || {}
+      const roles = cfg.roles || {}
+      const card = $('div', 'dshp-ai-entry')
+      const headEl = $('div', 'dshp-ai-ehead')
+      headEl.append($('b', null, e.name || e.id))
+      const esp = $('span', 'dshp-ai-esp', (e.baseUrl || '（没端点）') + (e.model ? ' · ' + e.model : ''))
+      esp.title = (e.baseUrl || '') + (e.model ? '\n模型：' + e.model : '') +
+        (e.apiKeySet ? '\n密钥：已设置' : '\n密钥：未设置')
+      const btns = $('div', 'dshp-ai-btns')
+      const bPing = $('button', 'dshp-btn', '连接')
+      bPing.title = '真发一条 ping（不动配置）'
+      const bEdit = $('button', 'dshp-btn', '编辑')
+      const bDel = $('button', 'dshp-btn', '删除')
+      bDel.title = '删掉条目；它负责的板块自动回到「未分配」（回落默认端点）'
+      btns.append(bPing, bEdit, bDel)
+      headEl.append(esp, btns)
+      card.append(headEl)
+      // 板块勾选（点已勾的 = 取消，点别的 = 换绑；改完立即保存）
+      const chips = $('div', 'dshp-ai-chips')
+      for (const [r, label] of AIP.ROLE_LABELS) {
+        const owned = roles[r] === e.id
+        const b = $('button', 'dshp-chip' + (owned ? ' dshp-on' : ''), label)
+        b.title = owned ? '点一下取消（这个板块回到「没人管」）' : '勾上 = 「' + label + '」板块用这个条目'
+        b.addEventListener('click', () => {
+          save({ roles: AIP.toggleRole(roles, r, e.id) })
+        })
+        chips.append(b)
+      }
+      card.append(chips)
+      const line = $('div', 'dshp-tune-status', '')
+      card.append(line)
+      bPing.addEventListener('click', async () => {
+        bPing.disabled = true
+        line.textContent = '确认中…'
+        let r = null
+        try {
+          r = await HB.pingEntry(e.id)
+        } catch (err) {
+          r = { ok: false, error: String((err && err.message) || err) }
+        }
+        bPing.disabled = false
+        line.textContent = r && r.ok
+          ? '连接正常：' + (r.baseUrl || '') + ' / ' + (r.model || '') + ' · ' + (r.ms || 0) + 'ms' +
+            (r.text ? ' · 回复「' + String(r.text).slice(0, 20) + '」' : r.empty ? ' · 空响应' : '')
+          : '失败：' + ((r && (r.hint || r.error)) || '未知')
+      })
+      bEdit.addEventListener('click', () => openEditor(e))
+      bDel.addEventListener('click', () => {
+        if (!window.confirm('删除条目「' + (e.name || e.id) + '」？\n它负责的板块会回到「未分配」（回落默认端点）。')) return
+        const rest = ((s.config && s.config.models) || []).filter((x) => x.id !== e.id)
+        save({ models: rest })
+      })
+      // 编辑器展开
+      if (editingId === e.id && draft) card.append(renderEditor(e))
+      return card
+    }
+
+    const renderEditor = (entry) => {
+      const cfg = (s && s.config) || {}
+      // 新条目（还没 id）不可能已负责声音板块 —— roles.tts === '' 时绝不能误展开
+      const ownsTts = !!(cfg.roles && draft.idNew && cfg.roles.tts === draft.idNew)
+      const box = $('div', 'dshp-ai-edit')
+      box.append(
+        mkInput('名称', draft.name, (v) => { draft.name = v }),
+        mkInput('API 地址', draft.baseUrl, (v) => { draft.baseUrl = v }, { placeholder: 'https://api.deepseek.com/v1 或 http://127.0.0.1:8080/v1' }),
+        mkInput('模型名', draft.model, (v) => { draft.model = v }, { placeholder: 'deepseek-flash / qwen3.5-9b-vision' }),
+      )
+      // 密钥：留空 = 不改；勾「清除」发空串；新填的覆盖
+      const keyRow = mkInput('API Key', '', (v) => {
+        draft.apiKeyNew = v
+        if (v) { draft.apiKeyClear = false; clearChk.checked = false }
+      }, { type: 'password', placeholder: draft.apiKeySet ? '已设置（留空 = 不改）' : 'sk-…' })
+      const clearChk = document.createElement('input')
+      clearChk.type = 'checkbox'
+      clearChk.checked = false
+      clearChk.style.flex = '0 0 auto'
+      clearChk.addEventListener('change', () => { draft.apiKeyClear = clearChk.checked })
+      const clearLab = $('label', 'dshp-label')
+      clearLab.style.margin = '0'
+      clearLab.append($('span', null, ''), clearChk, $('span', null, '清除已保存的密钥'))
+      box.append(keyRow, clearLab)
+      box.append(
+        mkInput('超时 ms', draft.timeoutMs, (v) => { draft.timeoutMs = Number(v) }, { type: 'number', min: 1000, max: 120000, step: 500 }),
+      )
+      const thinkBtn = $('button', 'dshp-chip' + (draft.enableThinking ? ' dshp-on' : ''), draft.enableThinking ? '思考：开' : '思考：关')
+      thinkBtn.title = '关：请求里带关思考参数（deepseek 系思考型模型会把预算花在思维链上，正文就空了）'
+      thinkBtn.addEventListener('click', () => {
+        draft.enableThinking = !draft.enableThinking
+        thinkBtn.textContent = draft.enableThinking ? '思考：开' : '思考：关'
+        thinkBtn.classList.toggle('dshp-on', draft.enableThinking)
+      })
+      const thinkRow = $('div', 'dshp-row')
+      thinkRow.append($('span', null, '关思考'), thinkBtn)
+      box.append(thinkRow)
+      // 扫描端点：结果点「用这个」只填草稿（完成才落盘）
+      const scanLine = $('div', 'dshp-tune-status', '')
+      const scanBox = $('div')
+      const bScan = $('button', 'dshp-btn', '扫描本地端点')
+      bScan.title = '只读探测常见端口（/v1/models），选一个填进草稿'
+      bScan.addEventListener('click', async () => {
+        bScan.disabled = true
+        scanLine.textContent = '扫描中…'
+        scanBox.textContent = ''
+        let r = null
+        try {
+          r = await HB.scan()
+        } catch (err) {
+          r = { ok: false, reason: String((err && err.message) || err) }
+        }
+        bScan.disabled = false
+        const results = (r && r.results) || []
+        if (!results.length) { scanLine.textContent = '没发现端点（先启动本地引擎，或直接手填 API 地址）'; return }
+        scanLine.textContent = '发现 ' + results.length + ' 个端点，选模型后点「用这个」'
+        for (const it of results) {
+          const row = $('div', 'dshp-row')
+          row.append($('span', 'dshp-hint', it.baseUrl))
+          const sel = document.createElement('select')
+          sel.style.maxWidth = '200px'
+          sel.style.font = 'inherit'
+          for (const mid of it.models || []) {
+            const op = document.createElement('option')
+            op.value = mid
+            op.textContent = mid
+            sel.append(op)
+          }
+          if (it.suggested) sel.value = it.suggested
+          const use = $('button', 'dshp-btn', '用这个')
+          use.addEventListener('click', () => {
+            draft.baseUrl = it.baseUrl
+            draft.model = sel.value
+            rebuild() // 重画编辑器，让填好的值显出来
+          })
+          row.append(sel, use)
+          scanBox.append(row)
+        }
+      })
+      box.append(bScan, scanLine, scanBox)
+      // 声音细节：只有这个条目负责「声音」板块才展开（数据跟条目走）
+      if (ownsTts) {
+        const adv = $('details', 'dshp-tune-adv')
+        adv.append($('summary', null, '声音细节（TTS 跟这个条目走）'))
+        const mkTtsInput = (label, key, opts) => {
+          const l = mkInput(label, draft.tts[key], (v) => {
+            draft.tts[key] = opts && opts.num ? Number(v) || 0 : v
+          }, opts)
+          return l
+        }
+        const bl = $('label', 'dshp-label')
+        bl.append($('span', null, '后端'))
+        const sel = document.createElement('select')
+        for (const [v, t] of [['gptsovits', 'GPT-SoVITS api_v2'], ['gsvlite', 'GSV-TTS-Lite'], ['openai', 'OpenAI 兼容 /audio/speech']]) {
+          const op = document.createElement('option')
+          op.value = v
+          op.textContent = t
+          sel.append(op)
+        }
+        sel.value = draft.tts.backend
+        sel.addEventListener('change', () => { draft.tts.backend = sel.value })
+        bl.append(sel)
+        adv.append(
+          bl,
+          mkTtsInput('参考音频', 'refAudioPath', { placeholder: '3~10 秒参考音频的本机路径' }),
+          mkTtsInput('风格参考', 'promptAudioPath', { placeholder: '留空 = 同参考音频' }),
+          mkTtsInput('参考转写', 'promptText', { placeholder: '参考音频的逐字转写' }),
+          mkTtsInput('语速', 'speed', { type: 'number', min: 0.5, max: 2, step: 0.1 }),
+          mkTtsInput('单句上限', 'maxChars', { type: 'number', min: 20, max: 300 }),
+          mkTtsInput('超时 ms', 'timeoutMs', { type: 'number', min: 1000, max: 120000, step: 1000 }),
+        )
+        box.append(adv)
+      }
+      // 完成 / 取消
+      const line = $('div', 'dshp-tune-status', '')
+      const foot = $('div', 'dshp-row')
+      const okBtn = $('button', 'dshp-btn dshp-primary', '完成')
+      const cancelBtn = $('button', 'dshp-btn', '取消')
+      okBtn.addEventListener('click', async () => {
+        if (!draft) return
+        if (!draft.baseUrl.trim()) { line.textContent = '先填 API 地址（本地引擎也是 http://127.0.0.1:端口/v1）'; return }
+        const entry = buildEntryFromDraft()
+        const models = (s.config && s.config.models) || []
+        const next = draft.idNew
+          ? models.map((x) => (x.id === draft.idNew ? entry : x))
+          : models.concat([entry])
+        // 必须先收起再保存（2026-11-01 验收反馈）：save() 里会 rebuild，那时 editingId
+        // 还挂着的话编辑器会被原样画回来 —— 症状就是「按完成不收起」，而且随后
+        // draft 被置空，残留在屏上的编辑器一碰就往 null 上写。
+        editingId = null
+        draft = null
+        await save({ models: next })
+      })
+      cancelBtn.addEventListener('click', () => { editingId = null; draft = null; rebuild() })
+      foot.append(okBtn, cancelBtn)
+      box.append(line, foot)
+      return box
+    }
+
+    // —— 全量重画（保存后 / 展开编辑器时）——
+    const rebuild = () => {
+      if (!s) return
+      body.textContent = ''
+      const cfg = (s.config || {})
+      const entries = Array.isArray(cfg.models) ? cfg.models : []
+      const roles = cfg.roles || {}
+      const ms = s.model || {}
+      const mm = cfg.model || {}
+      const sv = cfg.modelServer || {}
+      const refreshHeartPane = () => { try { if (ui.menu.focused === 'heart') renderPane('heart') } catch (e) {} }
+
+      // ◆ 模型条目
+      body.append($('div', 'dshp-tune-sec', '◆ 模型条目'))
+      const un = AIP.unassignedList(roles)
+      if (un.length) {
+        body.append($('div', 'dshp-tune-note dshp-ai-warn',
+          '⚠️ 没人管：' + un.map((r) => AIP.roleLabel(r)).join('、') +
+          '（' + un.map((r) => AIP.FALLBACK_NOTE[r] || '回落默认端点').join('；') + '）'))
+      }
+      for (const e of entries) body.append(renderEntryCard(e))
+      const addBtn = $('button', 'dshp-btn', '＋ 添加模型条目')
+      addBtn.addEventListener('click', () => openEditor(null))
+      if (editingId === '@new' && draft) {
+        body.append(renderNewEditorCard())
+      }
+      body.append(addBtn, $('div', 'dshp-hint',
+        '勾选 = 这个板块用这个条目（一个板块只归一个条目，换绑自动让位）；没人管的板块回落默认端点。'))
+
+      // ◆ 连续上下文
+      body.append($('div', 'dshp-tune-sec', '◆ 连续上下文'))
+      const cx = cfg.context || {}
+      const cxChip = $('button', 'dshp-chip' + (cx.enabled ? ' dshp-on' : ''), cx.enabled ? '已开启' : '已关闭')
+      cxChip.addEventListener('click', () => save({ context: { enabled: !cx.enabled } }))
+      const cxRow = $('div', 'dshp-row')
+      cxRow.append($('span', null, '连续上下文'), cxChip)
+      body.append(
+        cxRow,
+        $('div', 'dshp-hint', cx.enabled
+          ? '开：模型每次都能看到「近况回放 + 追加式历史窗口」，历史只追加不重写（云端前缀缓存才命中）。'
+          : '关：每次调用只带本次情境，不带历史。底账照常记录，随时能开回来。'),
+        mkRange('窗口预算', cx.windowTokens || 200000, 1024, 200000, 1024, (v) => (v >= 1024 ? Math.round(v / 1024) + 'k tok' : v + ' tok'), (v) => {
+          save({ context: { windowTokens: v } })
+        }),
+        $('div', 'dshp-hint', '每次请求带多少历史（不是模型上下文上限）。默认 200k；超过模型装得下的量会 400，她会自动把窗口砍半重试并记住。调小 = 更省钱。'),
+        mkRange('回放天数', cx.summaryDays || 3, 1, 7, 1, (v) => v + ' 天', (v) => {
+          save({ context: { summaryDays: v } })
+        }),
+        $('div', 'dshp-hint', '「近况回放」= 昨天以前的按天摘要，一天一换（不碎缓存）；今天的动态全在追加窗口里。'),
+      )
+
+      // ◆ 做梦（原「做梦」页签撤并进来，菜单 7 签变 6 签）
+      body.append($('div', 'dshp-tune-sec', '◆ 做梦'))
+      if (!D || typeof D.status !== 'function') {
+        body.append($('div', 'dshp-hint', '「做梦」只在桌面外壳里可用。'))
+      } else {
+        D.status().then((st) => {
+          if (ui.ai !== self) return
+          const dreamBox = body.querySelector('.dshp-ai-dream')
+          if (!dreamBox) return
+          dreamBox.textContent = ''
+          const d = st && st.ok ? st : {}
+          const enabled = d.enabled === true
+          const statusLine = $('div', 'dshp-hint dshp-now', (() => {
+            const bits = []
+            if (d.running) bits.push('正在做梦…')
+            else if (Number(d.cooldownLeft) > 0) bits.push('冷却还剩 ' + Math.ceil(Number(d.cooldownLeft) / 60) + ' 分钟')
+            else bits.push('冷却已好，下次睡着就会写')
+            if (d.lastResult === 'written') bits.push('上次写了日记' + (d.lastDiaryDate ? '（' + d.lastDiaryDate + '）' : ''))
+            else if (d.lastResult === 'empty') bits.push('上次没什么值得记的事')
+            else if (d.lastResult === 'error') bits.push('上次失败：' + (d.lastError || '未知'))
+            return bits.join(' · ')
+          })())
+          const sw = $('button', 'dshp-chip' + (enabled ? ' dshp-on' : ''), enabled ? '已启用' : '已关闭')
+          sw.addEventListener('click', () => save({ dream: { enabled: !enabled } }))
+          const row0 = $('div', 'dshp-row')
+          row0.append($('span', null, '做梦'), sw)
+          const dirRow = $('div', 'dshp-label')
+          dirRow.append($('span', null, '日记目录'))
+          const dirIn = document.createElement('input')
+          dirIn.type = 'text'
+          const isCustom = !!d.dir && !!d.dirDefault && d.dir !== d.dirDefault
+          dirIn.value = isCustom ? d.dir : ''
+          dirIn.placeholder = d.dirDefault || '（默认目录）'
+          dirIn.style.cssText =
+            'flex:1;min-width:0;font-size:11.5px;padding:3px 6px;border-radius:6px;' +
+            'border:1px solid var(--dshp-line);background:transparent;color:inherit'
+          const applyDir = () => save({ dream: { dir: dirIn.value.trim() } })
+          dirIn.addEventListener('change', applyDir)
+          dirIn.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); applyDir() } })
+          const openBtn = $('button', 'dshp-btn', '打开')
+          openBtn.addEventListener('click', async () => { try { await D.open() } catch (e) {} })
+          dirRow.append(dirIn, openBtn)
+          dreamBox.append(
+            statusLine,
+            row0,
+            $('div', 'dshp-hint', enabled
+              ? '开：她每次睡着，把「上次醒来之后」的事回顾一遍写成日记。要在上面给「做梦」板块勾条目（或配默认端点）。'
+              : '关：她睡着就是睡觉，不写日记、不发请求。'),
+            mkRange('做梦冷却', Math.round((Number(d.cooldownSec) || 1800) / 60), 5, 180, 5, (v) => v + ' 分钟', (v) => {
+              save({ dream: { cooldownSec: v * 60 } })
+            }),
+            dirRow,
+          )
+          const forceBtn = $('button', 'dshp-btn', d.forceNext === true ? '✓ 已就绪 · 下次睡着立刻做梦（再按取消）' : '下次睡着时立即做梦')
+          forceBtn.disabled = !enabled
+          if (enabled && d.forceNext === true) forceBtn.style.borderColor = 'rgba(124,92,255,.9)'
+          forceBtn.addEventListener('click', async () => {
+            if (!enabled) return
+            const on = d.forceNext !== true
+            let r = null
+            try {
+              r = await D.force(on)
+            } catch (e) {
+              r = { ok: false }
+            }
+            if (!r || r.ok === false) { statusLine.textContent = '操作失败'; return }
+            d.forceNext = on
+            forceBtn.textContent = on ? '✓ 已就绪 · 下次睡着立刻做梦（再按取消）' : '下次睡着时立即做梦'
+            forceBtn.style.borderColor = on ? 'rgba(124,92,255,.9)' : ''
+          })
+          dreamBox.append(forceBtn)
+        }).catch(() => {})
+        body.append($('div', 'dshp-ai-dream'))
+      }
+
+      // ◆ 本地模型（兜底引擎：没人管的板块回落 heart.model 时用的就是它拉起来的端点）
+      // 2026-11-01 博士拍板：API 和本地模型可以共存，不再「填了 API 就禁止启动」
+      body.append($('div', 'dshp-tune-sec', '◆ 本地模型（兜底）'))
+      const stLine = $('div', 'dshp-hint', ms.running
+        ? '运行中 · :' + ms.port + ' · pid ' + ms.pid
+        : '未运行' + (ms.lastError ? ' · ' + ms.lastError : ''))
+      const btnStart = $('button', 'dshp-btn', '启动本地模型')
+      btnStart.title = ''
+      const btnStop = $('button', 'dshp-btn', '停止')
+      btnStart.addEventListener('click', async () => {
+        btnStart.disabled = true
+        stLine.textContent = '启动中…（最多 60 秒）'
+        let r = null
+        try {
+          r = await HB.model('start')
+        } catch (e) {
+          r = { ok: false, reason: String((e && e.message) || e) }
+        }
+        btnStart.disabled = false
+        if (r && r.ok) refreshSnapshot()
+        else stLine.textContent = '启动失败：' + ((r && r.reason) || '未知（检查下面的路径/端口）')
+      })
+      btnStop.addEventListener('click', async () => {
+        try { await HB.model('stop') } catch (e) {}
+        refreshSnapshot()
+      })
+      const lmRow = $('div', 'dshp-row')
+      lmRow.append(btnStart, btnStop, stLine)
+      body.append(
+        lmRow,
+        mkInput('引擎 exe', sv.exe, (v) => save({ modelServer: { exe: v } }), { placeholder: 'D:\\models\\llama-server.exe' }),
+        mkInput('模型 gguf', sv.model, (v) => save({ modelServer: { model: v } }), { placeholder: 'D:\\models\\MiniCPM-V-4_7-1B-Q8_0.gguf' }),
+        mkInput('视觉投影', sv.mmproj, (v) => save({ modelServer: { mmproj: v } }), { placeholder: 'D:\\models\\mmproj-model-f16.gguf' }),
+        mkInput('API 端口', mm.port, (v) => {
+          const n = Number(v)
+          if (Number.isFinite(n) && n > 0 && n < 65536) save({ model: { port: Math.round(n) } })
+        }, { type: 'number', placeholder: '19411' }),
+        $('div', 'dshp-hint', '这是「默认端点」的兜底引擎：没人管的板块、没建条目的旧用法走它。日常用上面的条目就够了。'),
+      )
+
+      // ◆ 提示词（人设覆盖，全局一份）
+      body.append(
+        $('div', 'dshp-tune-sec', '◆ 提示词'),
+        $('div', 'dshp-hint', '给模型的提示词（留空 = 默认人设；动作词表由程序提供，所有条目共用这一份）'),
+      )
+      const ta = document.createElement('textarea')
+      ta.value = (cfg.prompt || '').trim() ? cfg.prompt : (s.defaultPrompt || '')
+      ta.spellcheck = false
+      ta.className = 'dshp-ai-prompt'
+      const rowP = $('div', 'dshp-row')
+      const btnSaveP = $('button', 'dshp-btn dshp-primary', '保存提示词')
+      const btnResetP = $('button', 'dshp-btn', '恢复默认')
+      btnSaveP.addEventListener('click', () => save({ prompt: ta.value }))
+      btnResetP.addEventListener('click', () => {
+        ta.value = s.defaultPrompt || ''
+        save({ prompt: '' })
+      })
+      rowP.append(btnSaveP, btnResetP)
+      body.append(ta, rowP)
+      refreshHeartPane()
+    }
+
+    // 新建条目的草稿卡（复用 renderEditor，包一层卡片）
+    const renderNewEditorCard = () => {
+      const card = $('div', 'dshp-ai-entry')
+      const h = $('div', 'dshp-ai-ehead')
+      h.append($('b', null, '新条目'), $('span', 'dshp-ai-esp', '填完点「完成」才会保存'))
+      card.append(h, renderEditor(null))
+      return card
+    }
+
+    refreshSnapshot()
+  }
+
   /**
    * 「心跳」页：总开关 / 本地模型一键启停 / 频率 / 提示词 / 端口。
    *
@@ -8385,47 +9239,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         box.append(chatRow, $('div', 'dshp-hint', '回应模式会记住最近 12 轮对话（含她自己主动说的话）。'))
       }
 
-      // —— 本地模型 ——
-      box.append($('div', 'dshp-hint', '本地模型（llama.cpp ≥ b11582，路径可手填）'))
-      const usingApi = !!(cfg.model && cfg.model.baseUrl)
-      const stLine = $('div', 'dshp-hint', ms.running
-        ? '运行中' + (usingApi ? '（未使用，建议点「停止」释放显存）' : '') + ' · :' + ms.port + ' · pid ' + ms.pid
-        : '未运行' + (ms.lastError ? ' · ' + ms.lastError : ''))
-      box.append(stLine)
-
-      const btnStart = $('button', 'dshp-btn', usingApi ? '启动本地模型（已忽略）' : '启动本地模型')
-      btnStart.disabled = usingApi
-      btnStart.title = usingApi ? '已配置自定义 API，本地模型不会再启动；要用本地请先清空 API 地址' : ''
-      const btnStop = $('button', 'dshp-btn', '停止')
-      const btnScan = $('button', 'dshp-btn', '扫描本地端点')
-      const btnCheck = $('button', 'dshp-btn', '确认 API 连接')
+      // —— 立即看一眼（2026-11-01 心跳页瘦身：模型/端点/提示词/做梦都搬去了「AI 面板…」）——
       const btnTick = $('button', 'dshp-btn', '立即看一眼')
       const resLine = $('div', 'dshp-hint', '')
-      const checkLine = $('div', 'dshp-hint', '')
-      const scanLine = $('div', 'dshp-hint', '')
-      const scanBox = document.createElement('div')
-      scanBox.style.display = 'flex'
-      scanBox.style.flexDirection = 'column'
-      scanBox.style.gap = '4px'
-      btnStart.addEventListener('click', async () => {
-        btnStart.disabled = true
-        stLine.textContent = '启动中…（最多 60 秒）'
-        let r = null
-        try {
-          r = await HB.model('start')
-        } catch (e) {
-          r = { ok: false, reason: String((e && e.message) || e) }
-        }
-        btnStart.disabled = false
-        if (r && r.ok) refresh()
-        else stLine.textContent = '启动失败：' + ((r && r.reason) || '未知（检查面板里的路径/端口）')
-      })
-      btnStop.addEventListener('click', async () => {
-        try {
-          await HB.model('stop')
-        } catch (e) {}
-        refresh()
-      })
       btnTick.addEventListener('click', async () => {
         // 做梦期间独占模型：冒一句拒绝，既不进队列也不补（按钮本来就没有冷却）
         if (dreamReject()) return
@@ -8441,147 +9257,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
         else resLine.textContent = '这次不说：' + ((r && r.reason) || '未知')
       })
       const rowM = $('div', 'dshp-row')
-      rowM.append(btnStart, btnStop, btnScan, btnCheck, btnTick)
-      box.append(rowM, checkLine, scanLine, scanBox, resLine)
-
-      // 「确认 API 连接」：真发一条 ping；llama-swap 收到请求就会把对应模型加载起来
-      btnCheck.addEventListener('click', async () => {
-        btnCheck.disabled = true
-        checkLine.textContent = '确认中…（真发一条 ping；llama-swap 换模型时可能要等几十秒）'
-        let r = null
-        try {
-          r = await HB.test()
-        } catch (e) {
-          r = { ok: false, error: String((e && e.message) || e) }
-        }
-        btnCheck.disabled = false
-        if (r && r.ok && r.endpoint) {
-          const reply = r.text
-            ? '回复「' + r.text + '」'
-            : r.reasoning
-              ? '思考模式已回复（无正文；思考前 40 字：' + String(r.reasoning).slice(0, 40) + '…）'
-              : '合法响应（无正文）'
-          checkLine.textContent = '连接正常：' + r.endpoint.baseUrl + ' / ' + r.endpoint.model +
-            ' · ' + r.ms + 'ms · ' + reply
-        } else {
-          const d = (r && r.detail) || {}
-          checkLine.textContent = '连接失败：' + ((d.hint || d.error || (r && r.error) || '未知'))
-        }
-      })
-
-      // 「扫描」只在用户点它时探测端口；心跳推理永远只打配置里的那一个端点
-      btnScan.addEventListener('click', async () => {
-        btnScan.disabled = true
-        scanLine.textContent = '扫描中…（只读 /v1/models，不加载模型）'
-        scanBox.textContent = ''
-        let r = null
-        try {
-          r = await HB.scan()
-        } catch (e) {
-          r = { ok: false, reason: String((e && e.message) || e) }
-        }
-        btnScan.disabled = false
-        const results = (r && r.results) || []
-        if (!r || !r.ok) {
-          scanLine.textContent = '扫描失败：' + ((r && r.reason) || '未知')
-          return
-        }
-        if (!results.length) {
-          scanLine.textContent = '没发现端点（先启动 llama-server，或手填 API 地址）'
-          return
-        }
-        scanLine.textContent = '发现 ' + results.length + ' 个端点；选模型后点「用这个」写入配置（不会自动切换）'
-        for (const it of results) {
-          const row = $('div', 'dshp-row')
-          row.append($('span', 'dshp-hint', it.baseUrl))
-          const sel = document.createElement('select')
-          sel.style.maxWidth = '220px'
-          sel.style.font = 'inherit'
-          for (const mid of it.models || []) {
-            const op = document.createElement('option')
-            op.value = mid
-            op.textContent = mid
-            sel.append(op)
-          }
-          if (it.suggested) sel.value = it.suggested
-          const use = $('button', 'dshp-btn', '用这个')
-          use.addEventListener('click', async () => {
-            use.disabled = true
-            await save({ model: { baseUrl: it.baseUrl, model: sel.value } })
-            use.disabled = false
-          })
-          row.append(sel, use)
-          scanBox.append(row)
-        }
-      })
-
-      // —— 端口 / 路径 ——
-      const mkInput = (label, value, onChange, opts) => {
-        const o = opts || {}
-        const l = $('label', 'dshp-label')
-        l.append($('span', null, label))
-        const inp = document.createElement('input')
-        inp.type = o.type || 'text'
-        if (o.type === 'number') {
-          inp.min = String(o.min == null ? 1 : o.min)
-          inp.max = String(o.max == null ? 65535 : o.max)
-        }
-        inp.value = value == null ? '' : String(value)
-        inp.placeholder = o.placeholder || ''
-        inp.title = o.placeholder || ''
-        inp.style.flex = '1'
-        inp.style.minWidth = '80px'
-        inp.style.padding = '2px 6px'
-        inp.style.borderRadius = '6px'
-        inp.style.border = '1px solid var(--dshp-line)'
-        inp.style.background = 'transparent'
-        inp.style.color = 'inherit'
-        inp.style.font = 'inherit'
-        inp.addEventListener('change', () => onChange(inp.value))
-        l.append(inp)
-        return l
-      }
-      const mm = cfg.model || {}
-      const sv = cfg.modelServer || {}
-      box.append(
-        mkInput('API 端口', mm.port, (v) => {
-          const n = Number(v)
-          if (Number.isFinite(n) && n > 0 && n < 65536) save({ model: { port: Math.round(n) } })
-        }, { type: 'number', placeholder: '19411' }),
-        mkInput('引擎 exe', sv.exe, (v) => save({ modelServer: { exe: v } }), {
-          placeholder: 'D:\\models\\llama-server.exe',
-        }),
-        mkInput('模型 gguf', sv.model, (v) => save({ modelServer: { model: v } }), {
-          placeholder: 'D:\\models\\MiniCPM-V-4_7-1B-Q8_0.gguf',
-        }),
-        mkInput('视觉投影', sv.mmproj, (v) => save({ modelServer: { mmproj: v } }), {
-          placeholder: 'D:\\models\\mmproj-model-f16.gguf',
-        }),
-        $('div', 'dshp-hint', '填完路径点「启动模型」；它会在 ' + (mm.port || 19411) + ' 端口起 llama-server。'),
-        $('div', 'dshp-hint', '本地端点只在你点「扫描」时探测；心跳不会在后台自动发现，避免误用别的服务。'),
-        $('div', 'dshp-hint', '自定义 API（OpenAI 兼容）：填了地址就优先用它；保存地址不会自动停本地模型（llama-swap 会自己换模型）。'),
-        mkInput('API 地址', mm.baseUrl, (v) => save({ model: { baseUrl: v } }), { placeholder: 'https://api.example.com/v1' }),
-        mkInput('模型名', mm.model, (v) => save({ model: { model: v } }), { placeholder: 'qwen3.5-9b / gpt-4o-mini' }),
-        mkInput('API Key', '', (v) => save({ model: { apiKey: v } }), { type: 'password', placeholder: mm.apiKeySet ? '已设置（清空并保存=删除）' : 'sk-...' }),
-        $('div', 'dshp-hint', '想聊得更自然：换更大的视觉模型（更能接住屏幕上的真实内容，显存占用也更高）；小模型更省显存，但话更像「播报」。'),
-      )
-
-      // —— 提示词 ——
-      box.append($('div', 'dshp-hint', '给模型的提示词（留空 = 默认人设；动作词表由程序提供）'))
-      const ta = document.createElement('textarea')
-      ta.value = (cfg.prompt || '').trim() ? cfg.prompt : (s && s.defaultPrompt) || ''
-      ta.style.height = '120px'
-      ta.spellcheck = false
-      const rowP = $('div', 'dshp-row')
-      const btnSaveP = $('button', 'dshp-btn dshp-primary', '保存提示词')
-      const btnResetP = $('button', 'dshp-btn', '恢复默认')
-      btnSaveP.addEventListener('click', () => save({ prompt: ta.value }))
-      btnResetP.addEventListener('click', () => {
-        ta.value = (s && s.defaultPrompt) || ''
-        save({ prompt: '' })
-      })
-      rowP.append(btnSaveP, btnResetP)
-      box.append(ta, rowP)
+      rowM.append(btnTick)
+      box.append(rowM, resLine, $('div', 'dshp-hint',
+        '端点 / 模型条目 / 提示词 / 做梦 / 连续上下文都搬去了设置页的「AI 面板…」。'))
 
       // —— 实际使用 / 最近一次状态 ——
       const ep = st.endpoint
@@ -8638,6 +9316,15 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       const cfg = (s && s.config) || {}
       const tc = cfg.tts || {}
       const tStat = s.ttsStatus || {}
+
+      // 「声音跟条目走」（2026-11-01）：勾了条目后端点/声音细节以条目为准，本页只管全局开关和来源
+      const ttsOwner = cfg.roles && cfg.roles.tts
+      if (ttsOwner) {
+        const ownerEntry = (cfg.models || []).find((m) => m && m.id === ttsOwner)
+        box.append($('div', 'dshp-hint dshp-ai-warn',
+          '⚠️ 「声音」板块已勾给条目「' + ((ownerEntry && ownerEntry.name) || ttsOwner) +
+          '」：端点和参考音频等声音细节以**条目**为准（在 AI 面板 → 编辑该条目 → 声音细节里改），本页的端点/音频设置不生效。'))
+      }
 
       // —— 总开关 ——
       const ttsHead = $('div', 'dshp-row')
@@ -8805,164 +9492,9 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
   }
 
   /**
-   * 「做梦」页签（2026-10-21）。
+   * 「做梦」页签 2026-11-01 撤并：开关/冷却/目录/立即做梦搬进了 AI 面板的「◆ 做梦」区，
+   * 和模型条目、连续上下文一处管（renderDreamPane 已删）。
    *
-   * 这里只放**做梦自己的参数**：开关 / 冷却 / 日记目录 / 下次立即做梦 / 状态。
-   * 心跳页不重复出现这些控件 —— 同一个配置两处能改，早晚会不一致。
-   *
-   * 「日记风格」现在是占位：以后要做成「追加到提示词里的一段话」，所以先占个位置。
-   */
-  function renderDreamPane(box) {
-    const D = dreamBridge()
-    if (!D || typeof D.status !== 'function') {
-      box.append($('div', 'dshp-hint', '「做梦」只在桌面外壳里可用（浏览器版没有主进程，写不了日记）。'))
-      return
-    }
-    const HB = heartBridge()
-    const tip = $('div', 'dshp-hint', '读取中…')
-    box.append(tip)
-
-    const refresh = () => renderPane('dream')
-    const save = async (patch) => {
-      if (!HB || typeof HB.save !== 'function') {
-        tip.textContent = '外壳版本太旧：重启一下桌宠再试'
-        return
-      }
-      tip.textContent = '保存中…'
-      let r = null
-      try {
-        r = await HB.save(patch)
-      } catch (e) {
-        r = { ok: false, reason: String((e && e.message) || e) }
-      }
-      if (!r || !r.ok) {
-        tip.textContent = '保存失败：' + ((r && r.reason) || '未知')
-        return
-      }
-      refresh()
-    }
-
-    D.status().then((st) => {
-      if (ui.menu.focused !== 'dream') return
-      box.textContent = ''
-      const d = st && st.ok ? st : {}
-      const enabled = d.enabled === true
-      const coolSec = Number(d.cooldownSec) || 1800
-
-      // —— 状态行（她现在在不在做梦 / 冷却 / 上次结果）——
-      const statusOf = (x) => {
-        const bits = []
-        if (x.running) bits.push('正在做梦…')
-        else if (Number(x.cooldownLeft) > 0) bits.push('冷却还剩 ' + Math.ceil(Number(x.cooldownLeft) / 60) + ' 分钟')
-        else bits.push('冷却已好，下次睡着就会写')
-        if (x.lastResult === 'written') {
-          bits.push('上次写了日记' + (x.lastDiaryDate ? '（' + x.lastDiaryDate + '）' : '') +
-            (Number(x.todayCount) > 0 ? '，今天第 ' + x.todayCount + ' 段' : ''))
-        } else if (x.lastResult === 'empty') bits.push('上次没什么值得记的事')
-        else if (x.lastResult === 'error') bits.push('上次失败：' + (x.lastError || '未知'))
-        return bits.join(' · ')
-      }
-      const statusLine = $('div', 'dshp-hint dshp-now', statusOf(d))
-      box.append(statusLine)
-
-      // —— 开关 ——
-      const sw = $('button', 'dshp-chip' + (enabled ? ' dshp-on' : ''), enabled ? '已启用' : '已关闭')
-      sw.addEventListener('click', () => save({ dream: { enabled: !enabled } }))
-      const row0 = $('div', 'dshp-row')
-      row0.append($('span', null, '做梦'), sw)
-      box.append(
-        row0,
-        $('div', 'dshp-hint', enabled
-          ? '开：她每次睡着，会把「上次醒来之后」的事回顾一遍，写成一篇日记。'
-          : '关：她睡着就是睡觉，不写日记、不发请求。'),
-        // 用户明确要求写在面板上：不强制先开别的功能，但必须配好模型
-        $('div', 'dshp-hint', '⚠️ 仅在配置了模型 / API 时有效（不用开心跳，也不用开刷视频）。'),
-      )
-
-      // —— 冷却 ——
-      box.append(
-        mkRange('做梦冷却', Math.round(coolSec / 60), 5, 180, 5, (v) => v + ' 分钟', (v) => {
-          save({ dream: { cooldownSec: v * 60 } })
-        }),
-        $('div', 'dshp-hint', '起睡就计时：一次梦发出去就开始冷却，模型回「没值得记的」也算一次。'),
-      )
-
-      // —— 日记目录 ——
-      const dirRow = $('div', 'dshp-label')
-      dirRow.append($('span', null, '日记目录'))
-      const dirIn = document.createElement('input')
-      dirIn.type = 'text'
-      const isCustom = !!d.dir && !!d.dirDefault && d.dir !== d.dirDefault
-      dirIn.value = isCustom ? d.dir : ''
-      dirIn.placeholder = d.dirDefault || '（默认目录）'
-      dirIn.style.cssText =
-        'flex:1;min-width:0;font-size:12px;padding:4px 6px;border-radius:6px;' +
-        'border:1px solid rgba(128,128,128,.45);background:transparent;color:inherit'
-      const openBtn = $('button', 'dshp-btn', '打开文件夹')
-      openBtn.title = '在资源管理器里打开日记目录'
-      openBtn.addEventListener('click', async () => {
-        let r = null
-        try {
-          r = await D.open()
-        } catch (e) {
-          r = { ok: false, reason: String((e && e.message) || e) }
-        }
-        if (!r || !r.ok) tip.textContent = '打不开：' + ((r && r.reason) || '未知')
-        else tip.textContent = ''
-      })
-      const applyDir = () => save({ dream: { dir: dirIn.value.trim() } })
-      dirIn.addEventListener('change', applyDir)
-      dirIn.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
-          ev.preventDefault()
-          applyDir()
-        }
-      })
-      dirRow.append(dirIn, openBtn)
-      box.append(dirRow, $('div', 'dshp-hint', '留空 = 默认目录；每天一个 .md 文件，同一天睡几次都追加进同一个。'))
-
-      // —— 下次睡着时立即做梦（一次性绕过冷却，多按不叠加）——
-      const forceRow = $('div', 'dshp-row')
-      const label = (on) => (on ? '✓ 已就绪 · 下次睡着立刻做梦（再按取消）' : '下次睡着时立即做梦')
-      const forceBtn = $('button', 'dshp-btn', label(d.forceNext === true))
-      forceBtn.disabled = !enabled
-      forceBtn.title = enabled
-        ? '只绕过「做梦冷却」这一次；按几次都只有一次效果'
-        : '先打开上面的开关'
-      if (enabled && d.forceNext === true) forceBtn.style.borderColor = 'rgba(124,92,255,.9)'
-      forceBtn.addEventListener('click', async () => {
-        if (!enabled) return
-        const on = d.forceNext !== true
-        let r = null
-        try {
-          r = await D.force(on)
-        } catch (e) {
-          r = { ok: false, reason: String((e && e.message) || e) }
-        }
-        if (!r || r.ok === false) {
-          tip.textContent = '操作失败：' + ((r && r.reason) || '未知')
-          return
-        }
-        // 就地更新，不整页重画：设置页一重画滚动位置就弹回顶部
-        d.forceNext = on
-        forceBtn.textContent = label(on)
-        forceBtn.style.borderColor = on ? 'rgba(124,92,255,.9)' : ''
-        tip.textContent = on
-          ? '已就绪：她下次睡着时会跳过冷却立刻做梦（只用一次）。'
-          : ''
-        statusLine.textContent = statusOf(d)
-      })
-      forceRow.append(forceBtn)
-      box.append(forceRow)
-
-      // —— 日记风格（占位，暂未实现）——
-      box.append(
-        $('div', 'dshp-hint', '日记风格：（以后加）写日记的语气 / 篇幅 / 要不要碎碎念，会写进给模型的提示词。'),
-      )
-    })
-  }
-
-  /**
    * 「表情 + 口型」合并页（2026-10-25，原两个页签）。
    * 两边机制完全一样：点一下 → 走 override 层换脸/换嘴 + 说一句配好的话，三四秒后自己让位。
    * 「平常」两区各放一个（合并前每个页签各有一个，行为不变 —— 它同时清掉脸和嘴，
@@ -9054,10 +9586,7 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
       renderHeartPane(panes)
       return
     }
-    if (id === 'dream') {
-      renderDreamPane(panes)
-      return
-    }
+    // 'dream' 页签 2026-11-01 撤并进 AI 面板；老状态/诊断口还传 'dream' 时落到设置页
     if (id === 'tts') {
       // 「声音」（2026-10-25，从心跳页拆出来）：TTS 配置 + 试听，见 renderTtsPane
       renderTtsPane(panes)
@@ -9302,6 +9831,16 @@ body.dshp-pet-hidden .dshp-tab{display:flex}
     detailBtn.title = '单独调每个待机行为 / 每段小戏的频率；改完立即生效、自动保存'
     detailBtn.addEventListener('click', openTuningPanel)
     detailRow.appendChild(detailBtn)
+    // AI 面板（2026-11-01）：模型条目 / 连续上下文 / 做梦 / 本地模型 / 提示词，收在一处
+    const aiBtn = $('button', 'dshp-btn', 'AI 面板…')
+    aiBtn.title = '模型条目（谁负责哪个板块）/ 连续上下文 / 做梦 / 本地模型 / 提示词'
+    aiBtn.addEventListener('click', openAIPanel)
+    detailRow.appendChild(aiBtn)
+    // 经历面板（2026-11-01）：和详细面板并排的第三个按钮
+    const expBtn = $('button', 'dshp-btn', '经历面板…')
+    expBtn.title = '她记得什么、经历过什么（只读：下一次心跳的上下文 + 全部流水）'
+    expBtn.addEventListener('click', openExperiencePanel)
+    detailRow.appendChild(expBtn)
     box.append(
       $('div', 'dshp-hint', '灵动度（想更活就点「明显更活泼」，或直接拖下面的滑块）'),
       liveRow,

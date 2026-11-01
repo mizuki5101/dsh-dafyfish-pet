@@ -54,6 +54,8 @@ let tools = null
 let tts = null
 /** 「经历流水」（2026-10-31）：所有模型调用共享的 append-only 底账 + 连续上下文的素材源 */
 let ledger = null
+/** 回应模式「追加窗口」的会话级预算上限（0 = 没发现过超限；200k 大窗口的保险丝，见 heart:chat） */
+let chatWindowCap = 0
 
 /**
  * 识图遮罩窗是不是开着。
@@ -1691,7 +1693,7 @@ app.whenReady().then(() => {
     // 也只是「没有心跳」，不能把主窗口一起搞死。
     try {
       const { createHeart } = require('./heart')
-      const { patchHeart, sanitizeHeartPatch, redactForLog } = require('./heart/settings')
+      const { patchHeart, sanitizeHeartPatch, redactForLog, carryOverEntryKeys } = require('./heart/settings')
       const { createModelServer } = require('./heart/server')
       const promptModule = require('./heart/prompt')
       const vision = require('./heart/vision')
@@ -1793,6 +1795,17 @@ app.whenReady().then(() => {
               },
               // 连续上下文（2026-10-31）：面板暂不做控件，settings.json 里可调
               context: cfg.context,
+              // 模型条目（2026-11-01）：apiKey 绝不回传页面，只给 apiKeySet 布尔
+              models: (cfg.models || []).map((m) => ({
+                id: m.id,
+                name: m.name,
+                baseUrl: m.baseUrl,
+                model: m.model,
+                apiKeySet: !!m.apiKey,
+                timeoutMs: m.timeoutMs,
+                enableThinking: m.enableThinking,
+              })),
+              roles: cfg.roles || {},
             }
           : null
         return {
@@ -1895,7 +1908,7 @@ app.whenReady().then(() => {
       heart.start()
       // 「声音」/TTS（2026-10-24）：放在 heart 之后装配，getCfg 直接读 heart 的归一化配置。
       // 合成结果落 userData/tts-cache，经 petserver 的 /dsh-pet/tts/ 同源路由给页面播。
-      const { createTts } = require('./tts')
+      const { createTts, resolveTtsTarget } = require('./tts')
       tts = createTts({
         log: bootLog,
         dir: path.join(app.getPath('userData'), 'tts-cache'),
@@ -1904,7 +1917,8 @@ app.whenReady().then(() => {
             if (petServer) petServer.push(msg)
           } catch (e) {}
         },
-        getCfg: () => (heart ? heart.config().tts : null),
+        // 「声音跟条目走」（2026-11-01）：roles.tts 指到条目时端点/声音细节用条目的
+        getCfg: () => (heart ? resolveTtsTarget(heart.config()) : null),
       })
       ipcMain.handle('heart:status', () => {
         if (!heart) return { enabled: false, lastReason: 'no-heart' }
@@ -1999,6 +2013,17 @@ app.whenReady().then(() => {
       ipcMain.handle('heart:scan', () => (heart ? heart.scan() : { ok: false, results: [] }))
       // 「确认 API 连接」：真发一条 ping（也能让 llama-swap 把模型加载起来）
       ipcMain.handle('heart:test', () => (heart ? heart.probe() : { ok: false, error: 'no-heart' }))
+      // 「确认连接」按**条目**（2026-11-01，AI 面板）：ping 该条目的端点，不动配置
+      ipcMain.handle('heart:ping-entry', async (_e, req) => {
+        const id = String((req && req.id) || '')
+        const cfg = heart ? heart.config() : null
+        const entry = ((cfg && cfg.models) || []).find((m) => m && m.id === id)
+        if (!entry) return { ok: false, error: 'no-entry', hint: '条目不存在（先保存一次？）' }
+        const cand = vision.entryCandidate(entry)
+        if (!cand) return { ok: false, error: 'no-endpoint', hint: '条目没填 API 地址' }
+        const r = await vision.ping(cand, { timeoutMs: entry.timeoutMs || undefined })
+        return Object.assign({}, r, { baseUrl: cand.baseUrl, model: cand.model })
+      })
       // 「回应模式」：对话按钮直接问聊天模型（不走 DSH），带最近 12 轮记忆
       ipcMain.handle('heart:chat', async (_e, req) => {
         if (!heart || !chatMemory) return { ok: false, reason: 'no-heart' }
@@ -2024,30 +2049,39 @@ app.whenReady().then(() => {
         // ledger 开着时旁白（sideNote）不要了：她的嘀咕已经在环境窗口里。
         const cfgCtx = cfg.context || {}
         const ctxOn = !!(ledger && cfgCtx.enabled)
-        const messages = ctxOn
-          ? context.assemble({
-              system: CHAT_SYSTEM,
-              summary: context.dailySummary(ledger.all(), { days: cfgCtx.summaryDays }),
-              blocks: [
-                renderTurns(ledger.window({ budgetTokens: cfgCtx.windowTokens, excludeKinds: ['chat-user', 'chat-her'] })),
-                chatMemory.messages(),
-              ],
-              tail: text + (ctxOn ? '' : sideNote),
-            })
-          : [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
-              { role: 'user', content: text + sideNote },
-            ])
+        const assemble = (budget) =>
+          ctxOn
+            ? context.assemble({
+                system: CHAT_SYSTEM,
+                summary: context.dailySummary(ledger.all(), { days: cfgCtx.summaryDays }),
+                blocks: [
+                  renderTurns(ledger.window({ budgetTokens: budget, excludeKinds: ['chat-user', 'chat-her'] })),
+                  chatMemory.messages(),
+                ],
+                tail: text + (ctxOn ? '' : sideNote),
+              })
+            : [{ role: 'system', content: CHAT_SYSTEM }].concat(chatMemory.messages(), [
+                { role: 'user', content: text + sideNote },
+              ])
+        // 上下文超长保险丝（2026-11-01）：200k 默认窗口撞上模型上限就 400 ——
+        // 窗口预算砍半立刻重试，会话内记住（下一句直接从安全预算起步）。
+        let windowBudget = ctxOn ? (chatWindowCap || cfgCtx.windowTokens) : 0
         // 聊天期间让心跳让路：llama-server 只有 -np 1 一个槽位，抢起来会「想好久」
         heart.hold()
         let r = null
         try {
-          r = await vision.infer(cfg, messages, {
-            // 聊天只要 1~2 句：300 token 时 9B 会啰嗦到 10 秒以上，看起来像「卡住」
-            maxTokens: 120,
-            timeoutMs: cfg.model.timeoutMs,
-            temperature: 0.7,
-            enableThinking: cfg.model.enableThinking,
-          })
+          for (;;) {
+            r = await vision.inferFor(cfg, 'chat', assemble(windowBudget), {
+              // 聊天只要 1~2 句：300 token 时 9B 会啰嗦到 10 秒以上，看起来像「卡住」
+              maxTokens: 120,
+              timeoutMs: cfg.model.timeoutMs,
+              temperature: 0.7,
+            })
+            if (!(!r.ok && r.overflow && ctxOn && windowBudget > 2048)) break
+            chatWindowCap = Math.max(2048, Math.floor(windowBudget / 2))
+            bootLog('对话：请求超过模型上下文，窗口预算 ' + windowBudget + ' → ' + chatWindowCap + ' 再试')
+            windowBudget = chatWindowCap
+          }
         } finally {
           heart.release()
         }
@@ -2082,10 +2116,54 @@ app.whenReady().then(() => {
       // —— 设置面板「心跳」页用 ——
       // 读：配置 + 运行状态 + 模型进程 + 默认提示词（面板要能「恢复默认」）
       ipcMain.handle('heart:settings', () => heartSettingsPayload())
+      // —— 经历面板（2026-11-01）：两个只读通道，没有删除/写入 ——
+      // 底账分页（页签过滤 + 游标往前翻）；过滤/分页的数学都在 ledger.recentPage（有单测）
+      ipcMain.handle('ledger:recent', (_e, req) => {
+        if (!ledger) return { ok: false, reason: 'no-ledger' }
+        const r = req || {}
+        const page = ledger.recent({
+          groups: Array.isArray(r.groups) ? r.groups : null,
+          before: Number(r.before) > 0 ? Number(r.before) : 0,
+          limit: Number(r.limit) > 0 ? Number(r.limit) : 50,
+        })
+        return Object.assign({ ok: true }, page)
+      })
+      // 「她现在记得什么」：**如实**拼出下一次心跳要发的那三段——
+      // [system（人设或面板覆盖）] + [近况回放（昨天以前的确定性摘要）] + [追加式窗口]。
+      // 情境截图/时间这类每次都变的「本次情境」不在预览里（它们永远在最一条 user）。
+      ipcMain.handle('context:preview', () => {
+        if (!ledger) return { ok: false, reason: 'no-ledger' }
+        const cfg = heart ? heart.config() : null
+        const ctx = (cfg && cfg.context) || {}
+        const on = !!ctx.enabled
+        const all = ledger.all()
+        const windowTurns = on
+          ? renderTurns(ledger.window({ budgetTokens: ctx.windowTokens }))
+          : []
+        const sysOverride = cfg && typeof cfg.prompt === 'string' ? cfg.prompt.trim() : ''
+        return {
+          ok: true,
+          enabled: on,
+          windowTokens: ctx.windowTokens || 0,
+          summaryDays: ctx.summaryDays || 0,
+          system: sysOverride || promptModule.SYSTEM,
+          systemCustom: !!sysOverride,
+          summary: on ? context.dailySummary(all, { days: ctx.summaryDays }) : '',
+          window: windowTurns,
+          totalEntries: all.length,
+        }
+      })
       // 写：只接受白名单字段，合并进 settings.json 的 heart 段，然后按新配置重排定时器
       ipcMain.handle('heart:save', async (_e, patch) => {
         try {
           const clean = sanitizeHeartPatch(patch)
+          // 条目密钥回填（2026-11-01）：payload 只给 apiKeySet，页面拿不到明文密钥 ——
+          // patch 里 apiKey 为 undefined/null 的条目沿用旧值（'' = 明确清空，不回填）。
+          if (clean.models && heart) {
+            clean.models = carryOverEntryKeys((heart.config().models || []), clean.models)
+          }
+          // 换了模型/窗口预算后，「上次撞上下文上限」的旧结论不再适用
+          chatWindowCap = 0
           patchHeart(settingsPath(), clean)
           if (heart) {
             heart.reload()
@@ -2110,12 +2188,9 @@ app.whenReady().then(() => {
         if (!modelServer || !heart) return { ok: false, reason: 'no-heart' }
         const action = (req && req.action) || 'status'
         if (action === 'start') {
-          // 自定义 API 优先：配置了地址就不允许再起本地模型（否则又是「API 在跑、9B 也在占显存」）
-          const cfg = heart.config()
-          if (cfg.model.baseUrl) {
-            return { ok: false, reason: '已启用自定义 API（' + cfg.model.baseUrl + '），不会再启动本地模型；要用本地请先清空 API 地址' }
-          }
-          return modelServer.start(cfg)
+          // 2026-11-01 博士拍板：不再禁止「API + 本地模型」共存（模型条目时代，
+          // 本地模型只是兜底引擎，跟云端 API 谁在用由条目/回落关系决定，不冲突）
+          return modelServer.start(heart.config())
         }
         if (action === 'stop') return modelServer.stop()
         return { ok: true, model: modelServer.status() }

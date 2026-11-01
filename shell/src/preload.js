@@ -38,6 +38,8 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     // 回应模式：对话按钮直接问聊天模型（带最近 12 轮记忆）
     chat: (payload) => ipcRenderer.invoke('heart:chat', payload || {}),
     clearChat: () => ipcRenderer.invoke('heart:chat-clear'),
+    // AI 面板（2026-11-01）：「确认连接」按条目 ping，不动配置
+    pingEntry: (id) => ipcRenderer.invoke('heart:ping-entry', { id: String(id || '') }),
   },
   // 刷一条视频（2026-10-20）：点按钮才跑，主进程负责取数/抽帧/推理。
   // 结果不走这里返回 —— 气泡和邮件都由主进程推 control，页面只拿一个「成败」。
@@ -78,6 +80,12 @@ contextBridge.exposeInMainWorld('dshpetBridge', {
     test: () => ipcRenderer.invoke('tts:test'),
     // 气泡被顶掉/关掉时通知一下（在途合成不会被取消，只是页面停声）
     stop: () => ipcRenderer.send('tts:stop'),
+  },
+  // 经历面板（2026-11-01）：两个只读通道 —— 流水分页 + 下一次心跳的真实上下文预览。
+  // **没有删除/写入**：底账是事实源，不给页面任何改它的口子。
+  ledger: {
+    recent: (req) => ipcRenderer.invoke('ledger:recent', req || {}),
+    contextPreview: () => ipcRenderer.invoke('context:preview'),
   },
 })
 

@@ -247,7 +247,7 @@ function createShot(options = {}) {
       let second = null
       let refused = false
       await withHold(async () => {
-        first = await vision.infer(cfg, messages, {
+        first = await vision.inferFor(cfg, 'answer', messages, {
           maxTokens: firstMax,
           // 小模型把预算全花在思考上就只剩空 content
           enableThinking: false,
@@ -286,7 +286,7 @@ function createShot(options = {}) {
           return
         }
 
-        second = await vision.infer(cfg, read.answerMessages(rd.question, rd.seen), {
+        second = await vision.inferFor(cfg, 'answer', read.answerMessages(rd.question, rd.seen), {
           maxTokens: 640,
           enableThinking: false,
           temperature: 0.5,

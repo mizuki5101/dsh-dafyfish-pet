@@ -201,7 +201,21 @@ async function resolve(cfg) {
   if (!base) {
     return { ok: false, error: 'no-endpoint', hint: '未配置 API 地址：点「扫描」选择本地端点，或手填自定义 API' }
   }
-  const listOpts = { apiKey: m.apiKey, timeoutMs: 1500 }
+  const rc = await resolveCandidate({ baseUrl: base, model: m.model, apiKey: m.apiKey })
+  if (!rc.ok) return rc
+  return { ok: true, candidate: rc.candidate, models: rc.models }
+}
+
+/**
+ * 解析**任意一个**候选端点（条目或旧 heart.model 共用）：
+ * /v1/models 校验（缓存 5 分钟）+ 模型名严格匹配。resolve() 的实体，inferFor 也走这里。
+ */
+async function resolveCandidate(cand) {
+  const base = normalizeBase(cand && cand.baseUrl)
+  if (!base) {
+    return { ok: false, error: 'no-endpoint', hint: '未配置 API 地址：点「扫描」选择本地端点，或手填自定义 API' }
+  }
+  const listOpts = { apiKey: (cand && cand.apiKey) || '', timeoutMs: 1500 }
   const cached = MODEL_CACHE.key === base && MODEL_CACHE.models && Date.now() - MODEL_CACHE.at < MODEL_CACHE_TTL
   let models = cached ? MODEL_CACHE.models : null
   if (!models) {
@@ -211,12 +225,12 @@ async function resolve(cfg) {
   if (!models) {
     return { ok: false, error: 'endpoint-unreachable', baseUrl: base, hint: '连不上 ' + base + '/models（服务没起，或不是 OpenAI 兼容）' }
   }
-  let mm = matchModel(models, m.model)
+  let mm = matchModel(models, cand && cand.model)
   if (!mm.ok && cached) {
     models = await listModels(base, listOpts)
     if (models) {
       MODEL_CACHE = { key: base, at: Date.now(), models }
-      mm = matchModel(models, m.model)
+      mm = matchModel(models, cand && cand.model)
     }
   }
   if (!mm.ok) {
@@ -230,9 +244,75 @@ async function resolve(cfg) {
   }
   return {
     ok: true,
-    candidate: { baseUrl: base, model: mm.model, apiKey: m.apiKey || '', source: 'manual' },
+    candidate: { baseUrl: base, model: mm.model, apiKey: (cand && cand.apiKey) || '', source: (cand && cand.source) || 'manual' },
     models,
   }
+}
+
+// ———— 模型条目（2026-11-01）：板块 → 条目 → candidate ————
+
+/**
+ * 条目 → 候选端点（纯函数）。没 baseUrl 返回 null（调用方回落旧路径）。
+ * timeoutMs / enableThinking 是条目级的，inferFor 会在 opts 没显式给时注入。
+ */
+function entryCandidate(entry) {
+  const e = entry || {}
+  const base = normalizeBase(e.baseUrl)
+  if (!base) return null
+  return {
+    baseUrl: base,
+    model: String(e.model || '').trim(),
+    apiKey: e.apiKey || '',
+    source: 'entry:' + (e.id || '?'),
+    timeoutMs: Number(e.timeoutMs) > 0 ? Number(e.timeoutMs) : undefined,
+    enableThinking: typeof e.enableThinking === 'boolean' ? e.enableThinking : undefined,
+  }
+}
+
+/**
+ * 板块 → 条目候选（纯函数）。roles[role] 指向现存条目才返回 candidate，
+ * 否则 null（未分配 / 悬空引用 —— normalize 本不该产生悬空，这里兜底）⇒ 调用方走旧 heart.model 路径。
+ */
+function resolveRole(cfg, role) {
+  const roles = (cfg && cfg.roles) || {}
+  const models = Array.isArray(cfg && cfg.models) ? cfg.models : []
+  const want = roles[role]
+  if (!want || want === 'free') return null
+  const e = models.find((m) => m && m.id === want)
+  return e ? entryCandidate(e) : null
+}
+
+/**
+ * 按**板块**推理 —— 模型条目系统的唯一收口（2026-11-01）。
+ *
+ * roles[role] 指到条目 → 校验端点（/v1/models 严格匹配，和旧路径同一套）→ chat()；
+ * 没分配（或条目失效）→ 完整回落旧 heart.model 路径 infer(cfg)。
+ * 条目级的 timeoutMs / enableThinking 只在 opts 没显式给时注入（调用点的显式值永远赢）。
+ * 格式/重试/缓存逻辑全在 chat()，这里零改动。
+ */
+async function inferFor(cfg, role, messages, opts) {
+  const o = Object.assign({}, opts || {})
+  const cand = resolveRole(cfg, role)
+  if (cand) {
+    if (!o.timeoutMs && cand.timeoutMs) o.timeoutMs = cand.timeoutMs
+    if (o.enableThinking === undefined && typeof cand.enableThinking === 'boolean') o.enableThinking = cand.enableThinking
+    const rc = await resolveCandidate(cand)
+    if (!rc.ok) return { ok: false, error: rc.error, detail: rc, candidates: 1, role }
+    const r = await chat(rc.candidate, messages, o)
+    return Object.assign({}, r, { candidate: rc.candidate, candidates: 1, role })
+  }
+  // 未分配：回落旧路径，端点级默认值也从 cfg.model 注入（等价老调用点的行为）
+  if (!o.timeoutMs) o.timeoutMs = (cfg && cfg.model && cfg.model.timeoutMs) || undefined
+  if (o.enableThinking === undefined && cfg && cfg.model) o.enableThinking = cfg.model.enableThinking
+  return infer(cfg, messages, o)
+}
+
+/** 上下文超长的识别（OpenAI 系措辞 + llama.cpp 常见措辞；遇到新措辞往这里加）。 */
+const RE_OVERFLOW = /maximum context length|context length|too many tokens|context_length_exceeded|reduce the length|input.*too long/i
+
+/** 纯函数：这个失败是不是「请求超过模型上下文」（200k 大窗口的保险丝，2026-11-01） */
+function isContextOverflow(status, errorText) {
+  return status === 400 && RE_OVERFLOW.test(String(errorText || ''))
 }
 
 /**
@@ -347,6 +427,9 @@ async function chat(candidate, messages, opts) {
   if (!r.ok && r.status === 400 && messagesHaveImage(messages) && /image|vision|multi.?modal|visual|图片/i.test(r.error || '')) {
     r.hint = '这个端点看不了图：心跳看屏/识图要在「视觉端点」里另配一个能看图的模型'
   }
+  // 上下文超长标记（2026-11-01）：200k 大窗口的保险丝 —— 调用方（think / heart:chat）
+  // 看到这个标记就把「追加窗口」的预算砍半重试，见各自实现。只在 chat() 打标记，不改请求。
+  if (!r.ok && isContextOverflow(r.status, r.error)) r.overflow = true
   return r
 }
 
@@ -419,4 +502,6 @@ module.exports = {
   DEFAULT_PORTS, normalizeBase, pickModelName, matchModel, listModels, resolve, scan, chat, ping, infer,
   // 云端适配（2026-10-31）—— 导出便于纯函数单测
   isDeepseekHost, isLoopbackHost, messagesHaveImage, stripImageParts, buildBody,
+  // 模型条目系统 + 上下文超长保险丝（2026-11-01）
+  inferFor, resolveRole, entryCandidate, resolveCandidate, isContextOverflow,
 }

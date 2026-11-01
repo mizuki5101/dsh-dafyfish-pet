@@ -11,7 +11,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import {
   KINDS, normalizeEntry, pruneEntries, entryTurn, renderTurns,
-  pickWindow, digestPastDays, entryLike, createLedger,
+  pickWindow, digestPastDays, entryLike, createLedger, GROUPS, recentPage,
 } from '../shell/src/heart/ledger.js'
 import context from '../shell/src/heart/context.js'
 import { estimateTokens } from '../shell/src/heart/chat.js'
@@ -240,6 +240,66 @@ console.log('【6】createLedger 读写/坏行/prune')
   ok('clear 后重开为空', createLedger({ file }).size() === 0)
 
   fs.rmSync(dir, { recursive: true, force: true })
+}
+
+console.log('【9】GROUPS / recentPage 经历面板分页（2026-11-01）')
+{
+  // 页签组：每个 kind 都要被恰好一个组覆盖（面板上没有「查无此条」的死角）
+  const covered = new Set()
+  for (const ks of Object.values(GROUPS)) for (const k of ks) covered.add(k)
+  ok('GROUPS 覆盖全部 kind', KINDS.every((k) => covered.has(k)), KINDS.filter((k) => !covered.has(k)))
+  ok('GROUPS 没有未知 kind', [...covered].every((k) => KINDS.includes(k)))
+  ok('组的 kind 不重不混（dream 归嘀咕）', GROUPS.talk.includes('say') && GROUPS.talk.includes('dream') &&
+    GROUPS.chat.includes('chat-user') && GROUPS.chat.includes('chat-her') &&
+    GROUPS.see.length === 1 && GROUPS.answer.length === 1 && GROUPS.bili.length === 1)
+
+  const now = T(2026, 11, 1, 12)
+  const ents = [
+    E('say', '第1条', T(2026, 10, 29, 9)),
+    E('see', '第2条', T(2026, 10, 30, 10)),
+    E('chat-user', '第3条', T(2026, 10, 30, 11)),
+    E('chat-her', '第4条', T(2026, 10, 30, 11, 1)),
+    E('bili', '第5条', T(2026, 10, 31, 20)),
+    E('say', '第6条', T(2026, 10, 31, 21)),
+    E('answer', '第7条', T(2026, 11, 1, 9)),
+  ]
+  // 全部：最新在前、一页拿完、没有下一页
+  let r = recentPage(ents, { now, limit: 50 })
+  ok('最新在前', r.items.map((x) => x.text).join(',') === '第7条,第6条,第5条,第4条,第3条,第2条,第1条', r.items.map((x) => x.text))
+  ok('total = 全部条数', r.total === 7)
+  ok('拿完没有下一页', r.nextBefore === null)
+
+  // limit 分页：第 1 页 3 条 + 游标；第 2 页接着拿，且接缝不重不漏
+  r = recentPage(ents, { limit: 3 })
+  ok('一页 3 条（最新的 3 条）', r.items.map((x) => x.text).join(',') === '第7条,第6条,第5条', r.items.map((x) => x.text))
+  ok('还有更早 → nextBefore = 本页最旧那条', r.nextBefore === T(2026, 10, 31, 20), r.nextBefore)
+  const r2 = recentPage(ents, { limit: 3, before: r.nextBefore })
+  ok('第二页紧接第一页', r2.items.map((x) => x.text).join(',') === '第4条,第3条,第2条', r2.items.map((x) => x.text))
+  const r3 = recentPage(ents, { limit: 3, before: r2.nextBefore })
+  ok('第三页只剩 1 条且到头', r3.items.map((x) => x.text).join(',') === '第1条' && r3.nextBefore === null)
+  ok('翻完三页不重不漏', [...r.items, ...r2.items, ...r3.items].length === 7)
+
+  // 过滤：对话页签只有 chat 两类；嘀咕页签含 dream
+  r = recentPage(ents, { groups: ['chat'] })
+  ok('对话页签 = chat-user + chat-her', r.items.map((x) => x.kind).join(',') === 'chat-her,chat-user' && r.total === 2)
+  ok('过滤后的 total 是过滤后的条数', r.total === 2)
+  r = recentPage(ents, { groups: ['talk'] })
+  ok('嘀咕页签 = say（本例无 dream）', r.items.every((x) => x.kind === 'say') && r.total === 2)
+  const withDream = ents.concat([E('dream', '第8条日记', T(2026, 11, 1, 10))])
+  r = recentPage(withDream, { groups: ['talk'], limit: 10 })
+  ok('嘀咕页签含日记', r.items.some((x) => x.kind === 'dream') && r.total === 3)
+  r = recentPage(ents, { groups: ['see', 'answer'] })
+  ok('可传多组', r.items.map((x) => x.text).join(',') === '第7条,第2条')
+  ok('未知组名 = 全部（不是空）', recentPage(ents, { groups: ['nope'] }).total === 7)
+  ok('非法条目跳过', recentPage([null, { at: 0, kind: 'say', text: 'x' }, ents[0]], {}).total === 1)
+
+  // 游标是「不含」边界：同 at 的几条**整组进出**，不会被切页吞掉也不会重复
+  // （recentPage 信任入序——流水是 append-only 天然升序，这里也按升序造数据）
+  const dup = [E('say', 'c', 999), E('say', 'a', 1000), E('say', 'b', 1000)]
+  const d1 = recentPage(dup, { limit: 1 })
+  ok('同 at 组整组进本页（limit=1 也吐 2 条）', d1.items.map((x) => x.text).join(',') === 'b,a' && d1.nextBefore === 1000, d1)
+  const d2 = recentPage(dup, { limit: 10, before: d1.nextBefore })
+  ok('游标之后没有漏的', d2.items.length === 1 && d2.items[0].text === 'c' && d2.nextBefore === null, d2.items)
 }
 
 console.log('\n——— 结果：' + pass + ' 通过 / ' + fails.length + ' 失败 ———')

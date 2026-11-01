@@ -1,6 +1,6 @@
 name: tests
 
-# 只跑「纯 Node」的 15 个套件（tests/）：不需要外壳、不需要模型文件，所以能在 CI 里跑。
+# 只跑「纯 Node」的 16 个套件（tests/）：不需要外壳、不需要模型文件，所以能在 CI 里跑。
 # 真机的 CDP 套件要桌面窗口，属于开发仓库的排障工具，不在公开仓库里。
 on:
   push:
@@ -29,6 +29,7 @@ jobs:
           - 测试TTS纯函数
           - 测试云端适配
           - 测试经历流水
+          - 测试模型条目
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
